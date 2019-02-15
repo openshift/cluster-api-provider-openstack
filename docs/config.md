@@ -39,3 +39,77 @@
         floatingIP: 172.17.0.117
         ...
    ```
+
+## Subnets
+Rather than just using a network, you have the option of specifying a specific subnet to connect your server to. The following is an example of how to set up machines.yaml to do this:
+
+```yaml
+- apiVersion: "cluster.k8s.io/v1alpha1"
+  kind: Machine
+  metadata:
+    generateName: openstack-node-
+    labels:
+      set: node
+  spec:
+    providerSpec:
+      value:
+        networks:
+          - subnet_id: < subnet id >
+```
+
+## Network Filters
+If you have a complex query that you want to use to lookup a network, then you can do this by using a network filter. The filter will allow you to look up a network by the following network features:
+  - status
+  - name
+  - admin_state_up
+  - tenant_id
+  - project_id
+  - shared
+  - id
+  - marker
+  - limit
+  - sort_key
+  - sort_dir
+  - tags
+  - tags-any
+  - not-tags
+  - not-tags-any
+
+By using filters to look up a network, please note that it is possible to get multiple networks as a result. This should not be a problem, however please test your filters with `openstack network list` to be certian that it returns the networks you want. Please refer to the following usage example:
+
+```yaml
+- apiVersion: "cluster.k8s.io/v1alpha1"
+  kind: Machine
+  metadata:
+    generateName: openstack-node-
+    labels:
+      set: node
+  spec:
+    providerSpec:
+      value:
+        networks:
+          - filters:
+              name: myNetwork
+              tags: myTag
+```
+
+## Multiple Networks
+You can specify multiple networks (or subnets) to connect your server to. To do this, simply add another entry in the networks array. The following example connects the server to 3 different networks using all of the ways to connect discussed above:
+
+```yaml
+- apiVersion: "cluster.k8s.io/v1alpha1"
+  kind: Machine
+  metadata:
+    generateName: openstack-node-
+    labels:
+      set: node
+  spec:
+    providerSpec:
+      value:
+        networks:
+          - filters:
+              name: myNetwork
+              tags: myTag
+          - uuid: your_network_id
+          - subnet_id: your_subnet_id
+```

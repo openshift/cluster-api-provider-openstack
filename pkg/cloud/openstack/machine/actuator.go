@@ -36,6 +36,8 @@ import (
 	bootstrap "sigs.k8s.io/cluster-api-provider-openstack/pkg/bootstrap"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/openstack"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/openstack/clients"
+	apierrors "sigs.k8s.io/cluster-api/pkg/errors"
+	"sigs.k8s.io/cluster-api/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -120,7 +122,7 @@ func (oc *OpenstackClient) Create(ctx context.Context, cluster *machinev1.Cluste
 
 	var userDataRendered string
 	if len(userData) > 0 {
-		if machine.Spec.Versions.ControlPlane != "" {
+		if util.IsControlPlaneMachine(machine) {
 			userDataRendered, err = masterStartupScript(cluster, machine, string(userData))
 			if err != nil {
 				return oc.handleMachineError(machine, apierrors.CreateMachine(
@@ -141,7 +143,7 @@ func (oc *OpenstackClient) Create(ctx context.Context, cluster *machinev1.Cluste
 		}
 	}
 
-	instance, err = machineService.InstanceCreate(machine.Name, providerSpec, userDataRendered, providerSpec.KeyName)
+	instance, err = machineService.InstanceCreate(fmt.Sprintf("%s/%s", cluster.ObjectMeta.Namespace, cluster.Name), machine.Name, providerSpec, userDataRendered, providerSpec.KeyName)
 	if err != nil {
 		return oc.handleMachineError(machine, apierrors.CreateMachine(
 			"error creating Openstack instance: %v", err))
@@ -221,7 +223,7 @@ func (oc *OpenstackClient) Update(ctx context.Context, cluster *machinev1.Cluste
 		return nil
 	}
 
-	if currentMachine.Spec.Versions.ControlPlane != "" {
+	if util.IsControlPlaneMachine(currentMachine) {
 		// TODO: add master inplace
 		klog.Errorf("master inplace update failed: %v", err)
 	} else {
