@@ -64,6 +64,8 @@ spec:
                       properties:
                         cidr:
                           type: string
+                        description:
+                          type: string
                         id:
                           type: string
                         limit:

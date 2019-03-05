@@ -237,7 +237,7 @@ You can specify multiple networks (or subnets) to connect your server to. To do 
 ```
 
 ## Tagging Instances
-Tags can be added to instances on startup by populating the tags array where it says `<Your Tags>`. You can remove this if you do not want to tag your instances. Please refer to the following usage example:
+Tags can be added to instances on startup by populating the tags array where it says `<Your Tags>`. You can remove this if you do not want to tag your instances. Please note that your Nova api must be at least mivroversion 2.52 to use this api! Please refer to the following usage example:
 
 ```yaml
 - apiVersion: "cluster.k8s.io/v1alpha1"
@@ -249,7 +249,25 @@ Tags can be added to instances on startup by populating the tags array where it 
   spec:
     providerSpec:
       value:
-        Tags:
+        tags:
           - tag1
           - tag2
+```
+
+## Metadata
+Instead of tagging, you also have the option to add metadata to instances. This functionality should be more commonly available than tagging. Here is a usage example:
+
+```yaml
+- apiVersion: "cluster.k8s.io/v1alpha1"
+  kind: Machine
+  metadata:
+    generateName: openstack-node-
+    labels:
+      set: node
+  spec:
+    providerSpec:
+      value:
+        server_metadata:
+          name: bob
+          nickname: bobbert
 ```

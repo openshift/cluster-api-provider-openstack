@@ -210,6 +210,16 @@ func (in *OpenstackProviderSpec) DeepCopyInto(out *OpenstackProviderSpec) {
 		*out = new(v1.SecretReference)
 		**out = **in
 	}
+	if in.Tags != nil {
+		for _, tag := range in.Tags {
+			out.Tags = append(out.Tags, tag)
+		}
+	}
+	if in.ServerMetadata != nil {
+		for k, v := range in.ServerMetadata {
+			out.ServerMetadata[k] = v
+		}
+	}
 	out.RootVolume = in.RootVolume
 	return
 }

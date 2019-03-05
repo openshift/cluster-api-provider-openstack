@@ -317,20 +317,9 @@ func isDuplicate(list []string, name string) bool {
 func GetSecurityGroups(is *InstanceService, sg_param []openstackconfigv1.SecurityGroupParam) ([]string, error) {
 	var sgIDs []string
 	for _, sg := range sg_param {
-		listOpts := groups.ListOpts{
-			ID:         sg.Filter.ID,
-			Name:       sg.Filter.Name,
-			TenantID:   sg.Filter.TenantID,
-			ProjectID:  sg.Filter.ProjectID,
-			Limit:      sg.Filter.Limit,
-			Marker:     sg.Filter.Marker,
-			SortKey:    sg.Filter.SortKey,
-			SortDir:    sg.Filter.SortDir,
-			Tags:       sg.Filter.Tags,
-			TagsAny:    sg.Filter.TagsAny,
-			NotTags:    sg.Filter.NotTags,
-			NotTagsAny: sg.Filter.NotTagsAny,
-		}
+		listOpts := groups.ListOpts(sg.Filter)
+		listOpts.Name = sg.Name
+		listOpts.ID = sg.UUID
 		pages, err := groups.List(is.networkClient, listOpts).AllPages()
 		if err != nil {
 			return nil, err
@@ -390,26 +379,8 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, confi
 			}
 
 			for _, snet := range net.Subnets {
-				sopts := subnets.ListOpts{
-					Name:       snet.Filter.Name,
-					EnableDHCP: snet.Filter.EnableDHCP,
-					NetworkID:  snet.Filter.NetworkID,
-					TenantID:   snet.Filter.TenantID,
-					IPVersion:  snet.Filter.IPVersion,
-					GatewayIP:  snet.Filter.GatewayIP,
-					CIDR:       snet.Filter.CIDR,
-					ID:         snet.Filter.ID,
-					Limit:      snet.Filter.Limit,
-					Marker:     snet.Filter.Marker,
-					SortKey:    snet.Filter.SortKey,
-					SortDir:    snet.Filter.SortDir,
-				}
-				if sopts.ID != "" {
-					sopts.ID = snet.UUID
-				}
-				if sopts.NetworkID != "" {
-					sopts.NetworkID = netID
-				}
+				sopts := subnets.ListOpts(snet.Filter)
+				sopts.ID = snet.UUID
 				sopts.NetworkID = netID
 				snets, err := getSubnetsByFilter(is, &sopts)
 				if err != nil {
@@ -511,6 +482,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, confi
 		SecurityGroups:   securityGroups,
 		ServiceClient:    is.computeClient,
 		Tags:             config.Tags,
+		Metadata:         config.ServerMetadata,
 	}
 	server, err := servers.Create(is.computeClient, keypairs.CreateOptsExt{
 		CreateOptsBuilder: serverCreateOpts,
