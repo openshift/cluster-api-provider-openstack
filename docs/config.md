@@ -38,6 +38,8 @@ items:
         userDataSecret:
           name: master-user-data
           namespace: openstack-provider-system
+        tags:
+          - <Your Tag>
     versions:
       kubelet: 1.12.3
       controlPlane: 1.12.3
@@ -65,6 +67,8 @@ items:
         userDataSecret:
           name: worker-user-data
           namespace: openstack-provider-system
+        tags:
+          - <Your Tag>
     versions:
       kubelet: 1.12.3
 ```
@@ -230,4 +234,22 @@ You can specify multiple networks (or subnets) to connect your server to. To do 
               tags: myTag
           - uuid: your_network_id
           - subnet_id: your_subnet_id
+```
+
+## Tagging Instances
+Tags can be added to instances on startup by populating the tags array where it says `<Your Tags>`. You can remove this if you do not want to tag your instances. Please refer to the following usage example:
+
+```yaml
+- apiVersion: "cluster.k8s.io/v1alpha1"
+  kind: Machine
+  metadata:
+    generateName: openstack-node-
+    labels:
+      set: node
+  spec:
+    providerSpec:
+      value:
+        Tags:
+          - tag1
+          - tag2
 ```

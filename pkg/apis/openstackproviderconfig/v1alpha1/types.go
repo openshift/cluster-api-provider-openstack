@@ -69,6 +69,9 @@ type OpenstackProviderSpec struct {
 	Trunk bool `json:"trunk,omitempty"`
 
 	RootVolume RootVolume `json:"root_volume,omitempty"`
+
+	// Server tags
+	Tags []string `json:"tags,omitempty"`
 }
 
 type SecurityGroupParam struct {
@@ -109,6 +112,7 @@ type NetworkParam struct {
 type Filter struct {
 	Status       string `json:"status,omitempty"`
 	Name         string `json:"name,omitempty"`
+	Description  string `json:"description,omitempty"`
 	AdminStateUp *bool  `json:"admin_state_up,omitempty"`
 	TenantID     string `json:"tenant_id,omitempty"`
 	ProjectID    string `json:"project_id,omitempty"`

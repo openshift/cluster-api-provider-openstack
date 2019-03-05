@@ -39,6 +39,8 @@ spec:
             properties:
               filter:
                 properties:
+                  description:
+                    type: string
                   id:
                     type: string
                   limit:
@@ -59,6 +61,20 @@ spec:
                 items:
                   properties:
                     filter:
+                      properties:
+                        cidr:
+                          type: string
+                        id:
+                          type: string
+                        limit:
+                          format: int64
+                          type: integer
+                        marker:
+                          type: string
+                        name:
+                          type: string
+                        tags:
+                          type: string
                       type: object
                     uuid:
                       type: string
@@ -73,6 +89,8 @@ spec:
             properties:
               filter:
                 properties:
+                  id:
+                    type: string
                   limit:
                     format: int64
                     type: integer
@@ -91,6 +109,10 @@ spec:
           type: array
         sshUserName:
           type: string
+        tags:
+          items:
+            type: string
+          type: array
         trunk:
           type: boolean
         userDataSecret:
