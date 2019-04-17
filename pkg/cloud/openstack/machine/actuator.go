@@ -259,27 +259,27 @@ func (oc *OpenstackClient) Delete(ctx context.Context, cluster *machinev1.Cluste
 	return nil
 }
 
-func (oc *OpenstackClient) Update(ctx context.Context, cluster *machinev1.Cluster, machine *machinev1.Machine) error {
-	status, err := oc.instanceStatus(machine)
+func (oc *OpenstackClient) Update(ctx context.Context, cluster *machinev1.Cluster, machine machinev1.Machine) error {
+	status, err := oc.instanceStatus(&machine)
 	if err != nil {
 		return err
 	}
 
 	currentMachine := (*machinev1.Machine)(status)
 	if currentMachine == nil {
-		instance, err := oc.instanceExists(machine)
+		instance, err := oc.instanceExists(&machine)
 		if err != nil {
 			return err
 		}
 		if instance != nil && instance.Status == "ACTIVE" {
 			klog.Infof("Populating current state for boostrap machine %v", machine.ObjectMeta.Name)
-			return oc.updateAnnotation(machine, instance.ID)
+			return oc.updateAnnotation(&machine, instance.ID)
 		} else {
 			return fmt.Errorf("Cannot retrieve current state to update machine %v", machine.ObjectMeta.Name)
 		}
 	}
 
-	if !oc.requiresUpdate(currentMachine, machine) {
+	if !oc.requiresUpdate(currentMachine, &machine) {
 		return nil
 	}
 
@@ -293,18 +293,18 @@ func (oc *OpenstackClient) Update(ctx context.Context, cluster *machinev1.Cluste
 			klog.Errorf("delete machine %s for update failed: %v", currentMachine.ObjectMeta.Name, err)
 		} else {
 			err = util.PollImmediate(RetryIntervalInstanceStatus, TimeoutInstanceDelete, func() (bool, error) {
-				instance, err := oc.instanceExists(machine)
+				instance, err := oc.instanceExists(&machine)
 				if err != nil {
 					return false, nil
 				}
 				return instance == nil, nil
 			})
 			if err != nil {
-				return oc.handleMachineError(machine, apierrors.DeleteMachine(
+				return oc.handleMachineError(&machine, apierrors.DeleteMachine(
 					"error deleting Openstack instance: %v", err))
 			}
 
-			err = oc.Create(ctx, cluster, machine)
+			err = oc.Create(ctx, cluster, &machine)
 			if err != nil {
 				klog.Errorf("create machine %s for update failed: %v", machine.ObjectMeta.Name, err)
 			}
