@@ -42,7 +42,6 @@ required = [
   branch = "master"
   name = "github.com/gophercloud/gophercloud"
 
-
 [[override]]
   name = "k8s.io/kube-aggregator"
   version = "kubernetes-1.13.1"
@@ -91,7 +90,6 @@ required = [
   name = "github.com/pkg/errors"
   version = "0.8.0"
 
-
 [[constraint]]
   name = "k8s.io/klog"
   version = "0.1.0"
@@ -103,7 +101,6 @@ required = [
 [[override]]
   name = "github.com/ajeddeloh/yaml"
   revision = "6b94386aeefd8c4b8470aee72bfca084c2f91da9"
-
 
 [prune]
   go-tests = true
