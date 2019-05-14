@@ -1,4 +1,4 @@
-# Kubernetes cluster-api-provider-openstack Project
+# Do Not Merge!
 
 This repository hosts a concrete implementation of an OpenStack provider for the [cluster-api project](https://github.com/kubernetes-sigs/cluster-api).
 
