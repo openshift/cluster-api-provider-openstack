@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/bootstrap"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/openstack"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/openstack/clients"
+	"sigs.k8s.io/cluster-api-provider-openstack/pkg/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clconfig "github.com/coreos/container-linux-config-transpiler/config"
@@ -247,6 +248,7 @@ func (oc *OpenstackClient) Create(ctx context.Context, cluster *machinev1.Cluste
 
 	}
 
+	record.Eventf(machine, "CreatedInstance", "Created new instance with id: %s", instance.ID)
 	return oc.updateAnnotation(machine, instance.ID)
 }
 
@@ -272,7 +274,7 @@ func (oc *OpenstackClient) Delete(ctx context.Context, cluster *machinev1.Cluste
 		return oc.handleMachineError(machine, apierrors.DeleteMachine(
 			"error deleting Openstack instance: %v", err))
 	}
-
+	record.Eventf(machine, "DeletedInstance", "Deleted instance with id: %s", instance.ID)
 	return nil
 }
 

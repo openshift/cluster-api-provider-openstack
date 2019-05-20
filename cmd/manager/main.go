@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/apis"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/controller"
+	"sigs.k8s.io/cluster-api-provider-openstack/pkg/record"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/signals"
@@ -47,6 +48,7 @@ func main() {
 		klog.Fatal(err)
 	}
 
+	record.InitFromRecorder(mgr.GetRecorder("openstack-controller"))
 	klog.Infof("Initializing Dependencies.")
 
 	// Setup Scheme for all resources
