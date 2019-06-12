@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/bootstrap"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/openstack"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/openstack/clients"
+	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/openstack/options"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -57,8 +58,6 @@ const (
 	TimeoutInstanceCreate       = 5
 	TimeoutInstanceDelete       = 5
 	RetryIntervalInstanceStatus = 10 * time.Second
-
-	TokenTTL = 60 * time.Minute
 )
 
 type OpenstackClient struct {
@@ -484,7 +483,7 @@ func (oc *OpenstackClient) createBootstrapToken() (string, error) {
 		return "", err
 	}
 
-	expiration := time.Now().UTC().Add(TokenTTL)
+	expiration := time.Now().UTC().Add(options.TokenTTL)
 	tokenSecret, err := bootstrap.GenerateTokenSecret(token, expiration)
 	if err != nil {
 		panic(fmt.Sprintf("unable to create token. there might be a bug somwhere: %v", err))
