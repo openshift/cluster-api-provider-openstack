@@ -48,7 +48,7 @@ required = [
 
 [[override]]
   name = "github.com/openshift/cluster-api"
-  branch = "openshift-4.0-cluster-api-0.0.0-alpha.4"
+  branch = "openshift-4.2-cluster-api-0.1.0"
 
 [[override]]
   name = "k8s.io/code-generator"
@@ -72,7 +72,8 @@ required = [
 
 [[override]]
   name = "sigs.k8s.io/controller-runtime"
-  version = "v0.1.10"
+  source = "https://github.com/kubernetes-sigs/controller-runtime.git"
+  revision = "96b67f231945a8e8550dbdd8bfbd550a0c68097b"
 
 [[constraint]]
   name="sigs.k8s.io/controller-tools"
@@ -81,6 +82,10 @@ required = [
 [[override]]
   name = "k8s.io/cluster-bootstrap"
   revision = "c9acc0c1bea2de07a6d31502c2fece9139c7f793"
+
+[[override]]
+  name = "gopkg.in/fsnotify.v1"
+  source = "https://github.com/fsnotify/fsnotify.git"
 
 [[constraint]]
   name = "github.com/gophercloud/utils"
