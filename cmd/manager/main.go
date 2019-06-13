@@ -49,7 +49,7 @@ func main() {
 		klog.Fatal(err)
 	}
 
-	record.InitFromRecorder(mgr.GetRecorder("openstack-controller"))
+	record.InitFromRecorder(mgr.GetEventRecorderFor("openstack-controller"))
 	klog.Infof("Initializing Dependencies.")
 
 	// Setup Scheme for all resources
