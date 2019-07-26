@@ -64,6 +64,9 @@ type OpenstackProviderSpec struct {
 	// The names of the security groups to assign to the instance
 	SecurityGroups []SecurityGroupParam `json:"securityGroups,omitempty"`
 
+	// IP addresses to set in the `allowed_address_pairs` property of the ports we create
+	AllowedAddressPairs []string `json:"allowedAddressPairs,omitempty"`
+
 	// The name of the secret containing the user data (startup script in most cases)
 	UserDataSecret *corev1.SecretReference `json:"userDataSecret,omitempty"`
 

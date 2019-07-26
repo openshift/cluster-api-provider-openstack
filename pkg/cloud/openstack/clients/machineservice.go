@@ -299,11 +299,12 @@ func getSubnetsByFilter(is *InstanceService, opts *subnets.ListOpts) ([]subnets.
 	return snets, nil
 }
 
-func CreatePort(is *InstanceService, name string, net ServerNetwork, securityGroups *[]string) (ports.Port, error) {
+func CreatePort(is *InstanceService, name string, net ServerNetwork, securityGroups *[]string, allowedAddressPairs *[]ports.AddressPair) (ports.Port, error) {
 	portCreateOpts := ports.CreateOpts{
 		Name:           name,
 		NetworkID:      net.networkID,
 		SecurityGroups: securityGroups,
+		AllowedAddressPairs: *allowedAddressPairs,
 	}
 	if net.subnetID != "" {
 		portCreateOpts.FixedIPs = []ports.IP{{SubnetID: net.subnetID}}
@@ -418,6 +419,12 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 	if err != nil {
 		return nil, err
 	}
+
+	allowedAddressPairs := []ports.AddressPair{}
+	for _, ip := range config.AllowedAddressPairs {
+		allowedAddressPairs = append(allowedAddressPairs, ports.AddressPair{IPAddress: ip})
+	}
+
 	// Get all network UUIDs
 	var nets []ServerNetwork
 	for _, net := range config.Networks {
@@ -471,7 +478,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 		var port ports.Port
 		if len(portList) == 0 {
 			// create server port
-			port, err = CreatePort(is, name, net, &securityGroups)
+			port, err = CreatePort(is, name, net, &securityGroups, &allowedAddressPairs)
 			if err != nil {
 				return nil, fmt.Errorf("Failed to create port err: %v", err)
 			}
