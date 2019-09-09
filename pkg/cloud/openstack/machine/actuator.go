@@ -29,6 +29,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/client-go/tools/record"
 
+	"github.com/gophercloud/gophercloud"
+	"github.com/gophercloud/gophercloud/openstack/networking/v2/networks"
+	"github.com/gophercloud/gophercloud/openstack/networking/v2/subnets"
+	"github.com/gophercloud/gophercloud/pagination"
 	clusterv1 "github.com/openshift/cluster-api/pkg/apis/cluster/v1alpha1"
 	machinev1 "github.com/openshift/cluster-api/pkg/apis/machine/v1beta1"
 	apierrors "github.com/openshift/cluster-api/pkg/errors"
@@ -117,7 +121,7 @@ func (oc *OpenstackClient) Create(ctx context.Context, cluster *clusterv1.Cluste
 			"Cannot unmarshal providerSpec field: %v", err), createEventAction)
 	}
 
-	if verr := oc.validateMachine(machine, providerSpec); verr != nil {
+	if verr := oc.validateMachine(cluster, machine, providerSpec); verr != nil {
 		return oc.handleMachineError(machine, verr, createEventAction)
 	}
 
@@ -558,7 +562,136 @@ func (oc *OpenstackClient) createBootstrapToken() (string, error) {
 	), nil
 }
 
-func (oc *OpenstackClient) validateMachine(machine *machinev1.Machine, config *openstackconfigv1.OpenstackProviderSpec) *apierrors.MachineError {
-	// TODO: other validate of openstackCloud
+// validateNetworks interrogates Neutron for checking the existence of
+// the subnets specified in the given network configuration.
+//
+// A nil error is returned if all the specified network and subnets filters
+// have at least one match in OpenStack.
+//
+// A non-nil error is returned when at least one of the networks or subnet
+// filters specified in the Machine definition is not found in OpenStack.
+func (oc *OpenstackClient) validateNetworks(cluster *clusterv1.Cluster, machine *machinev1.Machine, desiredNetworks []openstackconfigv1.NetworkParam) *apierrors.MachineError {
+
+	// First, get a client for interacting with Neutron.
+	var client *gophercloud.ServiceClient
+	{
+		machineService, err := clients.NewInstanceServiceFromMachine(oc.params.KubeClient, machine)
+		if err != nil {
+			return apierrors.InvalidMachineConfiguration(fmt.Sprintf("Failed to create Neutron client: %v", err))
+		}
+
+		client = machineService.GetNetworkingClient()
+	}
+
+	// For every network specified in the Networks array of the Machine
+	// definition...
+	for _, desiredNetwork := range desiredNetworks {
+
+		// If a filter is specified, collect the matching Network
+		// UUIDs.
+		//
+		// If a filter is specified and there is no match, then return
+		// a non-nil error.
+		//
+		// If no filter is specified, let the slice empty.
+		var desiredNetworkMatchingIDs []string
+		{
+			if desiredNetwork.Filter.Name != "" || desiredNetwork.Filter.Tags != "" {
+				pager := networks.List(client, networks.ListOpts{
+					Name: desiredNetwork.Filter.Name,
+					Tags: desiredNetwork.Filter.Tags,
+				})
+
+				err := pager.EachPage(func(page pagination.Page) (bool, error) {
+					networkList, err := networks.ExtractNetworks(page)
+					if err != nil {
+						return false, err
+					}
+
+					for _, n := range networkList {
+						desiredNetworkMatchingIDs = append(desiredNetworkMatchingIDs, n.ID)
+					}
+					return true, nil
+				})
+				if err != nil {
+					return apierrors.InvalidMachineConfiguration(fmt.Sprintf("Error while reading Neutron response: %v", err))
+				}
+
+				if len(desiredNetworkMatchingIDs) == 0 {
+					return apierrors.InvalidMachineConfiguration(fmt.Sprintf("No Network found in OpenStack with Name %q and Tags %q", desiredNetwork.Filter.Name, desiredNetwork.Filter.Tags))
+				}
+			}
+		}
+
+		// for every matching NetworkID, find matching subnets
+		for _, desiredNetworkMatchingID := range desiredNetworkMatchingIDs {
+			for _, desiredSubnet := range desiredNetwork.Subnets {
+				pager := subnets.List(client, subnets.ListOpts{
+					NetworkID: desiredNetworkMatchingID,
+					Name:      desiredSubnet.Filter.Name,
+					Tags:      desiredSubnet.Filter.Tags,
+				})
+
+				var matchingSubnetFound bool
+				err := pager.EachPage(func(page pagination.Page) (bool, error) {
+					subnetList, err := subnets.ExtractSubnets(page)
+					if err != nil {
+						return false, err
+					}
+
+					if len(subnetList) > 0 {
+						matchingSubnetFound = true
+					}
+
+					return false, nil
+				})
+				if err != nil {
+					return apierrors.InvalidMachineConfiguration(fmt.Sprintf("Error while reading Neutron response: %v", err))
+				}
+				if !matchingSubnetFound {
+					return apierrors.InvalidMachineConfiguration(fmt.Sprintf("No subnet found in Network %q with Name %q and Tags %q", desiredNetworkMatchingID, desiredSubnet.Filter.Name, desiredSubnet.Filter.Tags))
+				}
+			}
+		}
+
+		// If instead the slice is empty, search for the subnets
+		// without filtering by Network.
+		if len(desiredNetworkMatchingIDs) == 0 {
+			for _, desiredSubnet := range desiredNetwork.Subnets {
+				pager := subnets.List(client, subnets.ListOpts{
+					Name: desiredSubnet.Filter.Name,
+					Tags: desiredSubnet.Filter.Tags,
+				})
+
+				var matchingSubnetFound bool
+				err := pager.EachPage(func(page pagination.Page) (bool, error) {
+					subnetList, err := subnets.ExtractSubnets(page)
+					if err != nil {
+						return false, err
+					}
+
+					if len(subnetList) > 0 {
+						matchingSubnetFound = true
+					}
+
+					return false, nil
+				})
+				if err != nil {
+					return apierrors.InvalidMachineConfiguration(fmt.Sprintf("Error while reading Neutron response: %v", err))
+				}
+				if !matchingSubnetFound {
+					return apierrors.InvalidMachineConfiguration(fmt.Sprintf("No subnet found with Name %q and Tags %q", desiredSubnet.Filter.Name, desiredSubnet.Filter.Tags))
+				}
+			}
+		}
+	}
+
+	// If execution made it to this point, it means that no invalid Network
+	// configuration was found. This includes: no Network configuration was
+	// found at all.
 	return nil
+}
+
+func (oc *OpenstackClient) validateMachine(cluster *clusterv1.Cluster, machine *machinev1.Machine, config *openstackconfigv1.OpenstackProviderSpec) *apierrors.MachineError {
+	return oc.validateNetworks(cluster, machine, config.Networks)
 }

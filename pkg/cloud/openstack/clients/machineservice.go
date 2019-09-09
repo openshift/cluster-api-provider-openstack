@@ -276,6 +276,10 @@ func (is *InstanceService) GetAcceptableFloatingIP() (string, error) {
 	return "", fmt.Errorf("Don't have acceptable floating IP")
 }
 
+func (is *InstanceService) GetNetworkingClient() *gophercloud.ServiceClient {
+	return is.networkClient
+}
+
 // A function for getting the id of a network by querying openstack with filters
 func getNetworkIDsByFilter(is *InstanceService, opts *networks.ListOpts) ([]string, error) {
 	if opts == nil {
