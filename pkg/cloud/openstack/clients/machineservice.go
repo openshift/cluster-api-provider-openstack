@@ -590,7 +590,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 		return nil, fmt.Errorf("Create new server err: %v", err)
 	}
 
-	serverCreateOpts := servers.CreateOpts{
+	var serverCreateOpts servers.CreateOptsBuilder = servers.CreateOpts{
 		Name:             name,
 		ImageRef:         imageID,
 		FlavorName:       config.Flavor,
@@ -619,7 +619,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 		}
 		blocks = append(blocks, block)
 
-		createOpts = bootfromvolume.CreateOptsExt{
+		serverCreateOpts = bootfromvolume.CreateOptsExt{
 			CreateOptsBuilder: createOpts,
 			BlockDevice:       blocks,
 		}
