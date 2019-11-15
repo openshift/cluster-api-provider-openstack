@@ -226,12 +226,10 @@ func NewInstanceServiceFromCloud(cloud clientconfig.Cloud) (*InstanceService, er
 		return nil, fmt.Errorf("Create ImageClient err: %v", err)
 	}
 
-	volumeClient, err := openstack.NewBlockStorageV3(provider, gophercloud.EndpointOpts{
+	// defer error reporting until the volumeClient would actually be needed
+	volumeClient, _ := openstack.NewBlockStorageV3(provider, gophercloud.EndpointOpts{
 		Region: clientOpts.RegionName,
 	})
-	if err != nil {
-		return nil, fmt.Errorf("Create VolumeClient err: %v", err)
-	}
 
 	return &InstanceService{
 		provider:       provider,
@@ -636,6 +634,10 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 		if bootfromvolume.SourceType(config.RootVolume.SourceType) == bootfromvolume.SourceImage {
 			// if source type is "image" then we have to create a volume from the image first
 			klog.Infof("Creating a bootable volume from image %v.", config.RootVolume.SourceUUID)
+
+			if is.volumeClient == nil {
+				return nil, fmt.Errorf("Volume requested but block storage service is not available")
+			}
 
 			imageID, err := getImageID(is, config.RootVolume.SourceUUID)
 			if err != nil {
