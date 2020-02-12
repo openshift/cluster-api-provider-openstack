@@ -272,7 +272,7 @@ func (oc *OpenstackClient) Create(ctx context.Context, cluster *clusterv1.Cluste
 	err = util.PollImmediate(RetryIntervalInstanceStatus, instanceCreateTimeout, func() (bool, error) {
 		instance, err := machineService.GetInstance(instance.ID)
 		if err != nil {
-			return false, nil
+			return false, err
 		}
 		return instance.Status == "ACTIVE", nil
 	})
