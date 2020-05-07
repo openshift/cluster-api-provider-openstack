@@ -171,7 +171,7 @@ func NewInstanceServiceFromMachine(kubeClient kubernetes.Interface, machine *mac
 		}
 	}
 
-	cloudConfig, err := kubeClient.CoreV1().ConfigMaps("openshift-config").Get("cloud-provider-config", metav1.GetOptions{})
+	cloudConfig, err := kubeClient.CoreV1().ConfigMaps("openshift-config").Get(context.TODO(), "cloud-provider-config", metav1.GetOptions{})
 	if err != nil {
 		klog.Warningf("failed to get configmap openshift-config/cloud-provider-config from kubernetes api: %v", err)
 		return NewInstanceServiceFromCloud(cloud, nil)
