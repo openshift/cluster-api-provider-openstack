@@ -228,6 +228,19 @@ func (r *ReconcileMachine) Reconcile(request reconcile.Request) (reconcile.Resul
 		}
 
 		if err := r.actuator.Delete(ctx, m); err != nil {
+			// If you try to delete the instance and get a 404 response, it is common that the reconciler gets
+			// stuck in a delete loop. In order to break it, the user will need to manually delete the machine
+			// and whatever resource it is stuck looping on.
+			if errors.Is(err, errors.New("Resource not found")) {
+				// Remove finalizer so user can manually delete the machine
+				m.ObjectMeta.Finalizers = util.Filter(m.ObjectMeta.Finalizers, machinev1.MachineFinalizer)
+				if err := r.Client.Update(context.Background(), m); err != nil {
+					klog.Errorf("%v: failed to remove finalizer from machine: %v", machineName, err)
+					return reconcile.Result{}, err
+				}
+				klog.V(3).Infof("instance %v could not be deleted. The finalizer has been removed, please manually delete the machine and node", machineName)
+				return reconcile.Result{}, err
+			}
 			// isInvalidMachineConfiguration will take care of the case where the
 			// configuration is invalid from the beginning. len(m.Status.Addresses) > 0
 			// will handle the case when a machine configuration was invalidated
