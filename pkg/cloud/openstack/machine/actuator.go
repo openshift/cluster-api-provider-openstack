@@ -699,6 +699,15 @@ func (oc *OpenstackClient) validateMachine(machine *machinev1.Machine) error {
 
 	// TODO(mfedosin): add more validations here
 
+	// Validate that machine name != clusterID + machine-role
+	clusterID, _ := machineSpec.Labels["machine.openshift.io/cluster-api-cluster"]
+	machineRole, _ := machineSpec.Labels["machine.openshift.io/cluster-api-machine-role"]
+	if clusterID != "" && machineRole != "" {
+		if machineSpec.Name == fmt.Sprintf("%v-%v", clusterID, machineRole) {
+			return fmt.Errorf("\nInvalid machine name: %v", machineSpec.Name)
+		}
+	}
+
 	// Validate that image exists
 	err = machineService.DoesImageExist(machineSpec.Image)
 	if err != nil {
