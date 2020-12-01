@@ -14,16 +14,16 @@ require (
 	github.com/gophercloud/utils v0.0.0-20190124231947-9c3b9f2457ef
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.2
-	github.com/openshift/api v0.0.0-20200901182017-7ac89ba6b971
-	github.com/openshift/client-go v0.0.0-20200827190008-3062137373b5
-	github.com/openshift/machine-api-operator v0.2.1-0.20201002104344-6abfb5440597
+	github.com/openshift/api v0.0.0-20201019163320-c6a5ec25f267
+	github.com/openshift/client-go v0.0.0-20201020074620-f8fd44879f7c
+	github.com/openshift/machine-api-operator v0.2.1-0.20201127162808-71aeab4ff840
 	github.com/pkg/errors v0.9.1
 	github.com/vincent-petithory/dataurl v0.0.0-20160330182126-9a301d65acbb // indirect
 	go4.org v0.0.0-20191010144846-132d2879e1e9 // indirect
 	gopkg.in/yaml.v2 v2.3.0
-	k8s.io/api v0.19.0
-	k8s.io/apimachinery v0.19.0
-	k8s.io/client-go v0.19.0
+	k8s.io/api v0.19.2
+	k8s.io/apimachinery v0.19.2
+	k8s.io/client-go v0.19.2
 	k8s.io/cluster-bootstrap v0.0.0-20190202014938-c9acc0c1bea2
 	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.3.0
