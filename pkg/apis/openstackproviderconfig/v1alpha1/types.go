@@ -17,6 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/security/groups"
+	"github.com/gophercloud/gophercloud/openstack/networking/v2/networks"
+	"github.com/gophercloud/gophercloud/openstack/networking/v2/subnets"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -102,23 +105,7 @@ type SecurityGroupParam struct {
 	// Security Group name
 	Name string `json:"name,omitempty"`
 	// Filters used to query security groups in openstack
-	Filter SecurityGroupFilter `json:"filter,omitempty"`
-}
-
-type SecurityGroupFilter struct {
-	ID          string `json:"id,omitempty"`
-	Name        string `json:"name,omitempty"`
-	Description string `json:"description,omitempty"`
-	TenantID    string `json:"tenantId,omitempty"`
-	ProjectID   string `json:"projectId,omitempty"`
-	Limit       int    `json:"limit,omitempty"`
-	Marker      string `json:"marker,omitempty"`
-	SortKey     string `json:"sortKey,omitempty"`
-	SortDir     string `json:"sortDir,omitempty"`
-	Tags        string `json:"tags,omitempty"`
-	TagsAny     string `json:"tagsAny,omitempty"`
-	NotTags     string `json:"notTags,omitempty"`
-	NotTagsAny  string `json:"notTagsAny,omitempty"`
+	Filter groups.ListOpts `json:"filter,omitempty"`
 }
 
 type NetworkParam struct {
@@ -127,30 +114,11 @@ type NetworkParam struct {
 	// A fixed IPv4 address for the NIC.
 	FixedIp string `json:"fixedIp,omitempty"`
 	// Filters for optional network query
-	Filter Filter `json:"filter,omitempty"`
+	Filter networks.ListOpts `json:"filter,omitempty"`
 	// Subnet within a network to use
 	Subnets []SubnetParam `json:"subnets,omitempty"`
 	// NoAllowedAddressPairs disables creation of allowed address pairs for the network ports
 	NoAllowedAddressPairs bool `json:"noAllowedAddressPairs,omitempty"`
-}
-
-type Filter struct {
-	Status       string `json:"status,omitempty"`
-	Name         string `json:"name,omitempty"`
-	Description  string `json:"description,omitempty"`
-	AdminStateUp *bool  `json:"adminStateUp,omitempty"`
-	TenantID     string `json:"tenantId,omitempty"`
-	ProjectID    string `json:"projectId,omitempty"`
-	Shared       *bool  `json:"shared,omitempty"`
-	ID           string `json:"id,omitempty"`
-	Marker       string `json:"marker,omitempty"`
-	Limit        int    `json:"limit,omitempty"`
-	SortKey      string `json:"sortKey,omitempty"`
-	SortDir      string `json:"sortDir,omitempty"`
-	Tags         string `json:"tags,omitempty"`
-	TagsAny      string `json:"tagsAny,omitempty"`
-	NotTags      string `json:"notTags,omitempty"`
-	NotTagsAny   string `json:"notTagsAny,omitempty"`
 }
 
 type SubnetParam struct {
@@ -158,31 +126,7 @@ type SubnetParam struct {
 	UUID string `json:"uuid,omitempty"`
 
 	// Filters for optional network query
-	Filter SubnetFilter `json:"filter,omitempty"`
-}
-
-type SubnetFilter struct {
-	Name            string `json:"name,omitempty"`
-	Description     string `json:"description,omitempty"`
-	EnableDHCP      *bool  `json:"enableDhcp,omitempty"`
-	NetworkID       string `json:"networkId,omitempty"`
-	TenantID        string `json:"tenantId,omitempty"`
-	ProjectID       string `json:"projectId,omitempty"`
-	IPVersion       int    `json:"ipVersion,omitempty"`
-	GatewayIP       string `json:"gateway_ip,omitempty"`
-	CIDR            string `json:"cidr,omitempty"`
-	IPv6AddressMode string `json:"ipv6AddressMode,omitempty"`
-	IPv6RAMode      string `json:"ipv6RaMode,omitempty"`
-	ID              string `json:"id,omitempty"`
-	SubnetPoolID    string `json:"subnetpoolId,omitempty"`
-	Limit           int    `json:"limit,omitempty"`
-	Marker          string `json:"marker,omitempty"`
-	SortKey         string `json:"sortKey,omitempty"`
-	SortDir         string `json:"sortDir,omitempty"`
-	Tags            string `json:"tags,omitempty"`
-	TagsAny         string `json:"tagsAny,omitempty"`
-	NotTags         string `json:"notTags,omitempty"`
-	NotTagsAny      string `json:"notTagsAny,omitempty"`
+	Filter subnets.ListOpts `json:"filter,omitempty"`
 }
 
 type RootVolume struct {

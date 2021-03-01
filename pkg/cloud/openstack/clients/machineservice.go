@@ -345,7 +345,7 @@ func isDuplicate(list []string, name string) bool {
 func GetSecurityGroups(is *InstanceService, sg_param []openstackconfigv1.SecurityGroupParam) ([]string, error) {
 	var sgIDs []string
 	for _, sg := range sg_param {
-		listOpts := groups.ListOpts(sg.Filter)
+		listOpts := sg.Filter
 		listOpts.Name = sg.Name
 		listOpts.ID = sg.UUID
 		pages, err := groups.List(is.networkClient, listOpts).AllPages()
@@ -408,7 +408,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 	var nets []ServerNetwork
 	netsWithoutAllowedAddressPairs := map[string]struct{}{}
 	for _, net := range config.Networks {
-		opts := networks.ListOpts(net.Filter)
+		opts := net.Filter
 		opts.ID = net.UUID
 		ids, err := getNetworkIDsByFilter(is, &opts)
 		if err != nil {
@@ -425,7 +425,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 			}
 
 			for _, snet := range net.Subnets {
-				sopts := subnets.ListOpts(snet.Filter)
+				sopts := snet.Filter
 				sopts.ID = snet.UUID
 				sopts.NetworkID = netID
 				snets, err := getSubnetsByFilter(is, &sopts)
