@@ -100,6 +100,13 @@ type ServerNetwork struct {
 	portTags  []string
 	vnicType  string
 }
+
+// Extended Ports enables you to extract portsbinding info from query
+type ExtendedPorts struct {
+	ports.Port
+	portsbinding.PortsBindingExt
+}
+
 type InstanceListOpts struct {
 	// Name of the image in URL format.
 	Image string `q:"image"`
@@ -421,16 +428,26 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 		if err != nil {
 			return nil, err
 		}
+
+		// Set default number of ports created per network to 1
+		portCount := 1
+		if net.PortCount > 1 {
+			portCount = int(net.PortCount)
+		}
+
 		for _, netID := range ids {
 			if net.NoAllowedAddressPairs {
 				netsWithoutAllowedAddressPairs[netID] = struct{}{}
 			}
 			if net.Subnets == nil {
-				nets = append(nets, ServerNetwork{
-					networkID: netID,
-					portTags:  net.PortTags,
-					vnicType:  net.VNICType,
-				})
+				// Create one NIC per count
+				for i := portCount; i > 0; i-- {
+					nets = append(nets, ServerNetwork{
+						networkID: netID,
+						portTags:  net.PortTags,
+						vnicType:  net.VNICType,
+					})
+				}
 			}
 
 			for _, snetParam := range net.Subnets {
@@ -438,18 +455,25 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 				sopts.ID = snetParam.UUID
 				sopts.NetworkID = netID
 
+				portCount = 1
+				if snetParam.PortCount > 1 {
+					portCount = int(snetParam.PortCount)
+				}
+
 				// Query for all subnets that match filters
 				snetResults, err := getSubnetsByFilter(is, &sopts)
 				if err != nil {
 					return nil, err
 				}
 				for _, snet := range snetResults {
-					nets = append(nets, ServerNetwork{
-						networkID: snet.NetworkID,
-						subnetID:  snet.ID,
-						portTags:  append(net.PortTags, snetParam.PortTags...),
-						vnicType:  net.VNICType,
-					})
+					for i := portCount; i > 0; i-- {
+						nets = append(nets, ServerNetwork{
+							networkID: snet.NetworkID,
+							subnetID:  snet.ID,
+							portTags:  append(net.PortTags, snetParam.PortTags...),
+							vnicType:  net.VNICType,
+						})
+					}
 				}
 			}
 		}
@@ -478,25 +502,51 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 		}
 	}
 
+	// Convert nets list into a list of servers.Network to be passed as NICs for instance create
 	userData := base64.StdEncoding.EncodeToString([]byte(cmd))
 	var ports_list []servers.Network
+	takenPorts := map[string]bool{}
+
 	for _, net := range nets {
 		if net.networkID == "" {
 			return nil, fmt.Errorf("No network was found or provided. Please check your machine configuration and try again")
 		}
+
 		allPages, err := ports.List(is.networkClient, ports.ListOpts{
 			Name:      name,
 			NetworkID: net.networkID,
+			Status:    "DOWN",
 		}).AllPages()
 		if err != nil {
 			return nil, fmt.Errorf("Searching for existing port for server err: %v", err)
 		}
-		portList, err := ports.ExtractPorts(allPages)
+
+		var portList []ExtendedPorts
+		err = ports.ExtractPortsInto(allPages, &portList)
 		if err != nil {
 			return nil, fmt.Errorf("Searching for existing port for server err: %v", err)
 		}
+
+		// Iterate through ports that already exist and select a port with the status `Down`
+		// with the correct vnic type if it exists
 		var port ports.Port
-		if len(portList) == 0 {
+		nicType := "normal"
+		if net.vnicType != "" {
+			nicType = net.vnicType
+		}
+
+		if len(portList) > 0 {
+			for _, p := range portList {
+				if !takenPorts[p.ID] && p.PortsBindingExt.VNICType == nicType {
+					takenPorts[p.ID] = true
+					port = p.Port
+				}
+			}
+		}
+
+		// If we could not find a suitable port to use in OpenStack
+		// create a new one
+		if port.ID == "" {
 			// create server port
 			if _, ok := netsWithoutAllowedAddressPairs[net.networkID]; ok {
 				// create ports without address pairs
@@ -507,11 +557,9 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 			if err != nil {
 				return nil, fmt.Errorf("Failed to create port err: %v", err)
 			}
-		} else {
-			port = portList[0]
 		}
 
-		portTags := deduplicateList(append(machineTags, port.Tags...))
+		portTags := deduplicateList(append(machineTags, net.portTags...))
 		_, err = attributestags.ReplaceAll(is.networkClient, "ports", port.ID, attributestags.ReplaceAllOpts{
 			Tags: portTags}).Extract()
 		if err != nil {

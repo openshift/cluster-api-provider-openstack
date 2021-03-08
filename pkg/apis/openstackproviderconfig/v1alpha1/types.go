@@ -134,7 +134,14 @@ type NetworkParam struct {
 	NoAllowedAddressPairs bool `json:"noAllowedAddressPairs,omitempty"`
 	// PortTags allows users to specify a list of tags to add to ports created in a given network
 	PortTags []string `json:"portTags,omitempty"`
-	VNICType string   `json:"vnicType,omitempty"`
+	// VNICTYpe specifies the nic type of the ports created on this network
+	// Default: "Normal"
+	// +optional
+	VNICType string `json:"vnicType,omitempty"`
+	// PortCount is a positive, non-zero, intiger representing the number of ports in this network to attach to each node
+	// Default: 1
+	// +optional
+	PortCount uint `json:"portCount,omitempty"`
 }
 
 type Filter struct {
@@ -165,6 +172,11 @@ type SubnetParam struct {
 
 	// PortTags are tags that are added to ports created on this subnet
 	PortTags []string `json:"portTags,omitempty"`
+
+	// PortCount is a positive, non-zero, intiger representing the number of ports in this subnet to attach to each node
+	// Default: 1
+	// +optional
+	PortCount uint `json:"portCount,omitempty"`
 }
 
 type SubnetFilter struct {
