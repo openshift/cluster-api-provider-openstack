@@ -43,6 +43,7 @@ import (
 	netext "github.com/gophercloud/gophercloud/openstack/networking/v2/extensions"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/attributestags"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/portsbinding"
+	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/portsecurity"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/trunks"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/networks"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/ports"
@@ -95,16 +96,24 @@ type Instance struct {
 }
 
 type ServerNetwork struct {
-	networkID string
-	subnetID  string
-	portTags  []string
-	vnicType  string
+	networkID    string
+	subnetID     string
+	portTags     []string
+	vnicType     string
+	portSecurity *bool
 }
 
 // Extended Ports enables you to extract portsbinding info from query
 type ExtendedPorts struct {
 	ports.Port
 	portsbinding.PortsBindingExt
+	portsecurity.PortSecurityExt
+}
+
+// for updating port security
+var portWithPortSecurityExtensions struct {
+	ports.Port
+	portsecurity.PortSecurityExt
 }
 
 type InstanceListOpts struct {
@@ -443,9 +452,10 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 				// Create one NIC per count
 				for i := portCount; i > 0; i-- {
 					nets = append(nets, ServerNetwork{
-						networkID: netID,
-						portTags:  net.PortTags,
-						vnicType:  net.VNICType,
+						networkID:    netID,
+						portTags:     net.PortTags,
+						vnicType:     net.VNICType,
+						portSecurity: net.PortSecurity,
 					})
 				}
 			}
@@ -454,6 +464,12 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 				sopts := subnets.ListOpts(snetParam.Filter)
 				sopts.ID = snetParam.UUID
 				sopts.NetworkID = netID
+
+				// inherit port security settings from network if not set on subnet
+				portSecurity := net.PortSecurity
+				if snetParam.PortSecurity != nil {
+					portSecurity = snetParam.PortSecurity
+				}
 
 				portCount = 1
 				if snetParam.PortCount > 1 {
@@ -468,10 +484,11 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 				for _, snet := range snetResults {
 					for i := portCount; i > 0; i-- {
 						nets = append(nets, ServerNetwork{
-							networkID: snet.NetworkID,
-							subnetID:  snet.ID,
-							portTags:  append(net.PortTags, snetParam.PortTags...),
-							vnicType:  net.VNICType,
+							networkID:    snet.NetworkID,
+							subnetID:     snet.ID,
+							portTags:     append(net.PortTags, snetParam.PortTags...),
+							vnicType:     net.VNICType,
+							portSecurity: portSecurity,
 						})
 					}
 				}
@@ -505,48 +522,23 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 	// Convert nets list into a list of servers.Network to be passed as NICs for instance create
 	userData := base64.StdEncoding.EncodeToString([]byte(cmd))
 	var ports_list []servers.Network
-	takenPorts := map[string]bool{}
-
 	for _, net := range nets {
 		if net.networkID == "" {
 			return nil, fmt.Errorf("No network was found or provided. Please check your machine configuration and try again")
 		}
-
 		allPages, err := ports.List(is.networkClient, ports.ListOpts{
 			Name:      name,
 			NetworkID: net.networkID,
-			Status:    "DOWN",
 		}).AllPages()
 		if err != nil {
 			return nil, fmt.Errorf("Searching for existing port for server err: %v", err)
 		}
-
-		var portList []ExtendedPorts
-		err = ports.ExtractPortsInto(allPages, &portList)
+		portList, err := ports.ExtractPorts(allPages)
 		if err != nil {
 			return nil, fmt.Errorf("Searching for existing port for server err: %v", err)
 		}
-
-		// Iterate through ports that already exist and select a port with the status `Down`
-		// with the correct vnic type if it exists
 		var port ports.Port
-		nicType := "normal"
-		if net.vnicType != "" {
-			nicType = net.vnicType
-		}
-
-		if len(portList) > 0 {
-			for _, p := range portList {
-				if !takenPorts[p.ID] && p.PortsBindingExt.VNICType == nicType {
-					takenPorts[p.ID] = true
-					port = p.Port
-				}
-			}
-		}
-
-		// If we could not find a suitable port to use in OpenStack
-		// create a new one
-		if port.ID == "" {
+		if len(portList) == 0 {
 			// create server port
 			if _, ok := netsWithoutAllowedAddressPairs[net.networkID]; ok {
 				// create ports without address pairs
@@ -556,6 +548,35 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 			}
 			if err != nil {
 				return nil, fmt.Errorf("Failed to create port err: %v", err)
+			}
+		} else {
+			port = portList[0]
+		}
+
+		if len(portList) == 0 {
+			secGroups := &securityGroups
+			addrPairs := &allowedAddressPairs
+			if net.portSecurity != nil && *net.portSecurity == false {
+				secGroups = &[]string{}
+				addrPairs = &[]ports.AddressPair{}
+			} else if _, ok := netsWithoutAllowedAddressPairs[net.networkID]; ok {
+				addrPairs = &[]ports.AddressPair{}
+			}
+
+			port, err = CreatePort(is, name, net, secGroups, addrPairs)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to create port err: %v", err)
+			}
+		}
+
+		if net.portSecurity != nil {
+			updateOpts := portsecurity.PortUpdateOptsExt{
+				UpdateOptsBuilder:   ports.UpdateOpts{},
+				PortSecurityEnabled: net.portSecurity,
+			}
+			err := ports.Update(is.networkClient, port.ID, updateOpts).ExtractInto(&portWithPortSecurityExtensions)
+			if err != nil {
+				return nil, fmt.Errorf("Failed to set port security on port %s: %v", port.ID, err)
 			}
 		}
 

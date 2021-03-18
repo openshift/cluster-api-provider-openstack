@@ -142,6 +142,9 @@ type NetworkParam struct {
 	// Default: 1
 	// +optional
 	PortCount uint `json:"portCount,omitempty"`
+	// PortSecurity is a boolean value that indicates whether security is enabled on ports created for this subnet
+	// Default: Nova default
+	PortSecurity *bool `json:"portSecurity,omitempty"`
 }
 
 type Filter struct {
@@ -177,6 +180,10 @@ type SubnetParam struct {
 	// Default: 1
 	// +optional
 	PortCount uint `json:"portCount,omitempty"`
+
+	// PortSecurity is a boolean value that indicates whether security is enabled on ports created for this subnet
+	// Default: Nova default
+	PortSecurity *bool `json:"portSecurity,omitempty"`
 }
 
 type SubnetFilter struct {
