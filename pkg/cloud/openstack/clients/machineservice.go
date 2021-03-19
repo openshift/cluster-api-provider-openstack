@@ -101,13 +101,13 @@ type ServerNetwork struct {
 	portTags     []string
 	vnicType     string
 	portSecurity *bool
+	portName     string
 }
 
-// Extended Ports enables you to extract portsbinding info from query
-type ExtendedPorts struct {
+// for geting vnic type when listing ports
+type portWithPortsbinding struct {
 	ports.Port
 	portsbinding.PortsBindingExt
-	portsecurity.PortSecurityExt
 }
 
 // for updating port security
@@ -450,12 +450,13 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 			}
 			if net.Subnets == nil {
 				// Create one NIC per count
-				for i := portCount; i > 0; i-- {
+				for i := 0; i < portCount; i++ {
 					nets = append(nets, ServerNetwork{
 						networkID:    netID,
 						portTags:     net.PortTags,
 						vnicType:     net.VNICType,
 						portSecurity: net.PortSecurity,
+						portName:     fmt.Sprintf("%s-%d", name, i),
 					})
 				}
 			}
@@ -471,8 +472,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 					portSecurity = snetParam.PortSecurity
 				}
 
-				portCount = 1
-				if snetParam.PortCount > 1 {
+				if snetParam.PortCount > 0 {
 					portCount = int(snetParam.PortCount)
 				}
 
@@ -482,13 +482,14 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 					return nil, err
 				}
 				for _, snet := range snetResults {
-					for i := portCount; i > 0; i-- {
+					for i := 0; i < portCount; i++ {
 						nets = append(nets, ServerNetwork{
 							networkID:    snet.NetworkID,
 							subnetID:     snet.ID,
 							portTags:     append(net.PortTags, snetParam.PortTags...),
 							vnicType:     net.VNICType,
 							portSecurity: portSecurity,
+							portName:     fmt.Sprintf("%s-%d", name, i),
 						})
 					}
 				}
@@ -526,58 +527,31 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 		if net.networkID == "" {
 			return nil, fmt.Errorf("No network was found or provided. Please check your machine configuration and try again")
 		}
-		allPages, err := ports.List(is.networkClient, ports.ListOpts{
-			Name:      name,
-			NetworkID: net.networkID,
-		}).AllPages()
-		if err != nil {
-			return nil, fmt.Errorf("Searching for existing port for server err: %v", err)
-		}
-		portList, err := ports.ExtractPorts(allPages)
-		if err != nil {
-			return nil, fmt.Errorf("Searching for existing port for server err: %v", err)
-		}
 		var port ports.Port
-		if len(portList) == 0 {
-			// create server port
-			if _, ok := netsWithoutAllowedAddressPairs[net.networkID]; ok {
-				// create ports without address pairs
-				port, err = CreatePort(is, name, net, &securityGroups, &[]ports.AddressPair{})
-			} else {
-				port, err = CreatePort(is, name, net, &securityGroups, &allowedAddressPairs)
-			}
-			if err != nil {
-				return nil, fmt.Errorf("Failed to create port err: %v", err)
-			}
-		} else {
-			port = portList[0]
+		secGroups := &securityGroups
+		addrPairs := &allowedAddressPairs
+		if net.portSecurity != nil && *net.portSecurity == false {
+			secGroups = &[]string{}
+			addrPairs = &[]ports.AddressPair{}
+		}
+		if _, ok := netsWithoutAllowedAddressPairs[net.networkID]; ok {
+			addrPairs = &[]ports.AddressPair{}
 		}
 
-		if len(portList) == 0 {
-			secGroups := &securityGroups
-			addrPairs := &allowedAddressPairs
-			if net.portSecurity != nil && *net.portSecurity == false {
-				secGroups = &[]string{}
-				addrPairs = &[]ports.AddressPair{}
-			} else if _, ok := netsWithoutAllowedAddressPairs[net.networkID]; ok {
-				addrPairs = &[]ports.AddressPair{}
-			}
-
-			port, err = CreatePort(is, name, net, secGroups, addrPairs)
-			if err != nil {
-				return nil, fmt.Errorf("Failed to create port err: %v", err)
-			}
+		port, err = CreatePort(is, net.portName, net, secGroups, addrPairs)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to create port err: %v", err)
 		}
 
-		if net.portSecurity != nil {
-			updateOpts := portsecurity.PortUpdateOptsExt{
-				UpdateOptsBuilder:   ports.UpdateOpts{},
-				PortSecurityEnabled: net.portSecurity,
-			}
-			err := ports.Update(is.networkClient, port.ID, updateOpts).ExtractInto(&portWithPortSecurityExtensions)
-			if err != nil {
-				return nil, fmt.Errorf("Failed to set port security on port %s: %v", port.ID, err)
-			}
+		// Update the port with the correct port security settings
+		// TODO(egarcia): figure out if possible to make this part of the prior create and update api calls
+		updateOpts := portsecurity.PortUpdateOptsExt{
+			UpdateOptsBuilder:   ports.UpdateOpts{},
+			PortSecurityEnabled: net.portSecurity,
+		}
+		err = ports.Update(is.networkClient, port.ID, updateOpts).ExtractInto(&portWithPortSecurityExtensions)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to update port security on port %s: %v", port.ID, err)
 		}
 
 		portTags := deduplicateList(append(machineTags, net.portTags...))
@@ -591,31 +565,13 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 		})
 
 		if config.Trunk == true {
-			allPages, err := trunks.List(is.networkClient, trunks.ListOpts{
+			trunkCreateOpts := trunks.CreateOpts{
 				Name:   name,
 				PortID: port.ID,
-			}).AllPages()
-			if err != nil {
-				return nil, fmt.Errorf("Searching for existing trunk for server err: %v", err)
 			}
-			trunkList, err := trunks.ExtractTrunks(allPages)
+			trunk, err := trunks.Create(is.networkClient, trunkCreateOpts).Extract()
 			if err != nil {
-				return nil, fmt.Errorf("Searching for existing trunk for server err: %v", err)
-			}
-			var trunk trunks.Trunk
-			if len(trunkList) == 0 {
-				// create trunk with the previous port as parent
-				trunkCreateOpts := trunks.CreateOpts{
-					Name:   name,
-					PortID: port.ID,
-				}
-				newTrunk, err := trunks.Create(is.networkClient, trunkCreateOpts).Extract()
-				if err != nil {
-					return nil, fmt.Errorf("Create trunk for server err: %v", err)
-				}
-				trunk = *newTrunk
-			} else {
-				trunk = trunkList[0]
+				return nil, fmt.Errorf("Create trunk for server err: %v", err)
 			}
 
 			_, err = attributestags.ReplaceAll(is.networkClient, "trunks", trunk.ID, attributestags.ReplaceAllOpts{

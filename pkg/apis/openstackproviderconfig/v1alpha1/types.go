@@ -134,16 +134,17 @@ type NetworkParam struct {
 	NoAllowedAddressPairs bool `json:"noAllowedAddressPairs,omitempty"`
 	// PortTags allows users to specify a list of tags to add to ports created in a given network
 	PortTags []string `json:"portTags,omitempty"`
-	// VNICTYpe specifies the nic type of the ports created on this network
-	// Default: "Normal"
+	// VNICType specifies the nic type of the ports created on this network
+	// Default: nova default
 	// +optional
 	VNICType string `json:"vnicType,omitempty"`
-	// PortCount is a positive, non-zero, intiger representing the number of ports in this network to attach to each node
+	// PortCount is a positive, non-zero, integer representing the number of ports in this network to attach to each node
 	// Default: 1
 	// +optional
 	PortCount uint `json:"portCount,omitempty"`
 	// PortSecurity is a boolean value that indicates whether security is enabled on ports created for this subnet
 	// Default: Nova default
+	// +optional
 	PortSecurity *bool `json:"portSecurity,omitempty"`
 }
 
@@ -183,6 +184,7 @@ type SubnetParam struct {
 
 	// PortSecurity is a boolean value that indicates whether security is enabled on ports created for this subnet
 	// Default: Nova default
+	// +optional
 	PortSecurity *bool `json:"portSecurity,omitempty"`
 }
 
