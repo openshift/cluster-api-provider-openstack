@@ -499,7 +499,9 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 
 			for _, snetParam := range net.Subnets {
 				sopts := subnets.ListOpts(snetParam.Filter)
-				sopts.ID = snetParam.UUID
+				if snetParam.UUID == "" {
+					sopts.ID = snetParam.UUID
+				}
 				sopts.NetworkID = netID
 				// Inherit portSecurity from network if unset on subnet
 				portSecurity := net.PortSecurity
