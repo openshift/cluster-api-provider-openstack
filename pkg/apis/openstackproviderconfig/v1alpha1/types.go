@@ -222,6 +222,9 @@ type PortOpts struct {
 	// enable or disable security on a given port
 	// incompatible with securityGroups and allowedAddressPairs
 	PortSecurity *bool `json:"portSecurity,omitempty"`
+
+	// Port is to be part of a trunk
+	Trunk               bool               `json:"trunnk,omitempty"`
 }
 
 type FixedIPs struct {

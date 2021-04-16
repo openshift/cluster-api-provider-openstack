@@ -438,6 +438,19 @@ func GetSecurityGroups(is *InstanceService, sg_param []openstackconfigv1.Securit
 	return sgIDs, nil
 }
 
+
+func configNeedsTrunk( config *openstackconfigv1.OpenstackProviderSpec) bool {
+	if config.Trunk == true {
+		return true
+	}
+	for _, portCreateOpts := range config.Ports {
+		if portCreateOpts.Trunk {
+			return true
+		}
+	}
+	return false
+}
+
 // InstanceCreate creates a compute instance.
 // If ServerGroupName is nonempty and no server group exists with that name,
 // then InstanceCreate creates a server group with that name.
@@ -445,7 +458,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 	if config == nil {
 		return nil, fmt.Errorf("create Options need be specified to create instace")
 	}
-	if config.Trunk == true {
+	if configNeedsTrunk(config) == true {
 		trunkSupport, err := GetTrunkSupport(is)
 		if err != nil {
 			return nil, fmt.Errorf("There was an issue verifying whether trunk support is available, please disable it: %v", err)
@@ -494,6 +507,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 					Tags:         net.PortTags,
 					VNICType:     net.VNICType,
 					PortSecurity: net.PortSecurity,
+					Trunk:        config.Trunk,
 				})
 			}
 
@@ -519,6 +533,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 						Tags:         append(net.PortTags, snetParam.PortTags...),
 						VNICType:     net.VNICType,
 						PortSecurity: portSecurity,
+						Trunk:        config.Trunk,
 					})
 				}
 			}
@@ -575,7 +590,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 			Port: port.ID,
 		})
 
-		if config.Trunk == true {
+		if portOpt.Trunk == true {
 			allPages, err := trunks.List(is.networkClient, trunks.ListOpts{
 				Name:   name,
 				PortID: port.ID,
