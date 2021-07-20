@@ -330,10 +330,9 @@ func getSubnetsByFilter(is *InstanceService, opts *subnets.ListOpts) ([]subnets.
 
 func getOrCreatePort(is *InstanceService, name string, portOpts openstackconfigv1.PortOpts) (*ports.Port, error) {
 	var portName string
+	portName = name
 	if portOpts.NameSuffix != "" {
 		portName = name + "-" + portOpts.NameSuffix
-	} else {
-		portName = name
 	}
 	if len(portName) > PortNameMaxSize {
 		portName = portName[len(portName)-PortNameMaxSize:]
@@ -458,6 +457,58 @@ func GetSecurityGroups(is *InstanceService, sg_param []openstackconfigv1.Securit
 	return sgIDs, nil
 }
 
+func trunkSupportNeeded(config *openstackconfigv1.OpenstackProviderSpec) bool {
+	if config.Trunk == true {
+		return true
+	}
+	for _, portCreateOpts := range config.Ports {
+		if portCreateOpts.Trunk != nil && *portCreateOpts.Trunk == true {
+			return true
+		}
+	}
+	return false
+}
+
+func getOrCreateTrunk(is *InstanceService, port *ports.Port, machineTags []string) (*trunks.Trunk, error) {
+	trunkName := port.Name + "-trunk"
+	if len(trunkName) > PortNameMaxSize {
+		trunkName = trunkName[len(trunkName)-PortNameMaxSize:]
+	}
+	allPages, err := trunks.List(is.networkClient, trunks.ListOpts{
+		Name:   trunkName,
+		PortID: port.ID,
+	}).AllPages()
+	if err != nil {
+		return nil, fmt.Errorf("Searching for existing trunk for port %q err: %v", port.ID, err)
+	}
+	trunkList, err := trunks.ExtractTrunks(allPages)
+	if err != nil {
+		return nil, fmt.Errorf("Searching for existing trunk for port %q err: %v", port.ID, err)
+	}
+	var trunk trunks.Trunk
+	if len(trunkList) == 0 {
+		// create trunk with the previous port as parent
+		trunkCreateOpts := trunks.CreateOpts{
+			Name:   trunkName,
+			PortID: port.ID,
+		}
+		newTrunk, err := trunks.Create(is.networkClient, trunkCreateOpts).Extract()
+		if err != nil {
+			return nil, fmt.Errorf("Create trunk for port %q err: %v", port.ID, err)
+		}
+		trunk = *newTrunk
+	} else {
+		trunk = trunkList[0]
+	}
+
+	_, err = attributestags.ReplaceAll(is.networkClient, "trunks", trunk.ID, attributestags.ReplaceAllOpts{
+		Tags: machineTags}).Extract()
+	if err != nil {
+		return nil, fmt.Errorf("Tagging trunk for port %q err: %v", port.ID, err)
+	}
+	return &trunk, nil
+}
+
 // InstanceCreate creates a compute instance.
 // If ServerGroupName is nonempty and no server group exists with that name,
 // then InstanceCreate creates a server group with that name.
@@ -465,7 +516,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 	if config == nil {
 		return nil, fmt.Errorf("create Options need be specified to create instace")
 	}
-	if config.Trunk == true {
+	if trunkSupportNeeded(config) == true {
 		trunkSupport, err := GetTrunkSupport(is)
 		if err != nil {
 			return nil, fmt.Errorf("There was an issue verifying whether trunk support is available, please disable it: %v", err)
@@ -595,42 +646,17 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 		})
 
 		if config.Trunk == true {
-			allPages, err := trunks.List(is.networkClient, trunks.ListOpts{
-				Name:   name,
-				PortID: port.ID,
-			}).AllPages()
+			_, err := getOrCreateTrunk(is, port, machineTags)
 			if err != nil {
-				return nil, fmt.Errorf("Searching for existing trunk for server err: %v", err)
-			}
-			trunkList, err := trunks.ExtractTrunks(allPages)
-			if err != nil {
-				return nil, fmt.Errorf("Searching for existing trunk for server err: %v", err)
-			}
-			var trunk trunks.Trunk
-			if len(trunkList) == 0 {
-				// create trunk with the previous port as parent
-				trunkCreateOpts := trunks.CreateOpts{
-					Name:   name,
-					PortID: port.ID,
-				}
-				newTrunk, err := trunks.Create(is.networkClient, trunkCreateOpts).Extract()
-				if err != nil {
-					return nil, fmt.Errorf("Create trunk for server err: %v", err)
-				}
-				trunk = *newTrunk
-			} else {
-				trunk = trunkList[0]
-			}
-
-			_, err = attributestags.ReplaceAll(is.networkClient, "trunks", trunk.ID, attributestags.ReplaceAllOpts{
-				Tags: machineTags}).Extract()
-			if err != nil {
-				return nil, fmt.Errorf("Tagging trunk for server err: %v", err)
+				return nil, err
 			}
 		}
 	}
 
 	for _, portCreateOpts := range config.Ports {
+		if portCreateOpts.Trunk == nil {
+			portCreateOpts.Trunk = &config.Trunk
+		}
 		port, err := getOrCreatePort(is, name, portCreateOpts)
 		if err != nil {
 			return nil, err
@@ -646,6 +672,13 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 		portsList = append(portsList, servers.Network{
 			Port: port.ID,
 		})
+
+		if *portCreateOpts.Trunk == true {
+			_, err := getOrCreateTrunk(is, port, machineTags)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	if len(portsList) == 0 {
