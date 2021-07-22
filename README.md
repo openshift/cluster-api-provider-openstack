@@ -201,3 +201,4 @@ your openstack Cluster API Kubernetes cluster.
 ### Trouble shooting
 
 Please refer to [Trouble shooting documentation](docs/trouble_shooting.md) for further info.
+copyright 2021
