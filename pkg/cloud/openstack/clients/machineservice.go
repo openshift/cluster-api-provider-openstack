@@ -49,6 +49,7 @@ import (
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/ports"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/subnets"
 	"github.com/gophercloud/gophercloud/pagination"
+	volumeutils "github.com/gophercloud/utils/openstack/blockstorage/v3/volumes"
 	"github.com/gophercloud/utils/openstack/clientconfig"
 	azutils "github.com/gophercloud/utils/openstack/compute/v2/availabilityzones"
 	flavorutils "github.com/gophercloud/utils/openstack/compute/v2/flavors"
@@ -727,7 +728,7 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 			// Deleting any volumes with the same name, as they may
 			// be leftovers from a previous failed try.
 			{
-				volumeIDs, err := volumeIDsFromName(is.volumeClient, volumeName)
+				volumeIDs, err := volumeutils.IDsFromName(is.volumeClient, volumeName)
 				if err != nil {
 					klog.Infof("unable to list volumes with name %q: %v.", volumeName, err)
 				}
@@ -899,7 +900,7 @@ func deduplicateList(list []string) []string {
 }
 
 func getServerGroupsByName(computeClient *gophercloud.ServiceClient, name string) ([]servergroups.ServerGroup, error) {
-	pages, err := servergroups.List(computeClient).AllPages()
+	pages, err := servergroups.List(computeClient, nil).AllPages()
 	if err != nil {
 		return nil, err
 	}

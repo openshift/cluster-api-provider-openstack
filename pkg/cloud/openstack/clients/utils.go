@@ -9,7 +9,6 @@ import (
 
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
-	"github.com/gophercloud/gophercloud/openstack/blockstorage/v3/volumes"
 	"github.com/gophercloud/utils/openstack/clientconfig"
 	machinev1 "github.com/openshift/machine-api-operator/pkg/apis/machine/v1beta1"
 
@@ -106,27 +105,4 @@ func GetProviderClient(cloud clientconfig.Cloud, cert []byte) (*gophercloud.Prov
 	}
 
 	return provider, nil
-}
-
-// volumeIDsFromName returns zero or more IDs corresponding to a name. The returned
-// error is only non-nil in case of failure.
-func volumeIDsFromName(client *gophercloud.ServiceClient, name string) ([]string, error) {
-	pages, err := volumes.List(client, volumes.ListOpts{
-		Name: name,
-	}).AllPages()
-	if err != nil {
-		return nil, err
-	}
-
-	all, err := volumes.ExtractVolumes(pages)
-	if err != nil {
-		return nil, err
-	}
-
-	IDs := make([]string, len(all))
-	for i := range all {
-		IDs[i] = all[i].ID
-	}
-
-	return IDs, nil
 }
