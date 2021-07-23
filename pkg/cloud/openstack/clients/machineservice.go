@@ -462,6 +462,17 @@ func GetSecurityGroups(is *InstanceService, sg_param []openstackconfigv1.Securit
 // If ServerGroupName is nonempty and no server group exists with that name,
 // then InstanceCreate creates a server group with that name.
 func (is *InstanceService) InstanceCreate(clusterName string, name string, clusterSpec *openstackconfigv1.OpenstackClusterProviderSpec, config *openstackconfigv1.OpenstackProviderSpec, cmd string, keyName string, configClient configclient.ConfigV1Interface) (instance *Instance, err error) {
+	// server is only non-nil in case of successful server creation.
+	//
+	// There are multiple preparation steps in this method, some of which
+	// create resources (e.g. a volume in case of boot-from-volume with
+	// "image" source), and all of which have a chance to fail.
+	//
+	// This variable is guaranteed to remain nil until server creation is
+	// successful. Deferred cleanup functions can restore the initial state
+	// in case of failure, by only acting if "server" is nil.
+	var server *servers.Server
+
 	if config == nil {
 		return nil, fmt.Errorf("create Options need be specified to create instace")
 	}
@@ -732,15 +743,21 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 
 			volumeID = volume.ID
 
-			err = volumes.WaitForStatus(is.volumeClient, volumeID, "available", 300)
-			if err != nil {
-				klog.Infof("Bootable volume %v creation failed. Removing...", volumeID)
-				err = volumes.Delete(is.volumeClient, volumeID, volumes.DeleteOpts{}).ExtractErr()
-				if err != nil {
-					return nil, fmt.Errorf("Bootable volume deletion err: %v", err)
+			defer func() {
+				// If the server is created in Nova, the lifetime of the associated volume will be
+				// bound to it. This deferred cleanup function tackles the case where a volume was created
+				// but never attached to a server. In that case, the volume must be removed manually.
+				if server == nil {
+					if err := volumes.Delete(is.volumeClient, volumeID, nil).ExtractErr(); err != nil {
+						klog.Infof("Failed to delete stale volume %q", volumeID)
+					} else {
+						klog.Infof("Deleted stale volume %q", volumeID)
+					}
 				}
+			}()
 
-				return nil, fmt.Errorf("Bootable volume %v is not available err: %v", volumeID, err)
+			if err := volumes.WaitForStatus(is.volumeClient, volumeID, "available", 300); err != nil {
+				return nil, fmt.Errorf("bootable volume is not available: %v", err)
 			}
 
 			klog.Infof("Bootable volume %v was created successfully.", volumeID)
@@ -815,11 +832,14 @@ func (is *InstanceService) InstanceCreate(clusterName string, name string, clust
 		}
 	}
 
-	server, err := servers.Create(is.computeClient, keypairs.CreateOptsExt{
+	server, err = servers.Create(is.computeClient, keypairs.CreateOptsExt{
 		CreateOptsBuilder: serverCreateOpts,
 		KeyName:           keyName,
 	}).Extract()
 	if err != nil {
+		// Gophercloud does not guarantee "server" to be nil when "err"
+		// is not nil. Resetting to nil to trigger cleanup functions.
+		server = nil
 		return nil, fmt.Errorf("Create new server err: %v", err)
 	}
 
