@@ -221,6 +221,9 @@ type PortOpts struct {
 	// enable or disable security on a given port
 	// incompatible with securityGroups and allowedAddressPairs
 	PortSecurity *bool `json:"portSecurity,omitempty"`
+
+	// Enables and disables trunk at port level. If not provided, openStackMachine.Spec.Trunk is inherited.
+	Trunk *bool `json:"trunk,omitempty"`
 }
 
 type AddressPair struct {
