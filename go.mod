@@ -1,6 +1,6 @@
 module sigs.k8s.io/cluster-api-provider-openstack
 
-go 1.16
+go 1.17
 
 require (
 	github.com/ajeddeloh/go-json v0.0.0-20170920214419-6a2fe990e083 // indirect
