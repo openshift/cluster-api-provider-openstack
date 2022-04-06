@@ -87,8 +87,10 @@ spec:
                           on the APIServer will be created
                         type: integer
                       bastion:
-                        description: Bastion is the OpenStack instance to login the
-                          nodes
+                        description: "Bastion is the OpenStack instance to login the
+                          nodes \n As a rolling update is not ideal during a bastion
+                          host session, we prevent changes to a running bastion configuration.
+                          Set `enabled: false` to make changes."
                         properties:
                           availabilityZone:
                             type: string
@@ -764,19 +766,31 @@ spec:
                           a new floatingIP is allocated. This field is not used if
                           DisableAPIServerFloatingIP is set to true.
                         type: string
-                      apiServerLoadBalancerAdditionalPorts:
-                        description: APIServerLoadBalancerAdditionalPorts adds additional
-                          ports to the APIServerLoadBalancer
-                        items:
-                          type: integer
-                        type: array
+                      apiServerLoadBalancer:
+                        description: 'APIServerLoadBalancer configures the optional
+                          LoadBalancer for the APIServer. It must be activated by
+                          setting `enabled: true`.'
+                        properties:
+                          additionalPorts:
+                            description: AdditionalPorts adds additional tcp ports
+                              to the Loadbalacner
+                            items:
+                              type: integer
+                            type: array
+                          enabled:
+                            description: Enabled defines whether a LoadBalancer should
+                              be created.
+                            type: boolean
+                        type: object
                       apiServerPort:
                         description: APIServerPort is the port on which the listener
                           on the APIServer will be created
                         type: integer
                       bastion:
-                        description: Bastion is the OpenStack instance to login the
-                          nodes
+                        description: "Bastion is the OpenStack instance to login the
+                          nodes \n As a rolling update is not ideal during a bastion
+                          host session, we prevent changes to a running bastion configuration.
+                          Set `enabled: false` to make changes."
                         properties:
                           availabilityZone:
                             type: string
@@ -1283,10 +1297,6 @@ spec:
                         - kind
                         - name
                         type: object
-                      managedAPIServerLoadBalancer:
-                        description: ManagedAPIServerLoadBalancer defines whether
-                          a LoadBalancer for the APIServer should be created.
-                        type: boolean
                       managedSecurityGroups:
                         description: ManagedSecurityGroups determines whether OpenStack
                           security groups for the cluster will be managed by the OpenStack
