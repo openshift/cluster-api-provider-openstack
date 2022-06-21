@@ -1071,7 +1071,7 @@ func (is *InstanceService) InstanceDelete(id string) error {
 	if err != nil {
 		if httpStatus, ok := err.(gophercloud.ErrDefault404); ok {
 			if httpStatus.Actual == 404 {
-				klog.Warningf("Couldn't find instance %v to delete: %v", id, err)
+				klog.Infof("Couldn't find instance %v to delete: %v", id, err)
 				return nil
 			}
 		}
