@@ -1065,7 +1065,18 @@ func (is *InstanceService) InstanceDelete(id string) error {
 	}
 
 	// delete instance
-	return servers.Delete(is.computeClient, id).ExtractErr()
+	err = servers.Delete(is.computeClient, id).ExtractErr()
+
+	// we don't report HTTP 404 since that's okay - the server is gone already
+	if err != nil {
+		if httpStatus, ok := err.(gophercloud.ErrDefault404); ok {
+			if httpStatus.Actual == 404 {
+				klog.Warningf("Couldn't find instance %v to delete: %v", id, err)
+				return nil
+			}
+		}
+	}
+	return err
 }
 
 func GetTrunkSupport(is *InstanceService) (bool, error) {
