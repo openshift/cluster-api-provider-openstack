@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,7 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/metrics"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/record"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/names"
@@ -114,16 +114,17 @@ func (s *Service) DeleteFloatingIP(eventObject runtime.Object, ip string) error 
 
 var backoff = wait.Backoff{
 	Steps:    10,
-	Duration: 30 * time.Second,
-	Factor:   1.0,
+	Duration: 1 * time.Second,
+	Factor:   2.0,
 	Jitter:   0.1,
+	Cap:      30 * time.Second,
 }
 
 func (s *Service) AssociateFloatingIP(eventObject runtime.Object, fp *floatingips.FloatingIP, portID string) error {
 	s.scope.Logger.Info("Associating floating IP", "id", fp.ID, "ip", fp.FloatingIP)
 
 	if fp.PortID == portID {
-		record.Eventf(eventObject, "SuccessfulAssociateFloatingIP", "Floating IP %s already associated with port %s", fp.FloatingIP, portID)
+		s.scope.Logger.Info("Floating IP already associated:", "id", fp.ID, "ip", fp.FloatingIP)
 		return nil
 	}
 

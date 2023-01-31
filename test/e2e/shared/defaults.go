@@ -8,7 +8,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,7 +26,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/cluster-api/test/framework"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
 )
 
 const (
@@ -48,6 +48,7 @@ const (
 	FlavorExternalCloudProvider = "external-cloud-provider-ci-artifacts"
 	FlavorMultiNetwork          = "multi-network-ci-artifacts"
 	FlavorMultiAZ               = "multi-az-ci-artifacts"
+	FlavorV1alpha5              = "v1alpha5-ci-artifacts"
 )
 
 // DefaultScheme returns the default scheme to use for testing.

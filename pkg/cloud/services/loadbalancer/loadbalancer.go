@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,6 +19,7 @@ package loadbalancer
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/listeners"
@@ -26,18 +27,22 @@ import (
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/monitors"
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/pools"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/net"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/record"
 	capoerrors "sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/errors"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/names"
+	openstackutil "sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/openstack"
+	capostrings "sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/strings"
 )
 
 const (
-	networkPrefix   string = "k8s-clusterapi"
-	kubeapiLBSuffix string = "kubeapi"
+	networkPrefix               string = "k8s-clusterapi"
+	kubeapiLBSuffix             string = "kubeapi"
+	defaultLoadBalancerProvider string = "amphora"
 )
 
 const loadBalancerProvisioningStatusActive = "ACTIVE"
@@ -54,7 +59,22 @@ func (s *Service) ReconcileLoadBalancer(openStackCluster *infrav1.OpenStackClust
 		fixedIPAddress = openStackCluster.Spec.ControlPlaneEndpoint.Host
 	}
 
-	lb, err := s.getOrCreateLoadBalancer(openStackCluster, loadBalancerName, openStackCluster.Status.Network.Subnet.ID, clusterName, fixedIPAddress)
+	providers, err := s.loadbalancerClient.ListLoadBalancerProviders()
+	if err != nil {
+		return err
+	}
+
+	// As mostly all LoadBalancer features are only supported on "amphora" we explicitly set the provider
+	// in the LoadBalancer create call to make sure to get the desired features - even if multiple providers exist.
+	var lbProvider string
+	for _, v := range providers {
+		if v.Name == defaultLoadBalancerProvider {
+			lbProvider = v.Name
+			break
+		}
+	}
+
+	lb, err := s.getOrCreateLoadBalancer(openStackCluster, loadBalancerName, openStackCluster.Status.Network.Subnet.ID, clusterName, fixedIPAddress, lbProvider)
 	if err != nil {
 		return err
 	}
@@ -81,10 +101,24 @@ func (s *Service) ReconcileLoadBalancer(openStackCluster *infrav1.OpenStackClust
 		lbFloatingIP = fp.FloatingIP
 	}
 
+	allowedCIDRs := []string{}
+	// To reduce API calls towards OpenStack API, let's handle the CIDR support verification for all Ports only once.
+	allowedCIDRsSupported := false
+	octaviaVersions, err := s.loadbalancerClient.ListOctaviaVersions()
+	if err != nil {
+		return err
+	}
+	// The current version is always the last one in the list.
+	octaviaVersion := octaviaVersions[len(octaviaVersions)-1].ID
+	if openstackutil.IsOctaviaFeatureSupported(octaviaVersion, openstackutil.OctaviaFeatureVIPACL, lbProvider) {
+		allowedCIDRsSupported = true
+	}
+
 	portList := []int{apiServerPort}
 	portList = append(portList, openStackCluster.Spec.APIServerLoadBalancer.AdditionalPorts...)
 	for _, port := range portList {
 		lbPortObjectsName := fmt.Sprintf("%s-%d", loadBalancerName, port)
+
 		listener, err := s.getOrCreateListener(openStackCluster, lbPortObjectsName, lb.ID, port)
 		if err != nil {
 			return err
@@ -98,18 +132,29 @@ func (s *Service) ReconcileLoadBalancer(openStackCluster *infrav1.OpenStackClust
 		if err := s.getOrCreateMonitor(openStackCluster, lbPortObjectsName, pool.ID, lb.ID); err != nil {
 			return err
 		}
+
+		if allowedCIDRsSupported {
+			// Skip reconciliation if network status is nil (e.g. during clusterctl move)
+			if openStackCluster.Status.Network != nil {
+				if err := s.getOrUpdateAllowedCIDRS(openStackCluster, listener); err != nil {
+					return err
+				}
+				allowedCIDRs = listener.AllowedCIDRs
+			}
+		}
 	}
 
 	openStackCluster.Status.Network.APIServerLoadBalancer = &infrav1.LoadBalancer{
-		Name:       lb.Name,
-		ID:         lb.ID,
-		InternalIP: lb.VipAddress,
-		IP:         lbFloatingIP,
+		Name:         lb.Name,
+		ID:           lb.ID,
+		InternalIP:   lb.VipAddress,
+		IP:           lbFloatingIP,
+		AllowedCIDRs: allowedCIDRs,
 	}
 	return nil
 }
 
-func (s *Service) getOrCreateLoadBalancer(openStackCluster *infrav1.OpenStackCluster, loadBalancerName, subnetID, clusterName string, vipAddress string) (*loadbalancers.LoadBalancer, error) {
+func (s *Service) getOrCreateLoadBalancer(openStackCluster *infrav1.OpenStackCluster, loadBalancerName, subnetID, clusterName, vipAddress, provider string) (*loadbalancers.LoadBalancer, error) {
 	lb, err := s.checkIfLbExists(loadBalancerName)
 	if err != nil {
 		return nil, err
@@ -126,6 +171,7 @@ func (s *Service) getOrCreateLoadBalancer(openStackCluster *infrav1.OpenStackClu
 		VipSubnetID: subnetID,
 		VipAddress:  vipAddress,
 		Description: names.GetDescription(clusterName),
+		Provider:    provider,
 	}
 	lb, err = s.loadbalancerClient.CreateLoadBalancer(lbCreateOpts)
 	if err != nil {
@@ -175,6 +221,81 @@ func (s *Service) getOrCreateListener(openStackCluster *infrav1.OpenStackCluster
 	return listener, nil
 }
 
+func (s *Service) getOrUpdateAllowedCIDRS(openStackCluster *infrav1.OpenStackCluster, listener *listeners.Listener) error {
+	allowedCIDRs := []string{}
+
+	if len(openStackCluster.Spec.APIServerLoadBalancer.AllowedCIDRs) > 0 {
+		allowedCIDRs = append(allowedCIDRs, openStackCluster.Spec.APIServerLoadBalancer.AllowedCIDRs...)
+
+		// In the first reconciliation loop, only the Ready field is set in openStackCluster.Status
+		// All other fields are empty/nil
+		if openStackCluster.Status.Bastion != nil {
+			if openStackCluster.Status.Bastion.FloatingIP != "" {
+				allowedCIDRs = append(allowedCIDRs, openStackCluster.Status.Bastion.FloatingIP)
+			}
+
+			if openStackCluster.Status.Bastion.IP != "" {
+				allowedCIDRs = append(allowedCIDRs, openStackCluster.Status.Bastion.IP)
+			}
+		}
+
+		if openStackCluster.Status.Network != nil {
+			if openStackCluster.Status.Network.Subnet.CIDR != "" {
+				allowedCIDRs = append(allowedCIDRs, openStackCluster.Status.Network.Subnet.CIDR)
+			}
+
+			if len(openStackCluster.Status.Network.Router.IPs) > 0 {
+				allowedCIDRs = append(allowedCIDRs, openStackCluster.Status.Network.Router.IPs...)
+			}
+		}
+	}
+
+	// Validate CIDRs and convert any given IP into a CIDR.
+	allowedCIDRs = validateIPs(openStackCluster, allowedCIDRs)
+
+	// Remove duplicates.
+	allowedCIDRs = capostrings.Unique(allowedCIDRs)
+	listener.AllowedCIDRs = capostrings.Unique(listener.AllowedCIDRs)
+
+	if !reflect.DeepEqual(allowedCIDRs, listener.AllowedCIDRs) {
+		listenerUpdateOpts := listeners.UpdateOpts{
+			AllowedCIDRs: &allowedCIDRs,
+		}
+
+		listener, err := s.loadbalancerClient.UpdateListener(listener.ID, listenerUpdateOpts)
+		if err != nil {
+			record.Warnf(openStackCluster, "FailedUpdateListener", "Failed to update listener %s: %v", listener.Name, err)
+			return err
+		}
+
+		if err := s.waitForListener(listener.ID, "ACTIVE"); err != nil {
+			record.Warnf(openStackCluster, "FailedUpdateListener", "Failed to update listener %s with id %s: wait for listener active: %v", listener.Name, listener.ID, err)
+			return err
+		}
+
+		record.Eventf(openStackCluster, "SuccessfulUpdateListener", "Updated allowed_cidrs %s for listener %s with id %s", listener.AllowedCIDRs, listener.Name, listener.ID)
+	}
+	return nil
+}
+
+// validateIPs validates given IPs/CIDRs and removes non valid network objects.
+func validateIPs(openStackCluster *infrav1.OpenStackCluster, definedCIDRs []string) []string {
+	marshaledCIDRs := []string{}
+
+	for _, v := range definedCIDRs {
+		switch {
+		case net.IsIPv4String(v):
+			marshaledCIDRs = append(marshaledCIDRs, v+"/32")
+		case net.IsIPv4CIDRString(v):
+			marshaledCIDRs = append(marshaledCIDRs, v)
+		default:
+			record.Warnf(openStackCluster, "FailedIPAddressValidation", "%s is not a valid IPv4 nor CIDR address and will not get applied to allowed_cidrs", v)
+		}
+	}
+
+	return marshaledCIDRs
+}
+
 func (s *Service) getOrCreatePool(openStackCluster *infrav1.OpenStackCluster, poolName, listenerID, lbID string) (*pools.Pool, error) {
 	pool, err := s.checkIfPoolExists(poolName)
 	if err != nil {
@@ -221,12 +342,13 @@ func (s *Service) getOrCreateMonitor(openStackCluster *infrav1.OpenStackCluster,
 	s.scope.Logger.Info(fmt.Sprintf("Creating load balancer monitor for pool %q", poolID), "name", monitorName, "lb-id", lbID)
 
 	monitorCreateOpts := monitors.CreateOpts{
-		Name:       monitorName,
-		PoolID:     poolID,
-		Type:       "TCP",
-		Delay:      30,
-		Timeout:    5,
-		MaxRetries: 3,
+		Name:           monitorName,
+		PoolID:         poolID,
+		Type:           "TCP",
+		Delay:          10,
+		MaxRetries:     5,
+		MaxRetriesDown: 3,
+		Timeout:        5,
 	}
 	monitor, err = s.loadbalancerClient.CreateMonitor(monitorCreateOpts)
 	if err != nil {
@@ -244,10 +366,6 @@ func (s *Service) getOrCreateMonitor(openStackCluster *infrav1.OpenStackCluster,
 }
 
 func (s *Service) ReconcileLoadBalancerMember(openStackCluster *infrav1.OpenStackCluster, machine *clusterv1.Machine, openStackMachine *infrav1.OpenStackMachine, clusterName, ip string) error {
-	if !util.IsControlPlaneMachine(machine) {
-		return nil
-	}
-
 	if openStackCluster.Status.Network == nil {
 		return errors.New("network is not yet available in openStackCluster.Status")
 	}

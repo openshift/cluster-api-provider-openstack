@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,8 +23,8 @@ import (
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/layer3/floatingips"
 	. "github.com/onsi/gomega"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5"
-	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/networking/mock_networking"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
+	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients/mock"
 )
 
 func Test_GetOrCreateFloatingIP(t *testing.T) {
@@ -34,13 +34,13 @@ func Test_GetOrCreateFloatingIP(t *testing.T) {
 	tests := []struct {
 		name   string
 		ip     string
-		expect func(m *mock_networking.MockNetworkClientMockRecorder)
+		expect func(m *mock.MockNetworkClientMockRecorder)
 		want   *floatingips.FloatingIP
 	}{
 		{
 			name: "creates floating IP when one doesn't already exist",
 			ip:   "192.168.111.0",
-			expect: func(m *mock_networking.MockNetworkClientMockRecorder) {
+			expect: func(m *mock.MockNetworkClientMockRecorder) {
 				m.
 					ListFloatingIP(floatingips.ListOpts{FloatingIP: "192.168.111.0"}).
 					Return([]floatingips.FloatingIP{}, nil)
@@ -56,7 +56,7 @@ func Test_GetOrCreateFloatingIP(t *testing.T) {
 		{
 			name: "finds existing floating IP where one exists",
 			ip:   "192.168.111.0",
-			expect: func(m *mock_networking.MockNetworkClientMockRecorder) {
+			expect: func(m *mock.MockNetworkClientMockRecorder) {
 				m.
 					ListFloatingIP(floatingips.ListOpts{FloatingIP: "192.168.111.0"}).
 					Return([]floatingips.FloatingIP{{FloatingIP: "192.168.111.0"}}, nil)
@@ -72,7 +72,7 @@ func Test_GetOrCreateFloatingIP(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
-			mockClient := mock_networking.NewMockNetworkClient(mockCtrl)
+			mockClient := mock.NewMockNetworkClient(mockCtrl)
 			tt.expect(mockClient.EXPECT())
 			s := Service{
 				client: mockClient,

@@ -16,6 +16,7 @@
   - [External network](#external-network)
   - [API server floating IP](#api-server-floating-ip)
     - [Disabling the API server floating IP](#disabling-the-api-server-floating-ip)
+    - [Restrict Access to the API server](#restrict-access-to-the-api-server)
   - [Network Filters](#network-filters)
   - [Multiple Networks](#multiple-networks)
   - [Subnet Filters](#subnet-filters)
@@ -45,7 +46,7 @@ Note: You can use [the template file](https://github.com/kubernetes-sigs/cluster
 # Using 'external-cloud-provider' flavor
 clusterctl generate cluster capi-quickstart \
   --flavor external-cloud-provider \
-  --kubernetes-version v1.23.5 \
+  --kubernetes-version v1.24.2 \
   --control-plane-machine-count=3 \
   --worker-machine-count=1 \
   > capi-quickstart.yaml
@@ -53,7 +54,7 @@ clusterctl generate cluster capi-quickstart \
 # Using 'without-lb' flavor
 clusterctl generate cluster capi-quickstart \
   --flavor without-lb \
-  --kubernetes-version v1.23.5 \
+  --kubernetes-version v1.24.2 \
   --control-plane-machine-count=1 \
   --worker-machine-count=1 \
   > capi-quickstart.yaml
@@ -86,6 +87,7 @@ or [configure custom security groups](#security-groups) with rules allowing ingr
 ## OpenStack credential
 
 ### Generate credentials
+
 The [env.rc](https://github.com/kubernetes-sigs/cluster-api-provider-openstack/blob/main/templates/env.rc) script sets the environment variables related to credentials. It's highly recommend to avoid using `admin` credential.
 
 ```bash
@@ -99,7 +101,7 @@ The following variables are set.
 | OPENSTACK_CLOUD | The cloud name which is used as second argument |
 | OPENSTACK_CLOUD_YAML_B64 | The secret used by Cluster API Provider OpenStack accessing OpenStack |
 | OPENSTACK_CLOUD_PROVIDER_CONF_B64 | The content of [cloud.conf](https://git.k8s.io/cloud-provider-openstack/docs/openstack-cloud-controller-manager/using-openstack-cloud-controller-manager.md#deploy-a-kubernetes-cluster-with-openstack-cloud-controller-manager-using-kubeadm) which is used by OpenStack cloud provider |
-| OPENSTACK_CLOUD_CACERT_B64 | (Optional) The content of your custom CA file which can be specified in your clouds.yaml by `ca-file` |
+| OPENSTACK_CLOUD_CACERT_B64 | The content of your custom CA file which can be specified in your clouds.yaml by `ca-file`, mandatory when openstack endpoint is `https` |
 
 Note: Only the [external cloud provider](https://cluster-api-openstack.sigs.k8s.io/topics/external-cloud-provider.html) supports [Application Credentials](https://docs.openstack.org/keystone/latest/user/application_credentials.html).
 
@@ -151,6 +153,12 @@ openstack floating ip create <public network>
 
 Note: Only user with admin role can create a floating IP with specific IP.
 
+Note: When associating a floating IP to a cluster with more than 1 controller node, the floatingIP will be
+associated to the first controller node and the other controller nodes have no floating IP assigned. When
+ the controller node has the floating IP status down CAPO will NOT auto assign the floating IP address
+to any other controller node. So we recommend to only set one controller node when floating IP is needed,
+or please consider using load balancer instead, see [issue #1265](https://github.com/kubernetes-sigs/cluster-api-provider-openstack/issues/1265) for further information.
+
 ### Disabling the API server floating IP
 
 It is possible to provision a cluster without a floating IP for the API server by setting
@@ -177,6 +185,61 @@ during an upgrade. When the API server has a floating IP, this role is fulfilled
 floating IP even if there is no load balancer. When the API server does not have a floating
 IP, the load balancer virtual IP on the cluster network is used.
 
+## Restrict Access to the API server
+
+> **NOTE**
+>
+> This requires "amphora" as load balancer provider at in version >= `v2.12`
+
+It is possible to restrict access to the Kubernetes API server on a network level. If required, you can specify
+the allowed CIDRs by `spec.APIServerLoadBalancer.AllowedCIDRs` of `OpenStackCluster`.
+
+```yaml
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha6
+kind: OpenStackCluster
+metadata:
+  name: <cluster-name>
+  namespace: <cluster-namespace>
+spec:
+  allowAllInClusterTraffic: true
+  apiServerLoadBalancer:
+    allowedCidrs:
+    - 192.168.10/24
+    - 10.10.0.0/16
+```
+
+All known IPs of the target cluster will be discovered dynamically (e.g. you don't have to take care of target Cluster own Router IP, internal CIDRs or any Bastion Host IP).
+**Note**: Please ensure, that at least the outgoing IP of your management Cluster is added to the list of allowed CIDRs. Otherwise CAPO can't reconcile the target Cluster correctly.
+
+All applied CIDRs (user defined + dynamically discovered) are written back into `status.network.apiServerLoadBalancer.allowedCIDRs`
+
+```yaml
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha6
+kind: OpenStackCluster
+metadata:
+  name: <cluster-name>
+  namespace: <cluster-namespace>
+status:
+  network:
+    apiServerLoadBalancer:
+      allowedCIDRs:
+        - 10.6.0.0/24 # openStackCluster.Status.Network.Subnet.CIDR
+        - 10.6.0.90/32 # bastion Host internal IP
+        - 10.10.0.0/16 # user defined
+        - 192.168.10/24 # user defined
+        - 172.16.111.100/32 # bastion host floating IP
+        - 172.16.111.85/32 # router IP
+      internalIP: 10.6.0.144
+      ip: 172.16.111.159
+      name: k8s-clusterapi-cluster-<cluster-namespace>-<cluster-name>
+```
+
+If you locked out yourself or the CAPO management cluster, you can easily clear the `allowed_cidrs` field on OpenStack via
+
+```bash
+openstack loadbalancer listener unset --allowed-cidrs <listener ID>
+```
+
 ## Network Filters
 
 If you have a complex query that you want to use to lookup a network, then you can do this by using a network filter. More details about the filter can be found in [NetworkParam](https://github.com/kubernetes-sigs/cluster-api-provider-openstack/blob/main/api/v1beta1/types.go)
@@ -184,7 +247,7 @@ If you have a complex query that you want to use to lookup a network, then you c
 By using filters to look up a network, please note that it is possible to get multiple networks as a result. This should not be a problem, however please test your filters with `openstack network list` to be certain that it returns the networks you want. Please refer to the following usage example:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha5
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha6
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -200,7 +263,7 @@ spec:
 You can specify multiple networks (or subnets) to connect your server to. To do this, simply add another entry in the networks array. The following example connects the server to 3 different networks:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha5
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha6
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -219,7 +282,7 @@ spec:
 Rather than just using a network, you have the option of specifying a specific subnet to connect your server to. The following is an example of how to specify a specific subnet of a network to use for your server.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha5
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha6
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -238,7 +301,7 @@ spec:
 A server can also be connected to networks by describing what ports to create. Describing a server's connection with `ports` allows for finer and more advanced configuration. For example, you can specify per-port security groups, fixed IPs, VNIC type or profile.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha5
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha6
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -271,7 +334,7 @@ Any such ports are created in addition to ports used for connections to networks
 Also, `port security` can be applied to specific port to enable/disable the `port security` on that port; When not set, it takes the value of the corresponding field at the network level.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha5
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha6
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -295,15 +358,15 @@ plane and worker nodes respectively.
 
 By default, these groups have rules that allow the following traffic:
 
-  * Control plane nodes
-    * API server traffic from anywhere
-    * Etcd traffic from other control plane nodes
-    * Kubelet traffic from other cluster nodes
-    * Calico CNI traffic from other cluster nodes
-  * Worker nodes
-    * Node port traffic from anywhere
-    * Kubelet traffic from other cluster nodes
-    * Calico CNI traffic from other cluster nodes
+- Control plane nodes
+  - API server traffic from anywhere
+  - Etcd traffic from other control plane nodes
+  - Kubelet traffic from other cluster nodes
+  - Calico CNI traffic from other cluster nodes
+- Worker nodes
+  - Node port traffic from anywhere
+  - Kubelet traffic from other cluster nodes
+  - Calico CNI traffic from other cluster nodes
 
 To use a CNI other than Calico, the flag `OpenStackCluster.spec.allowAllInClusterTraffic` can be
 set to `true`. With this flag set, the rules for the managed security groups permit all traffic
@@ -314,7 +377,7 @@ If this is not flexible enough, pre-existing security groups can be added to the
 spec of an `OpenStackMachineTemplate`, e.g.:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha5
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha6
 kind: OpenStackMachineTemplate
 metadata:
   name: ${CLUSTER_NAME}-control-plane
@@ -330,7 +393,7 @@ spec:
 You have the ability to tag all resources created by the cluster in the `OpenStackCluster` spec. Here is an example how to configure tagging:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha5
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha6
 kind: OpenStackCluster
 metadata:
   name: <cluster-name>
@@ -343,7 +406,7 @@ spec:
 To tag resources specific to a machine, add a value to the tags field in the `OpenStackMachineTemplate` spec like this:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha5
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha6
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -358,7 +421,7 @@ spec:
 You also have the option to add metadata to instances. Here is a usage example:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha5
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha6
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -374,7 +437,7 @@ spec:
 For example in `OpenStackMachineTemplate` set `spec.rootVolume.diskSize` to something greater than `0` means boot from volume.
 
    ```yaml
-   apiVersion: infrastructure.cluster.x-k8s.io/v1alpha5
+   apiVersion: infrastructure.cluster.x-k8s.io/v1alpha6
    kind: OpenStackMachineTemplate
    metadata:
      name: <cluster-name>-controlplane
@@ -394,7 +457,7 @@ If `availabilityZone` is not specified, the volume will be created in the cinder
 
 ## Timeout settings
 
-If creating servers in your OpenStack takes a long time, you can increase the timeout, by default it's 5 minutes. You can set it via the `CLUSTER_API_OPENSTACK_INSTANCE_CREATE_TIMEOUT` in your Cluster API Provider OpenStack controller deployment.
+The default timeout for instance creation is 5 minutes. If creating servers in your OpenStack takes a long time, you can increase the timeout. You can set a new value, in minutes, via the envorinment variable `CLUSTER_API_OPENSTACK_INSTANCE_CREATE_TIMEOUT` in your Cluster API Provider OpenStack controller deployment.
 
 ## Custom pod network CIDR
 
@@ -418,10 +481,9 @@ spec:
       sshKeyName: <Key pair name>
 ```
 
-The `enabled` flag is toggleable. Thus, you're able to save resources while the bastion host is not needed.  
-All other parameters can be changed via an `OpenStackCluster` update while the bastion host is not running.
-
-> Note: as a rolling update is not ideal during a bastion host session, we prevent changes to a running bastion configuration.
+All parameters are mutable during the runtime of the bastion host.
+The bastion host will be re-created if it's enabled and the instance spec has been changed.
+This is done by a simple checksum validation of the instance spec which is stored in the `OpenStackCluster` annotation `infrastructure.cluster.x-k8s.io/bastion-hash`.
 
 A floating IP is created and associated to the bastion host automatically, but you can add the IP address explicitly:
 
@@ -439,7 +501,6 @@ If `managedSecurityGroups: true`, security group rule opening 22/tcp is added to
 ### Obtain floating IP address of the bastion node
 
 Once the workload cluster is up and running after being configured for an SSH bastion host, you can use the kubectl get openstackcluster command to look up the floating IP address of the bastion host (make sure the kubectl context is set to the management cluster). The output will look something like this:
-
 
 ```yaml
 $ kubectl get openstackcluster

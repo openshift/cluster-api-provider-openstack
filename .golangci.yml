@@ -1,12 +1,14 @@
 linters:
   disable-all: true
   enable:
+  - asasalint
   - asciicheck
+  - bidichk
   - bodyclose
   - cyclop
-  - deadcode
   - depguard
   - dogsled
+  - dupword
   - durationcheck
   - errcheck
   - exportloopref
@@ -25,7 +27,6 @@ linters:
   - gosec
   - gosimple
   - govet
-  - ifshort
   - importas
   - ineffassign
   - makezero
@@ -41,14 +42,12 @@ linters:
   - rowserrcheck
   - sqlclosecheck
   - staticcheck
-  - structcheck
   - stylecheck
   - thelper
   - typecheck
   - unconvert
   - unparam
   - unused
-  - varcheck
   - wastedassign
   - whitespace
 
@@ -56,11 +55,29 @@ linters-settings:
   cyclop:
     # TODO(sbuerin) fix remaining findings and set to 20 afterwards
     max-complexity: 30
-  ifshort:
-    # Maximum length of variable declaration measured in number of characters, after which linter won't suggest using short syntax.
-    max-decl-chars: 50
   gci:
     local-prefixes: sigs.k8s.io/cluster-api-provider-openstack
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - performance
+    disabled-checks:
+      - appendAssign
+      - dupImport # https://github.com/go-critic/go-critic/issues/845
+      - evalOrder
+      - ifElseChain
+      - octalLiteral
+      - regexpSimplify
+      - sloppyReassign
+      - truncateCmp
+      - typeDefFirst
+      - unnamedResult
+      - unnecessaryDefer
+      - whyNoLint
+      - wrapperFunc
+      - rangeValCopy
+      - hugeParam
   importas:
     no-unaliased: true
     alias:
@@ -84,6 +101,8 @@ linters-settings:
       - pkg: sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha4
         alias: infrav1alpha4
       - pkg: sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5
+        alias: infrav1alpha5
+      - pkg: sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6
         alias: infrav1
       - pkg: sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/errors
         alias: capoerrors
@@ -110,9 +129,9 @@ linters-settings:
         alias: controlplanev1
 
   staticcheck:
-    go: "1.16"
+    go: "1.17"
   stylecheck:
-    go: "1.16"
+    go: "1.17"
   nestif:
     # minimal complexity of if statements to report, 5 by default
     # TODO(sbuerin) fix remaining findings and set to 5 after:

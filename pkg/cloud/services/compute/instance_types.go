@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,7 +24,8 @@ import (
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
+	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
 )
 
 // InstanceSpec defines the fields which can be set on a new OpenStack instance.
@@ -59,18 +60,18 @@ type InstanceIdentifier struct {
 
 // InstanceStatus represents instance data which has been returned by OpenStack.
 type InstanceStatus struct {
-	server *ServerExt
+	server *clients.ServerExt
 	logger logr.Logger
 }
 
-func NewInstanceStatusFromServer(server *ServerExt, logger logr.Logger) *InstanceStatus {
+func NewInstanceStatusFromServer(server *clients.ServerExt, logger logr.Logger) *InstanceStatus {
 	return &InstanceStatus{server, logger}
 }
 
 type networkInterface struct {
-	Address string  `json:"addr"`
-	Version float64 `json:"version"`
-	Type    string  `json:"OS-EXT-IPS:type"`
+	Address string `json:"addr"`
+	Version int    `json:"version"`
+	Type    string `json:"OS-EXT-IPS:type"`
 }
 
 // InstanceNetworkStatus represents the network status of an OpenStack instance
@@ -157,7 +158,7 @@ func (is *InstanceStatus) NetworkStatus() (*InstanceNetworkStatus, error) {
 
 			// Only consider IPv4
 			if address.Version != 4 {
-				is.logger.V(6).Info("Ignoring IPv%d address %s: only IPv4 is supported", address.Version, address.Address)
+				is.logger.V(6).Info("Ignoring IP address: only IPv4 is supported", "version", address.Version, "address", address.Address)
 				continue
 			}
 
@@ -168,7 +169,7 @@ func (is *InstanceStatus) NetworkStatus() (*InstanceNetworkStatus, error) {
 			case "fixed":
 				addressType = corev1.NodeInternalIP
 			default:
-				is.logger.V(6).Info("Ignoring address %s with unknown type '%s'", address.Address, address.Type)
+				is.logger.V(6).Info("Ignoring address with unknown type", "address", address.Address, "type", address.Type)
 				continue
 			}
 

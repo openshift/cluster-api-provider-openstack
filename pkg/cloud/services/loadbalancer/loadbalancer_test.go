@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,16 +21,17 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
+	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/apiversions"
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/listeners"
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/loadbalancers"
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/monitors"
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/pools"
+	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/providers"
 	. "github.com/onsi/gomega"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5"
-	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/loadbalancer/mock_loadbalancer"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
+	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients/mock"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/networking"
-	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/networking/mock_networking"
 )
 
 func Test_ReconcileLoadBalancer(t *testing.T) {
@@ -54,27 +55,34 @@ func Test_ReconcileLoadBalancer(t *testing.T) {
 	}
 	type serviceFields struct {
 		projectID          string
-		networkingClient   *mock_networking.MockNetworkClient
-		loadbalancerClient *mock_loadbalancer.MockLbClient
+		networkingClient   *mock.MockNetworkClient
+		loadbalancerClient *mock.MockLbClient
 	}
 	lbtests := []struct {
 		name               string
 		fields             serviceFields
 		prepareServiceMock func(sf *serviceFields)
-		expectNetwork      func(m *mock_networking.MockNetworkClientMockRecorder)
-		expectLoadBalancer func(m *mock_loadbalancer.MockLbClientMockRecorder)
+		expectNetwork      func(m *mock.MockNetworkClientMockRecorder)
+		expectLoadBalancer func(m *mock.MockLbClientMockRecorder)
 		wantError          error
 	}{
 		{
 			name: "reconcile loadbalancer in non active state should wait for active state",
 			prepareServiceMock: func(sf *serviceFields) {
-				sf.networkingClient = mock_networking.NewMockNetworkClient(mockCtrl)
-				sf.loadbalancerClient = mock_loadbalancer.NewMockLbClient(mockCtrl)
+				sf.networkingClient = mock.NewMockNetworkClient(mockCtrl)
+				sf.loadbalancerClient = mock.NewMockLbClient(mockCtrl)
 			},
-			expectNetwork: func(m *mock_networking.MockNetworkClientMockRecorder) {
+			expectNetwork: func(m *mock.MockNetworkClientMockRecorder) {
 				// add network api call results here
 			},
-			expectLoadBalancer: func(m *mock_loadbalancer.MockLbClientMockRecorder) {
+			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
+				// return loadbalancer providers
+				providers := []providers.Provider{
+					{Name: "amphora", Description: "The Octavia Amphora driver."},
+					{Name: "octavia", Description: "Deprecated alias of the Octavia Amphora driver."},
+				}
+				m.ListLoadBalancerProviders().Return(providers, nil)
+
 				pendingLB := loadbalancers.LoadBalancer{
 					ID:                 "aaaaaaaa-bbbb-cccc-dddd-333333333333",
 					Name:               "k8s-clusterapi-cluster-AAAAA-kubeapi",
@@ -89,6 +97,14 @@ func Test_ReconcileLoadBalancer(t *testing.T) {
 
 				// wait for active loadbalancer by returning active loadbalancer on second call
 				m.GetLoadBalancer("aaaaaaaa-bbbb-cccc-dddd-333333333333").Return(&pendingLB, nil).Return(&activeLB, nil)
+
+				// return octavia versions
+				versions := []apiversions.APIVersion{
+					{ID: "2.24"},
+					{ID: "2.23"},
+					{ID: "2.22"},
+				}
+				m.ListOctaviaVersions().Return(versions, nil)
 
 				listenerList := []listeners.Listener{
 					{

@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,6 +18,7 @@ package networking
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/portsbinding"
@@ -26,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/cluster-api/util"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/record"
 	capoerrors "sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/errors"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/names"
@@ -89,11 +90,12 @@ func (s *Service) GetOrCreatePort(eventObject runtime.Object, clusterName string
 				MACAddress: ap.MACAddress,
 			})
 		}
-
-		securityGroups = portOpts.SecurityGroups
-
+		securityGroups, err = s.CollectPortSecurityGroups(eventObject, portOpts.SecurityGroups, portOpts.SecurityGroupFilters)
+		if err != nil {
+			return nil, err
+		}
 		// inherit port security groups from the instance if not explicitly specified
-		if securityGroups == nil {
+		if securityGroups == nil || len(*securityGroups) == 0 {
 			securityGroups = instanceSecurityGroups
 		}
 	}
@@ -242,6 +244,32 @@ func (s *Service) DeletePort(eventObject runtime.Object, portID string) error {
 	return nil
 }
 
+func (s *Service) DeletePorts(openStackCluster *infrav1.OpenStackCluster) error {
+	networkID := openStackCluster.Spec.Network.ID
+	portList, err := s.client.ListPort(ports.ListOpts{
+		NetworkID:   networkID,
+		DeviceOwner: "",
+	})
+	if err != nil {
+		if capoerrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("list ports of network %q: %v", networkID, err)
+	}
+
+	for _, port := range portList {
+		if strings.HasPrefix(port.Name, openStackCluster.Name) {
+			err := s.DeletePort(openStackCluster, port.ID)
+			if capoerrors.IsNotFound(err) {
+				continue
+			}
+			return fmt.Errorf("delete port %s of network %q failed : %v", port.ID, networkID, err)
+		}
+	}
+
+	return nil
+}
+
 func (s *Service) GarbageCollectErrorInstancesPort(eventObject runtime.Object, instanceName string) error {
 	portList, err := s.client.ListPort(ports.ListOpts{
 		Name: instanceName,
@@ -256,4 +284,42 @@ func (s *Service) GarbageCollectErrorInstancesPort(eventObject runtime.Object, i
 	}
 
 	return nil
+}
+
+// CollectPortSecurityGroups collects distinct securityGroups from port.SecurityGroups and port.SecurityGroupFilter fields.
+func (s *Service) CollectPortSecurityGroups(eventObject runtime.Object, portSecurityGroups *[]string, portSecurityGroupFilters []infrav1.SecurityGroupParam) (*[]string, error) {
+	var allSecurityGroupIDs []string
+	// security groups provided with the portSecurityGroupFilters fields
+	securityGroupFiltersByID, err := s.GetSecurityGroups(portSecurityGroupFilters)
+	if err != nil {
+		return portSecurityGroups, fmt.Errorf("error getting security groups: %v", err)
+	}
+	allSecurityGroupIDs = append(allSecurityGroupIDs, securityGroupFiltersByID...)
+	securityGroupCount := 0
+	// security groups provided with the portSecurityGroups fields
+	if portSecurityGroups != nil {
+		allSecurityGroupIDs = append(allSecurityGroupIDs, *portSecurityGroups...)
+	}
+	// generate unique values
+	uids := make(map[string]int)
+	for _, sg := range allSecurityGroupIDs {
+		if sg == "" {
+			continue
+		}
+		// count distinct values
+		_, ok := uids[sg]
+		if !ok {
+			securityGroupCount++
+		}
+		uids[sg] = 1
+	}
+	distinctSecurityGroupIDs := make([]string, 0, securityGroupCount)
+	// collect distict values
+	for key := range uids {
+		if key == "" {
+			continue
+		}
+		distinctSecurityGroupIDs = append(distinctSecurityGroupIDs, key)
+	}
+	return &distinctSecurityGroupIDs, nil
 }

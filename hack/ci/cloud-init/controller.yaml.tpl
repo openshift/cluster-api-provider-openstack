@@ -54,7 +54,7 @@
     # Don't download default images, just our test images
     DOWNLOAD_DEFAULT_IMAGES=False
     # We upload the Amphora image so it doesn't have to be build
-    IMAGE_URLS="https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/amphora/2021-03-27/amphora-x64-haproxy.qcow2"
+    IMAGE_URLS="https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/amphora/2022-12-05/amphora-x64-haproxy.qcow2"
 
     [[post-config|$NOVA_CONF]]
     [DEFAULT]
@@ -79,6 +79,10 @@
     [[post-config|/$NEUTRON_CORE_PLUGIN_CONF]]
     [ml2]
     path_mtu = ${MTU}
+
+    [[post-config|$NEUTRON_CONF]]
+    [DEFAULT]
+    service_plugins = trunk,router
 - path: /tmp/register-worker.sh
   permissions: 0755
   content: |
@@ -132,8 +136,8 @@
     # Upload the images so we don't have to upload them from Prow
     # Upload cirros image first in order to avoid reach limit of project
     # https://docs.openstack.org/glance/latest/admin/quotas.html 
-    /opt/stack/devstack/tools/upload_image.sh https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/cirros/2021-03-27/cirros-0.5.1-x86_64-disk.img
-    /opt/stack/devstack/tools/upload_image.sh https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/ubuntu/2021-03-27/ubuntu-2004-kube-v1.18.15.qcow2
+    /opt/stack/devstack/tools/upload_image.sh https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/cirros/2022-12-05/cirros-0.6.1-x86_64-disk.img
+    /opt/stack/devstack/tools/upload_image.sh https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/ubuntu/2022-12-05/ubuntu-2004-kube-v1.23.10.qcow2
 
     # Add the controller to its own host aggregate and availability zone
     aggregateid=$(openstack aggregate create --zone "${PRIMARY_AZ}" "${PRIMARY_AZ}" -f value -c id)
@@ -152,7 +156,10 @@
 
     # Adjust the CPU quota
     openstack quota set --cores 32 demo
-    openstack quota set --secgroups 50 demo
+    openstack quota set --secgroups 200 demo
+    openstack quota set --secgroup-rules 1000 demo
+    openstack quota set --secgroups 100 admin
+    openstack quota set --secgroup-rules 1000 admin
 - path: /root/devstack.sh
   permissions: 0755
   content: |

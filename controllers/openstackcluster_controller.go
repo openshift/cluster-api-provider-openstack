@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -43,12 +43,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/compute"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/loadbalancer"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/networking"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/provider"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/scope"
+)
+
+const (
+	BastionInstanceHashAnnotation = "infrastructure.cluster.x-k8s.io/bastion-hash"
 )
 
 // OpenStackClusterReconciler reconciles a OpenStackCluster object.
@@ -142,6 +146,11 @@ func reconcileDelete(ctx context.Context, scope *scope.Scope, patchHelper *patch
 
 	clusterName := fmt.Sprintf("%s-%s", cluster.Namespace, cluster.Name)
 
+	if err = networkingService.DeletePorts(openStackCluster); err != nil {
+		handleUpdateOSCError(openStackCluster, errors.Errorf("failed to delete ports: %v", err))
+		return reconcile.Result{}, errors.Wrap(err, "failed to delete ports")
+	}
+
 	if openStackCluster.Spec.APIServerLoadBalancer.Enabled {
 		loadBalancerService, err := loadbalancer.NewService(scope)
 		if err != nil {
@@ -222,8 +231,8 @@ func deleteBastion(scope *scope.Scope, cluster *clusterv1.Cluster, openStackClus
 			}
 		}
 
-		instanceSpec := bastionToInstanceSpec(openStackCluster, cluster.Name)
-		if err = computeService.DeleteInstance(openStackCluster, instanceSpec, instanceStatus); err != nil {
+		rootVolume := openStackCluster.Spec.Bastion.Instance.RootVolume
+		if err = computeService.DeleteInstance(openStackCluster, instanceStatus, instanceName, rootVolume); err != nil {
 			handleUpdateOSCError(openStackCluster, errors.Errorf("failed to delete bastion: %v", err))
 			return errors.Errorf("failed to delete bastion: %v", err)
 		}
@@ -236,6 +245,8 @@ func deleteBastion(scope *scope.Scope, cluster *clusterv1.Cluster, openStackClus
 		return errors.Errorf("failed to delete bastion security group: %v", err)
 	}
 	openStackCluster.Status.BastionSecurityGroup = nil
+
+	delete(openStackCluster.ObjectMeta.Annotations, BastionInstanceHashAnnotation)
 
 	return nil
 }
@@ -269,21 +280,16 @@ func reconcileNormal(ctx context.Context, scope *scope.Scope, patchHelper *patch
 		return ctrl.Result{}, err
 	}
 
-	// Create a new list to remove any Availability
-	// Zones that have been removed from OpenStack
+	// Create a new list in case any AZs have been removed from OpenStack
 	openStackCluster.Status.FailureDomains = make(clusterv1.FailureDomains)
 	for _, az := range availabilityZones {
-		found := true
-		// If Az given, then check whether it's in the allow list
-		// If no Az given, then by default put into allow list
+		// By default, the AZ is used or not used for control plane nodes depending on the flag
+		found := !openStackCluster.Spec.ControlPlaneOmitAvailabilityZone
+		// If explicit AZs for control plane nodes are given, they override the value
 		if len(openStackCluster.Spec.ControlPlaneAvailabilityZones) > 0 {
-			if contains(openStackCluster.Spec.ControlPlaneAvailabilityZones, az.ZoneName) {
-				found = true
-			} else {
-				found = false
-			}
+			found = contains(openStackCluster.Spec.ControlPlaneAvailabilityZones, az.ZoneName)
 		}
-
+		// Add the AZ object to the failure domains for the cluster
 		openStackCluster.Status.FailureDomains[az.ZoneName] = clusterv1.FailureDomainSpec{
 			ControlPlane: found,
 		}
@@ -308,20 +314,35 @@ func reconcileBastion(scope *scope.Scope, cluster *clusterv1.Cluster, openStackC
 		return err
 	}
 
+	instanceSpec := bastionToInstanceSpec(openStackCluster, cluster.Name)
+	bastionHash, err := compute.HashInstanceSpec(instanceSpec)
+	if err != nil {
+		return errors.Wrap(err, "failed computing bastion hash from instance spec")
+	}
+
 	instanceStatus, err := computeService.GetInstanceStatusByName(openStackCluster, fmt.Sprintf("%s-bastion", cluster.Name))
 	if err != nil {
 		return err
 	}
 	if instanceStatus != nil {
-		bastion, err := instanceStatus.APIInstance(openStackCluster)
-		if err != nil {
+		if !bastionHashHasChanged(bastionHash, openStackCluster.ObjectMeta.Annotations) {
+			bastion, err := instanceStatus.APIInstance(openStackCluster)
+			if err != nil {
+				return err
+			}
+			// Add the current hash if no annotation is set.
+			if _, ok := openStackCluster.ObjectMeta.Annotations[BastionInstanceHashAnnotation]; !ok {
+				annotations.AddAnnotations(openStackCluster, map[string]string{BastionInstanceHashAnnotation: bastionHash})
+			}
+			openStackCluster.Status.Bastion = bastion
+			return nil
+		}
+
+		if err := deleteBastion(scope, cluster, openStackCluster); err != nil {
 			return err
 		}
-		openStackCluster.Status.Bastion = bastion
-		return nil
 	}
 
-	instanceSpec := bastionToInstanceSpec(openStackCluster, cluster.Name)
 	instanceStatus, err = computeService.CreateInstance(openStackCluster, openStackCluster, instanceSpec, cluster.Name)
 	if err != nil {
 		return errors.Errorf("failed to reconcile bastion: %v", err)
@@ -355,6 +376,7 @@ func reconcileBastion(scope *scope.Scope, cluster *clusterv1.Cluster, openStackC
 	}
 	bastion.FloatingIP = fp.FloatingIP
 	openStackCluster.Status.Bastion = bastion
+	annotations.AddAnnotations(openStackCluster, map[string]string{BastionInstanceHashAnnotation: bastionHash})
 	return nil
 }
 
@@ -383,6 +405,15 @@ func bastionToInstanceSpec(openStackCluster *infrav1.OpenStackCluster, clusterNa
 	instanceSpec.Ports = openStackCluster.Spec.Bastion.Instance.Ports
 
 	return instanceSpec
+}
+
+// bastionHashHasChanged returns a boolean whether if the latest bastion hash, built from the instance spec, has changed or not.
+func bastionHashHasChanged(computeHash string, clusterAnnotations map[string]string) bool {
+	latestHash, ok := clusterAnnotations[BastionInstanceHashAnnotation]
+	if !ok {
+		return false
+	}
+	return latestHash != computeHash
 }
 
 func reconcileNetworkComponents(scope *scope.Scope, cluster *clusterv1.Cluster, openStackCluster *infrav1.OpenStackCluster) error {
@@ -532,7 +563,7 @@ func reconcileNetworkComponents(scope *scope.Scope, cluster *clusterv1.Cluster, 
 }
 
 func (r *OpenStackClusterReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
-	clusterToInfraFn := util.ClusterToInfrastructureMapFunc(infrav1.GroupVersion.WithKind("OpenStackCluster"))
+	clusterToInfraFn := util.ClusterToInfrastructureMapFunc(ctx, infrav1.GroupVersion.WithKind("OpenStackCluster"), mgr.GetClient(), &infrav1.OpenStackCluster{})
 	log := ctrl.LoggerFrom(ctx)
 
 	return ctrl.NewControllerManagedBy(mgr).

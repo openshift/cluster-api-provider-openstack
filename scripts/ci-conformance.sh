@@ -6,7 +6,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -45,8 +45,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-#Install requests module explicitly for HTTP calls
-python3 -m pip install requests
+# Ensure that python3-pip is installed.
+apt-get update -y
+apt-get install -y python3-pip
+rm -rf /var/lib/apt/lists/*
+
+# Install/upgrade pip and requests module explicitly for HTTP calls.
+python3 -m pip install --upgrade pip requests
 
 # If BOSKOS_HOST is set then acquire a resource of type ${RESOURCE_TYPE} from Boskos.
 if [ -n "${BOSKOS_HOST:-}" ]; then

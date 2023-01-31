@@ -6,7 +6,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,8 +15,8 @@
 # limitations under the License.
 
 ################################################################################
-# usage: ci-conformance.sh
-#  This program runs the clusterctl conformance e2e tests.
+# usage: ci-e2e.sh
+#  This program runs the e2e tests.
 ################################################################################
 
 set -x
@@ -46,8 +46,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-#Install requests module explicitly for HTTP calls
-python3 -m pip install requests
+# Ensure that python3-pip is installed.
+apt-get update -y
+apt-get install -y python3-pip
+rm -rf /var/lib/apt/lists/*
+
+# Install/upgrade pip and requests module explicitly for HTTP calls.
+python3 -m pip install --upgrade pip requests
 
 # If BOSKOS_HOST is set then acquire a resource of type ${RESOURCE_TYPE} from Boskos.
 if [ -n "${BOSKOS_HOST:-}" ]; then
@@ -78,6 +83,20 @@ if [ -n "${BOSKOS_HOST:-}" ]; then
 fi
 
 "hack/ci/create_devstack.sh"
+
+# Upload image for e2e clusterctl upgrade tests
+source "${REPO_ROOT}/hack/ci/${RESOURCE_TYPE}.sh"
+CONTAINER_ARCHIVE="${ARTIFACTS}/capo-e2e-image.tar"
+SSH_KEY="$(get_ssh_private_key_file)"
+SSH_ARGS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes -o PasswordAuthentication=no"
+CONTROLLER_IP=${CONTROLLER_IP:-"10.0.3.15"}
+
+make e2e-image
+docker save -o "${CONTAINER_ARCHIVE}" gcr.io/k8s-staging-capi-openstack/capi-openstack-controller:e2e
+scp -i "${SSH_KEY}" ${SSH_ARGS} "${CONTAINER_ARCHIVE}" "cloud@${CONTROLLER_IP}:capo-e2e-image.tar"
+ssh -i "${SSH_KEY}" ${SSH_ARGS} "cloud@${CONTROLLER_IP}" -- sudo chown root:root capo-e2e-image.tar
+ssh -i "${SSH_KEY}" ${SSH_ARGS} "cloud@${CONTROLLER_IP}" -- sudo chmod u=rw,g=r,o=r capo-e2e-image.tar
+ssh -i "${SSH_KEY}" ${SSH_ARGS} "cloud@${CONTROLLER_IP}" -- sudo mv capo-e2e-image.tar /var/www/html/capo-e2e-image.tar
 
 export OPENSTACK_CLOUD_YAML_FILE
 OPENSTACK_CLOUD_YAML_FILE="$(pwd)/clouds.yaml"

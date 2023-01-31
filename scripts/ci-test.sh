@@ -6,7 +6,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+# 	http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,4 +22,11 @@ REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 # shellcheck source=../hack/ensure-go.sh
 source "${REPO_ROOT}/hack/ensure-go.sh"
 
-cd "${REPO_ROOT}" && make generate lint verify test
+cd "${REPO_ROOT}" && make generate templates lint verify test
+
+# Fail if the repo is dirty after generate/templates
+if [[ -n $(git status --short) ]]; then
+  echo "There are modified and/or untracked files."
+  echo "Did you remember to run 'make generate' and/or 'make templates'"
+  echo "$(git status)"
+fi

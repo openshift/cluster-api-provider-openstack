@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -114,11 +114,14 @@ type PortOpts struct {
 	AdminStateUp *bool  `json:"adminStateUp,omitempty"`
 	MACAddress   string `json:"macAddress,omitempty"`
 	// Specify pairs of subnet and/or IP address. These should be subnets of the network with the given NetworkID.
-	FixedIPs            []FixedIP     `json:"fixedIPs,omitempty"`
-	TenantID            string        `json:"tenantId,omitempty"`
-	ProjectID           string        `json:"projectId,omitempty"`
-	SecurityGroups      *[]string     `json:"securityGroups,omitempty"`
-	AllowedAddressPairs []AddressPair `json:"allowedAddressPairs,omitempty"`
+	FixedIPs  []FixedIP `json:"fixedIPs,omitempty"`
+	TenantID  string    `json:"tenantId,omitempty"`
+	ProjectID string    `json:"projectId,omitempty"`
+	// The uuids of the security groups to assign to the instance
+	SecurityGroups *[]string `json:"securityGroups,omitempty"`
+	// The names, uuids, filters or any combination these of the security groups to assign to the instance
+	SecurityGroupFilters []SecurityGroupParam `json:"securityGroupFilters,omitempty"`
+	AllowedAddressPairs  []AddressPair        `json:"allowedAddressPairs,omitempty"`
 	// Enables and disables trunk at port level. If not provided, openStackMachine.Spec.Trunk is inherited.
 	Trunk *bool `json:"trunk,omitempty"`
 
@@ -217,6 +220,8 @@ type Router struct {
 	ID   string `json:"id"`
 	//+optional
 	Tags []string `json:"tags,omitempty"`
+	//+optional
+	IPs []string `json:"ips,omitempty"`
 }
 
 // LoadBalancer represents basic information about the associated OpenStack LoadBalancer.
@@ -225,6 +230,8 @@ type LoadBalancer struct {
 	ID         string `json:"id"`
 	IP         string `json:"ip"`
 	InternalIP string `json:"internalIP"`
+	//+optional
+	AllowedCIDRs []string `json:"allowedCIDRs,omitempty"`
 }
 
 // SecurityGroup represents the basic information of the associated
@@ -298,8 +305,10 @@ type Bastion struct {
 }
 
 type APIServerLoadBalancer struct {
-	// Enabled defines whether a LoadBalancer should be created.
+	// Enabled defines whether a load balancer should be created.
 	Enabled bool `json:"enabled,omitempty"`
-	// AdditionalPorts adds additional tcp ports to the Loadbalacner
+	// AdditionalPorts adds additional tcp ports to the load balancer.
 	AdditionalPorts []int `json:"additionalPorts,omitempty"`
+	// AllowedCIDRs restrict access to all API-Server listeners to the given address CIDRs.
+	AllowedCIDRs []string `json:"allowedCidrs,omitempty"`
 }

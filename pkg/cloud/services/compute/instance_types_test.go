@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,6 +22,8 @@ import (
 	"github.com/go-logr/logr"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+
+	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
 )
 
 // Some arbitrary MAC addresses.
@@ -41,8 +43,8 @@ type networkAddress struct {
 	MacAddr string `json:"OS-EXT-IPS:mac_addr"`
 }
 
-func serverWithAddresses(addresses map[string][]networkAddress) *ServerExt {
-	var server ServerExt
+func serverWithAddresses(addresses map[string][]networkAddress) *clients.ServerExt {
+	var server clients.ServerExt
 
 	server.Addresses = make(map[string]interface{})
 	for network, addressList := range addresses {
@@ -258,6 +260,37 @@ func TestInstanceNetworkStatus(t *testing.T) {
 						Version: 6,
 						Addr:    "fe80::f816:3eff:fe56:3175",
 						Type:    "floating",
+						MacAddr: macAddr2,
+					}, {
+						Version: 4,
+						Addr:    "10.0.0.1",
+						Type:    "floating",
+						MacAddr: macAddr3,
+					}, {
+						Version: 4,
+						Addr:    "192.168.0.1",
+						Type:    "fixed",
+						MacAddr: macAddr4,
+					},
+				},
+			},
+			networkName:    "primary",
+			wantIP:         "192.168.0.1",
+			wantFloatingIP: "10.0.0.1",
+		},
+		{
+			name: "Ignore unknown address type",
+			addresses: map[string][]networkAddress{
+				"primary": {
+					{
+						Version: 4,
+						Addr:    "192.168.0.2",
+						Type:    "not-valid",
+						MacAddr: macAddr1,
+					}, {
+						Version: 4,
+						Addr:    "192.168.0.3",
+						Type:    "unknown",
 						MacAddr: macAddr2,
 					}, {
 						Version: 4,

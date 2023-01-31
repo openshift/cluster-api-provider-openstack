@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,12 +22,13 @@ import (
 	fuzz "github.com/google/gofuzz"
 	"github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/apitesting/fuzzer"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	runtimeserializer "k8s.io/apimachinery/pkg/runtime/serializer"
 	utilconversion "sigs.k8s.io/cluster-api/util/conversion"
 	ctrlconversion "sigs.k8s.io/controller-runtime/pkg/conversion"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
 )
 
 func TestConvertTo(t *testing.T) {
@@ -99,6 +100,11 @@ func TestConvertFrom(t *testing.T) {
 					ManagedAPIServerLoadBalancer:         true,
 					APIServerLoadBalancerAdditionalPorts: []int{80, 443},
 				},
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						"cluster.x-k8s.io/conversion-data": "{\"spec\":{\"allowAllInClusterTraffic\":false,\"apiServerLoadBalancer\":{\"additionalPorts\":[80,443],\"enabled\":true},\"cloudName\":\"\",\"controlPlaneEndpoint\":{\"host\":\"\",\"port\":0},\"disableAPIServerFloatingIP\":false,\"managedSecurityGroups\":false,\"network\":{},\"subnet\":{}},\"status\":{\"ready\":false}}",
+					},
+				},
 			},
 		},
 	}
@@ -120,39 +126,62 @@ func TestFuzzyConversion(t *testing.T) {
 
 	fuzzerFuncs := func(_ runtimeserializer.CodecFactory) []interface{} {
 		return []interface{}{
-			// Don't test spoke-hub-spoke conversion of v1alpha3 fields which are not in v1alpha5
-			func(v1alpha3ClusterSpec *OpenStackClusterSpec, c fuzz.Continue) {
-				c.FuzzNoCustom(v1alpha3ClusterSpec)
+			// Don't test spoke-hub-spoke conversion of v1alpha3 fields which are not in v1alpha6
+			func(v1alpha3Cluster *OpenStackCluster, c fuzz.Continue) {
+				c.FuzzNoCustom(v1alpha3Cluster)
 
-				v1alpha3ClusterSpec.UseOctavia = false
+				v1alpha3Cluster.ObjectMeta.Annotations = map[string]string{}
 
-				if v1alpha3ClusterSpec.CloudsSecret != nil {
+				v1alpha3Cluster.Spec.UseOctavia = false
+				if v1alpha3Cluster.Spec.CloudsSecret != nil {
 					// In switching to IdentityRef, fetching the cloud secret
 					// from a different namespace is no longer supported
-					v1alpha3ClusterSpec.CloudsSecret.Namespace = ""
+					v1alpha3Cluster.Spec.CloudsSecret.Namespace = ""
+				}
+
+				if v1alpha3Cluster.Spec.Bastion != nil {
+					v1alpha3Cluster.Spec.Bastion.Instance.Image = ""
+					v1alpha3Cluster.Spec.Bastion.Instance.UserDataSecret = nil
+					if v1alpha3Cluster.Spec.Bastion.Instance.CloudsSecret != nil {
+						v1alpha3Cluster.Spec.Bastion.Instance.CloudsSecret.Namespace = ""
+					}
 				}
 			},
 			func(v1alpha3RootVolume *RootVolume, c fuzz.Continue) {
 				c.FuzzNoCustom(v1alpha3RootVolume)
 
-				// In v1alpha5 only DeviceType="disk" and SourceType="image" are supported
+				// In v1alpha6 only DeviceType="disk" and SourceType="image" are supported
 				v1alpha3RootVolume.DeviceType = "disk"
 				v1alpha3RootVolume.SourceType = "image"
 			},
-			func(v1alpha3MachineSpec *OpenStackMachineSpec, c fuzz.Continue) {
-				c.FuzzNoCustom(v1alpha3MachineSpec)
+			func(v1alpha3Machine *OpenStackMachine, c fuzz.Continue) {
+				c.FuzzNoCustom(v1alpha3Machine)
 
-				v1alpha3MachineSpec.UserDataSecret = nil
+				v1alpha3Machine.ObjectMeta.Annotations = map[string]string{}
 
-				if v1alpha3MachineSpec.CloudsSecret != nil {
+				v1alpha3Machine.Spec.UserDataSecret = nil
+
+				if v1alpha3Machine.Spec.CloudsSecret != nil {
 					// In switching to IdentityRef, fetching the cloud secret
 					// from a different namespace is no longer supported
-					v1alpha3MachineSpec.CloudsSecret.Namespace = ""
+					v1alpha3Machine.Spec.CloudsSecret.Namespace = ""
 				}
 
-				if v1alpha3MachineSpec.RootVolume != nil {
+				if v1alpha3Machine.Spec.RootVolume != nil {
 					// OpenStackMachineSpec.Image is ignored in v1alpha3 if RootVolume is set
-					v1alpha3MachineSpec.Image = ""
+					v1alpha3Machine.Spec.Image = ""
+				}
+			},
+			func(v1alpha3MachineTemplate *OpenStackMachineTemplate, c fuzz.Continue) {
+				c.FuzzNoCustom(v1alpha3MachineTemplate)
+
+				v1alpha3MachineTemplate.ObjectMeta.Annotations = map[string]string{}
+
+				v1alpha3MachineTemplate.Spec.Template.Spec.Image = ""
+				v1alpha3MachineTemplate.Spec.Template.Spec.UserDataSecret = nil
+
+				if v1alpha3MachineTemplate.Spec.Template.Spec.CloudsSecret != nil {
+					v1alpha3MachineTemplate.Spec.Template.Spec.CloudsSecret.Namespace = ""
 				}
 			},
 			func(v1alpha3Instance *Instance, c fuzz.Continue) {
@@ -173,7 +202,7 @@ func TestFuzzyConversion(t *testing.T) {
 				v1alpha3SubnetFilter.SortKey = ""
 				v1alpha3SubnetFilter.SortDir = ""
 
-				// TenantID and ProjectID are the same thing, so TenantID is removed in v1alpha5
+				// TenantID and ProjectID are the same thing, so TenantID is removed in v1alpha6
 				// Test that we restore TenantID from ProjectID
 				v1alpha3SubnetFilter.TenantID = v1alpha3SubnetFilter.ProjectID
 			},
@@ -187,50 +216,85 @@ func TestFuzzyConversion(t *testing.T) {
 				v1alpha3Filter.SortKey = ""
 				v1alpha3Filter.SortDir = ""
 
-				// TenantID and ProjectID are the same thing, so TenantID is removed in v1alpha5
+				// TenantID and ProjectID are the same thing, so TenantID is removed in v1alpha6
 				// Test that we restore TenantID from ProjectID
 				v1alpha3Filter.TenantID = v1alpha3Filter.ProjectID
 			},
 
-			// Don't test hub-spoke-hub conversion of v1alpha5 fields which are not in v1alpha3
-			func(v1alpha5ClusterSpec *infrav1.OpenStackClusterSpec, c fuzz.Continue) {
-				c.FuzzNoCustom(v1alpha5ClusterSpec)
+			// Don't test hub-spoke-hub conversion of v1alpha6 fields which are not in v1alpha3
+			func(v1alpha6Cluster *infrav1.OpenStackCluster, c fuzz.Continue) {
+				c.FuzzNoCustom(v1alpha6Cluster)
 
-				v1alpha5ClusterSpec.APIServerFixedIP = ""
-				v1alpha5ClusterSpec.AllowAllInClusterTraffic = false
-				v1alpha5ClusterSpec.DisableAPIServerFloatingIP = false
-			},
-			func(v1alpha5MachineSpec *infrav1.OpenStackMachineSpec, c fuzz.Continue) {
-				c.FuzzNoCustom(v1alpha5MachineSpec)
+				v1alpha6Cluster.ObjectMeta.Annotations = map[string]string{}
 
-				v1alpha5MachineSpec.Ports = nil
-				v1alpha5MachineSpec.ImageUUID = ""
-			},
-			func(v1alpha5Network *infrav1.Network, c fuzz.Continue) {
-				c.FuzzNoCustom(v1alpha5Network)
+				v1alpha6Cluster.Spec.APIServerFixedIP = ""
+				v1alpha6Cluster.Spec.AllowAllInClusterTraffic = false
+				v1alpha6Cluster.Spec.DisableAPIServerFloatingIP = false
+				v1alpha6Cluster.Spec.APIServerLoadBalancer.AllowedCIDRs = nil
+				if v1alpha6Cluster.Spec.Bastion != nil {
+					v1alpha6Cluster.Spec.Bastion.Instance.ImageUUID = ""
+					v1alpha6Cluster.Spec.Bastion.Instance.Ports = nil
+				}
+				v1alpha6Cluster.Spec.ControlPlaneOmitAvailabilityZone = false
 
-				v1alpha5Network.PortOpts = nil
-			},
-			func(v1alpha5ClusterStatus *infrav1.OpenStackClusterStatus, c fuzz.Continue) {
-				c.FuzzNoCustom(v1alpha5ClusterStatus)
+				v1alpha6Cluster.Status.FailureMessage = nil
+				v1alpha6Cluster.Status.FailureReason = nil
 
-				v1alpha5ClusterStatus.FailureMessage = nil
-				v1alpha5ClusterStatus.FailureReason = nil
-				if v1alpha5ClusterStatus.Bastion != nil {
-					v1alpha5ClusterStatus.Bastion.ImageUUID = ""
+				if v1alpha6Cluster.Status.Bastion != nil {
+					v1alpha6Cluster.Status.Bastion.ImageUUID = ""
+					v1alpha6Cluster.Status.Bastion.Networks = nil
+				}
+
+				if v1alpha6Cluster.Status.Network != nil {
+					if v1alpha6Cluster.Status.Network.APIServerLoadBalancer != nil {
+						v1alpha6Cluster.Status.Network.APIServerLoadBalancer.AllowedCIDRs = nil
+					}
+					if v1alpha6Cluster.Status.Network.Router != nil {
+						v1alpha6Cluster.Status.Network.Router.IPs = []string{}
+					}
+				}
+
+				if v1alpha6Cluster.Status.ExternalNetwork != nil {
+					if v1alpha6Cluster.Status.ExternalNetwork.APIServerLoadBalancer != nil {
+						v1alpha6Cluster.Status.ExternalNetwork.APIServerLoadBalancer.AllowedCIDRs = nil
+					}
+					if v1alpha6Cluster.Status.ExternalNetwork.Router != nil {
+						v1alpha6Cluster.Status.ExternalNetwork.Router.IPs = []string{}
+					}
 				}
 			},
-			func(v1alpha5OpenStackIdentityRef *infrav1.OpenStackIdentityReference, c fuzz.Continue) {
-				c.FuzzNoCustom(v1alpha5OpenStackIdentityRef)
+			func(v1alpha6Machine *infrav1.OpenStackMachine, c fuzz.Continue) {
+				c.FuzzNoCustom(v1alpha6Machine)
+
+				v1alpha6Machine.ObjectMeta.Annotations = map[string]string{}
+				v1alpha6Machine.Spec.Ports = nil
+				v1alpha6Machine.Spec.ImageUUID = ""
+			},
+			func(v1alpha6MachineTemplate *infrav1.OpenStackMachineTemplate, c fuzz.Continue) {
+				c.FuzzNoCustom(v1alpha6MachineTemplate)
+
+				v1alpha6MachineTemplate.ObjectMeta.Annotations = map[string]string{}
+
+				v1alpha6MachineTemplate.Spec.Template.Spec.Image = ""
+				v1alpha6MachineTemplate.Spec.Template.Spec.ImageUUID = ""
+				v1alpha6MachineTemplate.Spec.Template.Spec.Ports = nil
+			},
+			func(v1alpha6Network *infrav1.Network, c fuzz.Continue) {
+				c.FuzzNoCustom(v1alpha6Network)
+
+				v1alpha6Network.PortOpts = nil
+			},
+			func(v1alpha6OpenStackIdentityRef *infrav1.OpenStackIdentityReference, c fuzz.Continue) {
+				c.FuzzNoCustom(v1alpha6OpenStackIdentityRef)
 
 				// IdentityRef was assumed to be a Secret in v1alpha3
-				v1alpha5OpenStackIdentityRef.Kind = "Secret"
+				v1alpha6OpenStackIdentityRef.Kind = "Secret"
 			},
-			func(v1alpha5RootVolume *infrav1.RootVolume, c fuzz.Continue) {
-				c.FuzzNoCustom(v1alpha5RootVolume)
+			func(v1alpha6RootVolume *infrav1.RootVolume, c fuzz.Continue) {
+				c.FuzzNoCustom(v1alpha6RootVolume)
 
-				v1alpha5RootVolume.VolumeType = ""
-				v1alpha5RootVolume.AvailabilityZone = ""
+				v1alpha6RootVolume.VolumeType = ""
+				v1alpha6RootVolume.AvailabilityZone = ""
 			},
 		}
 	}

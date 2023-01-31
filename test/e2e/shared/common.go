@@ -8,7 +8,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,7 +28,7 @@ import (
 	"path/filepath"
 	"time"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/cluster-api/test/framework"
@@ -36,11 +36,11 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
 )
 
 func SetupSpecNamespace(ctx context.Context, specName string, e2eCtx *E2EContext) *corev1.Namespace {
-	Byf("Creating a namespace for hosting the %q test spec", specName)
+	Logf("Creating a namespace for hosting the %q test spec", specName)
 	namespace, cancelWatches := framework.CreateNamespaceAndWatchEvents(ctx, framework.CreateNamespaceAndWatchEventsInput{
 		Creator:   e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
 		ClientSet: e2eCtx.Environment.BootstrapClusterProxy.GetClientSet(),
@@ -54,14 +54,14 @@ func SetupSpecNamespace(ctx context.Context, specName string, e2eCtx *E2EContext
 }
 
 func DumpSpecResourcesAndCleanup(ctx context.Context, specName string, namespace *corev1.Namespace, e2eCtx *E2EContext) {
-	Byf("Running DumpSpecResourcesAndCleanup for namespace %q", namespace.Name)
+	Logf("Running DumpSpecResourcesAndCleanup for namespace %q", namespace.Name)
 	// Dump all Cluster API related resources to artifacts before deleting them.
 	cancelWatches := e2eCtx.Environment.Namespaces[namespace]
 	dumpSpecResources(ctx, e2eCtx, namespace)
 
 	dumpOpenStack(ctx, e2eCtx, e2eCtx.Environment.BootstrapClusterProxy.GetName())
 
-	Byf("Dumping all OpenStack server instances in the %q namespace", namespace.Name)
+	Logf("Dumping all OpenStack server instances in the %q namespace", namespace.Name)
 	dumpMachines(ctx, e2eCtx, namespace)
 
 	if !e2eCtx.Settings.SkipCleanup {
@@ -70,7 +70,7 @@ func DumpSpecResourcesAndCleanup(ctx context.Context, specName string, namespace
 			Namespace: namespace.Name,
 		}, e2eCtx.E2EConfig.GetIntervals(specName, "wait-delete-cluster")...)
 
-		Byf("Deleting namespace used for hosting the %q test spec", specName)
+		Logf("Deleting namespace used for hosting the %q test spec", specName)
 		framework.DeleteNamespace(ctx, framework.DeleteNamespaceInput{
 			Deleter: e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
 			Name:    namespace.Name,
@@ -207,13 +207,13 @@ func dumpSpecResources(ctx context.Context, e2eCtx *E2EContext, namespace *corev
 	})
 }
 
-func Byf(format string, a ...interface{}) {
-	By("[" + time.Now().Format(time.RFC3339) + "] " + fmt.Sprintf(format, a...))
+func Logf(format string, a ...interface{}) {
+	fmt.Fprintf(GinkgoWriter, "["+time.Now().Format(time.RFC3339)+"] "+format+"\n", a...)
 }
 
 func Debugf(debug bool, format string, a ...interface{}) {
 	if debug {
-		By("[DEBUG] [" + time.Now().Format(time.RFC3339) + "] " + fmt.Sprintf(format, a...))
+		fmt.Fprintf(GinkgoWriter, "[DEBUG] ["+time.Now().Format(time.RFC3339)+"] "+format+"\n", a...)
 	}
 }
 
@@ -232,6 +232,6 @@ func SetEnvVar(key, value string, private bool) {
 		printableValue = value
 	}
 
-	Byf("Setting environment variable: key=%s, value=%s", key, printableValue)
+	Logf("Setting environment variable: key=%s, value=%s", key, printableValue)
 	_ = os.Setenv(key, value)
 }

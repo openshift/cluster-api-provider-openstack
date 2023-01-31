@@ -8,7 +8,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -45,24 +45,25 @@ import (
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/ports"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/subnets"
 	"github.com/gophercloud/utils/openstack/clientconfig"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/ini.v1"
 	"sigs.k8s.io/yaml"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
+	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/compute"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/provider"
 )
 
 type ServerExtWithIP struct {
-	compute.ServerExt
+	clients.ServerExt
 	ip string
 }
 
 // ensureSSHKeyPair ensures A SSH key is present under the name.
 func ensureSSHKeyPair(e2eCtx *E2EContext) {
-	Byf("Ensuring presence of SSH key %q in OpenStack", DefaultSSHKeyPairName)
+	Logf("Ensuring presence of SSH key %q in OpenStack", DefaultSSHKeyPairName)
 
 	providerClient, clientOpts, _, err := GetTenantProviderClient(e2eCtx)
 	Expect(err).NotTo(HaveOccurred())
@@ -82,7 +83,7 @@ func ensureSSHKeyPair(e2eCtx *E2EContext) {
 	}
 
 	sshDir := filepath.Join(e2eCtx.Settings.ArtifactFolder, "ssh")
-	Byf("Storing keypair in %q", sshDir)
+	Logf("Storing keypair in %q", sshDir)
 
 	err = os.MkdirAll(sshDir, 0o750)
 	Expect(err).NotTo(HaveOccurred())
@@ -95,7 +96,7 @@ func ensureSSHKeyPair(e2eCtx *E2EContext) {
 }
 
 func dumpOpenStack(_ context.Context, e2eCtx *E2EContext, bootstrapClusterProxyName string) {
-	Byf("Running dumpOpenStack")
+	Logf("Running dumpOpenStack")
 	logPath := filepath.Join(e2eCtx.Settings.ArtifactFolder, "clusters", bootstrapClusterProxyName, "openstack-resources")
 	if err := os.MkdirAll(logPath, os.ModePerm); err != nil {
 		_, _ = fmt.Fprintf(GinkgoWriter, "error creating directory %s: %s\n", logPath, err)
@@ -115,6 +116,18 @@ func dumpOpenStack(_ context.Context, e2eCtx *E2EContext, bootstrapClusterProxyN
 
 	if err := dumpOpenStackPorts(e2eCtx, logPath); err != nil {
 		_, _ = fmt.Fprintf(GinkgoWriter, "error dumping OpenStack ports: %s\n", err)
+	}
+
+	if err := dumpOpenStackSG(e2eCtx, logPath); err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "error dumping OpenStack sgs: %s\n", err)
+	}
+
+	if err := dumpOpenStackNetworks(e2eCtx, logPath); err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "error dumping OpenStack networks: %s\n", err)
+	}
+
+	if err := dumpOpenStackSubnets(e2eCtx, logPath); err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "error dumping OpenStack subnets: %s\n", err)
 	}
 }
 
@@ -160,6 +173,54 @@ func dumpOpenStackPorts(e2eCtx *E2EContext, logPath string) error {
 	return nil
 }
 
+func dumpOpenStackSG(e2eCtx *E2EContext, logPath string) error {
+	sgsList, err := DumpOpenStackSecurityGroups(e2eCtx, groups.ListOpts{})
+	if err != nil {
+		return err
+	}
+	sgsJSON, err := json.MarshalIndent(sgsList, "", "    ")
+	if err != nil {
+		return fmt.Errorf("error marshalling SGs %v: %s", sgsList, err)
+	}
+	if err := os.WriteFile(path.Join(logPath, "secgrps.json"), sgsJSON, 0o600); err != nil {
+		return fmt.Errorf("error writing secgrps.json %s: %s", sgsJSON, err)
+	}
+
+	return nil
+}
+
+func dumpOpenStackNetworks(e2eCtx *E2EContext, logPath string) error {
+	networksList, err := DumpOpenStackNetworks(e2eCtx, networks.ListOpts{})
+	if err != nil {
+		return err
+	}
+	networkJSON, err := json.MarshalIndent(networksList, "", "    ")
+	if err != nil {
+		return fmt.Errorf("error marshalling networks %v: %s", networksList, err)
+	}
+	if err := os.WriteFile(path.Join(logPath, "networks.json"), networkJSON, 0o600); err != nil {
+		return fmt.Errorf("error writing networks.json %s: %s", networkJSON, err)
+	}
+
+	return nil
+}
+
+func dumpOpenStackSubnets(e2eCtx *E2EContext, logPath string) error {
+	subnetsList, err := DumpOpenStackSubnets(e2eCtx, subnets.ListOpts{})
+	if err != nil {
+		return err
+	}
+	subnetJSON, err := json.MarshalIndent(subnetsList, "", "    ")
+	if err != nil {
+		return fmt.Errorf("error marshalling subnets %v: %s", subnetsList, err)
+	}
+	if err := os.WriteFile(path.Join(logPath, "subnets.json"), subnetJSON, 0o600); err != nil {
+		return fmt.Errorf("error writing subnets.json %s: %s", subnetJSON, err)
+	}
+
+	return nil
+}
+
 func DumpOpenStackServers(e2eCtx *E2EContext, filter servers.ListOpts) ([]servers.Server, error) {
 	providerClient, clientOpts, _, err := GetTenantProviderClient(e2eCtx)
 	if err != nil {
@@ -172,7 +233,7 @@ func DumpOpenStackServers(e2eCtx *E2EContext, filter servers.ListOpts) ([]server
 		return nil, fmt.Errorf("error creating compute client: %v", err)
 	}
 
-	computeClient.Microversion = compute.NovaMinimumMicroversion
+	computeClient.Microversion = clients.NovaMinimumMicroversion
 	allPages, err := servers.List(computeClient, filter).AllPages()
 	if err != nil {
 		return nil, fmt.Errorf("error listing servers: %v", err)
@@ -311,6 +372,32 @@ func DumpOpenStackPorts(e2eCtx *E2EContext, filter ports.ListOpts) ([]ports.Port
 	return portsList, nil
 }
 
+// CreateOpenStackSecurityGroup creates a security group to be consumed by a worker node.
+func CreateOpenStackSecurityGroup(e2eCtx *E2EContext, securityGroupName, description string) error {
+	providerClient, clientOpts, _, err := GetTenantProviderClient(e2eCtx)
+	if err != nil {
+		return fmt.Errorf("error creating provider client: %s", err)
+	}
+
+	networkClient, err := openstack.NewNetworkV2(providerClient, gophercloud.EndpointOpts{
+		Region: clientOpts.RegionName,
+	})
+	if err != nil {
+		return fmt.Errorf("error creating network client: %s", err)
+	}
+
+	createOpts := groups.CreateOpts{
+		Name:        securityGroupName,
+		Description: description,
+	}
+
+	_, err = groups.Create(networkClient, createOpts).Extract()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // DumpOpenStackTrunks trunks for a given port.
 func DumpOpenStackTrunks(e2eCtx *E2EContext, portID string) (*trunks.Trunk, error) {
 	providerClient, clientOpts, _, err := GetTenantProviderClient(e2eCtx)
@@ -362,7 +449,7 @@ func GetOpenStackServers(e2eCtx *E2EContext, openStackCluster *infrav1.OpenStack
 		return nil, fmt.Errorf("error listing server: %v", err)
 	}
 
-	var serverList []compute.ServerExt
+	var serverList []clients.ServerExt
 	err = servers.ExtractServersInto(allPages, &serverList)
 	if err != nil {
 		return nil, fmt.Errorf("error extracting server: %v", err)
