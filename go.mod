@@ -18,6 +18,7 @@ require (
 	github.com/openshift/machine-api-operator v0.2.1-0.20210820103535-d50698c302f5
 	github.com/vincent-petithory/dataurl v0.0.0-20160330182126-9a301d65acbb // indirect
 	go4.org v0.0.0-20191010144846-132d2879e1e9 // indirect
+	golang.org/x/net v0.4.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.22.0
 	k8s.io/apimachinery v0.22.0
