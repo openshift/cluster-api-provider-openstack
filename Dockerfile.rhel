@@ -1,9 +1,9 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.19-openshift-4.12 AS builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-8-golang-1.19-openshift-4.13 AS builder
 WORKDIR /go/src/sigs.k8s.io/cluster-api-provider-openstack
 COPY . .
 
 RUN go build -o ./machine-controller-manager ./cmd/manager
 
-FROM registry.ci.openshift.org/ocp/4.12:base
+FROM registry.ci.openshift.org/ocp/4.13:base
 
 COPY --from=builder /go/src/sigs.k8s.io/cluster-api-provider-openstack/machine-controller-manager /
