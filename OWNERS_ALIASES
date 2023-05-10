@@ -1,34 +1,10 @@
-# See the OWNERS docs: https://git.k8s.io/community/contributors/guide/owners.md
-#
-# When making changes to this file, also consider if you need to update:
-# - https://github.com/kubernetes/org/blob/main/config/kubernetes-sigs/sig-cluster-lifecycle/teams.yaml
-# - https://github.com/kubernetes/test-infra/blob/master/OWNERS_ALIASES
-# - https://github.com/kubernetes/k8s.io/blob/main/groups/sig-architecture/groups.yaml
-# - https://github.com/kubernetes/k8s.io/blob/main/groups/sig-cluster-lifecycle/groups.yaml
-
 aliases:
-  # correct as of 2021/03/03
-  sig-cluster-lifecycle-leads:
-    - justinsb
-    - neolit123
-    - timothysc
-    - fabriziopandini
-  # correct as of 2021/03/03
-  cluster-api-admins:
-    - justinsb
-    - detiber
-    - vincepri
-  # correct as of 2021/03/03
-  cluster-api-maintainers:
-    - justinsb
-    - detiber
-    - vincepri
-    - CecileRobertMichon
-  cluster-api-openstack-maintainers:
-    - jichenjc
-    - lentzi90
-    - mdbooth
-    - seanschneeweiss
-    - tobiasgiese
-  cluster-api-openstack-reviewers:
+  shiftstack-team:
+    - EmilienM
+    - MaysaMacedo
     - dulek
+    - gryf
+    - mandre
+    - mdbooth
+    - pierreprinetti
+    - stephenfin
