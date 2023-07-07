@@ -1,0 +1,6 @@
+resources:
+- ../../../config/rbac
+
+components:
+- ../cluster-capi-operator
+- ../tech-preview

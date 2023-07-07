@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kustomize-capo-vars
+  annotations:
+    config.kubernetes.io/local-config: "true"
+data:
+  webhookSecretName: capo-webhook-cert

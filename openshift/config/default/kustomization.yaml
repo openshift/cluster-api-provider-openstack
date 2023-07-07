@@ -1,0 +1,70 @@
+namePrefix: capo-
+
+resources:
+- ../../../config/manager
+- ../../../config/webhook
+- vars.yaml
+
+components:
+- ../cluster-capi-operator
+- ../tech-preview
+
+images:
+- name: controller
+  newName: quay.io/openshift/cluster-api-provider-openstack
+
+patches:
+# Add webhook to manager deployment
+# N.B. This is copied from /config/default/manager_webhook_patch.yaml
+- path: manager_webhook_patch.yaml
+
+# Remove validation webhooks for cluster objects
+- patch: |-
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingWebhookConfiguration
+    metadata:
+      name: validating-webhook-configuration
+    webhooks:
+    - name: validation.openstackcluster.infrastructure.cluster.x-k8s.io
+      $patch: delete
+    - name: validation.openstackclustertemplate.infrastructure.cluster.x-k8s.io
+      $patch: delete
+
+# Remove defaulting webhooks for cluster objects
+- patch: |-
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: MutatingWebhookConfiguration
+    metadata:
+      name: mutating-webhook-configuration
+    webhooks:
+    - name: default.openstackcluster.infrastructure.cluster.x-k8s.io
+      $patch: delete
+    - name: default.openstackclustertemplate.infrastructure.cluster.x-k8s.io
+      $patch: delete
+
+replacements:
+# Set the webhook cert secret name in the service and the controller-manager
+# deployment where it's used
+- source:
+    version: v1
+    kind: ConfigMap
+    name: kustomize-capo-vars
+    fieldPath: data.webhookSecretName
+  targets:
+  - select:
+      version: v1
+      kind: Service
+      name: webhook-service
+      namespace: system
+    fieldPaths:
+    - metadata.annotations[service\.beta\.openshift\.io/serving-cert-secret-name]
+    options:
+      create: true
+  - select:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: controller-manager
+      namespace: system
+    fieldPaths:
+    - spec.template.spec.volumes.[name=cert].secret.secretName
