@@ -1,4 +1,4 @@
-manifests_dir ?= ./manifests
+manifests_dir ?= ../manifests
 manifests_prefix ?= 0000_30_cluster-api-provider-openstack_
 
 define manifest_name

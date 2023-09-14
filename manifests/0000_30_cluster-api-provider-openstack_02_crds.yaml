@@ -2,13 +2,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.10.0
+    controller-gen.kubebuilder.io/version: v0.13.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-set: TechPreviewNoUpgrade
     service.beta.openshift.io/inject-cabundle: "true"
-  creationTimestamp: "null"
   labels:
     cluster.x-k8s.io/v1beta1: v1alpha5_v1alpha6_v1alpha7
   name: openstackclusters.infrastructure.cluster.x-k8s.io
@@ -3680,10 +3679,6 @@ spec:
       jsonPath: .status.network.id
       name: Network
       type: string
-    - description: Subnet the cluster is using
-      jsonPath: .status.network.subnet.id
-      name: Subnet
-      type: string
     - description: API Endpoint
       jsonPath: .spec.controlPlaneEndpoint.host
       name: Endpoint
@@ -4650,13 +4645,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.10.0
+    controller-gen.kubebuilder.io/version: v0.13.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-set: TechPreviewNoUpgrade
     service.beta.openshift.io/inject-cabundle: "true"
-  creationTimestamp: "null"
   labels:
     cluster.x-k8s.io/v1beta1: v1alpha5_v1alpha6_v1alpha7
   name: openstackclustertemplates.infrastructure.cluster.x-k8s.io
@@ -6825,13 +6819,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.10.0
+    controller-gen.kubebuilder.io/version: v0.13.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-set: TechPreviewNoUpgrade
     service.beta.openshift.io/inject-cabundle: "true"
-  creationTimestamp: "null"
   labels:
     cluster.x-k8s.io/v1beta1: v1alpha5_v1alpha6_v1alpha7
   name: openstackmachines.infrastructure.cluster.x-k8s.io
@@ -8389,13 +8382,12 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.10.0
+    controller-gen.kubebuilder.io/version: v0.13.0
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-set: TechPreviewNoUpgrade
     service.beta.openshift.io/inject-cabundle: "true"
-  creationTimestamp: "null"
   labels:
     cluster.x-k8s.io/v1beta1: v1alpha5_v1alpha6_v1alpha7
   name: openstackmachinetemplates.infrastructure.cluster.x-k8s.io
