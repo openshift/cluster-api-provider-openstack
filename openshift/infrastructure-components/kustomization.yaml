@@ -1,8 +1,8 @@
 namePrefix: capo-
 
 resources:
-- ../../../config/manager
-- ../../../config/webhook
+- ../../config/manager
+- ../../config/webhook
 - vars.yaml
 
 components:
@@ -11,7 +11,8 @@ components:
 
 images:
 - name: controller
-  newName: quay.io/openshift/cluster-api-provider-openstack
+  newName: registry.k8s.io/capi-openstack/capi-openstack-controller
+  newTag: v0.8.0
 
 patches:
 # Add webhook to manager deployment
@@ -57,7 +58,7 @@ replacements:
       name: webhook-service
       namespace: system
     fieldPaths:
-    - metadata.annotations[service\.beta\.openshift\.io/serving-cert-secret-name]
+    - metadata.annotations.service\.beta\.openshift\.io/serving-cert-secret-name
     options:
       create: true
   - select:

@@ -1,0 +1,204 @@
+apiVersion: v1
+data:
+  components: |
+    apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        exclude.release.openshift.io/internal-openshift-hosted: "true"
+        include.release.openshift.io/self-managed-high-availability: "true"
+        include.release.openshift.io/single-node-developer: "true"
+        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        service.beta.openshift.io/serving-cert-secret-name: capo-webhook-cert
+      name: capo-webhook-service
+      namespace: openshift-cluster-api
+    spec:
+      ports:
+      - port: 443
+        targetPort: webhook-server
+    ---
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      annotations:
+        exclude.release.openshift.io/internal-openshift-hosted: "true"
+        include.release.openshift.io/self-managed-high-availability: "true"
+        include.release.openshift.io/single-node-developer: "true"
+        release.openshift.io/feature-set: TechPreviewNoUpgrade
+      labels:
+        control-plane: capo-controller-manager
+      name: capo-controller-manager
+      namespace: openshift-cluster-api
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          control-plane: capo-controller-manager
+      template:
+        annotations:
+          target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+        metadata:
+          annotations:
+            exclude.release.openshift.io/internal-openshift-hosted: "true"
+            include.release.openshift.io/self-managed-high-availability: "true"
+            include.release.openshift.io/single-node-developer: "true"
+            release.openshift.io/feature-set: TechPreviewNoUpgrade
+          labels:
+            control-plane: capo-controller-manager
+        spec:
+          containers:
+          - args:
+            - --leader-elect
+            - --v=2
+            - --metrics-bind-addr=127.0.0.1:8080
+            command:
+            - /manager
+            image: registry.k8s.io/capi-openstack/capi-openstack-controller:v0.8.0:latest
+            imagePullPolicy: Always
+            livenessProbe:
+              httpGet:
+                path: /healthz
+                port: healthz
+            name: manager
+            ports:
+            - containerPort: 9443
+              name: webhook-server
+              protocol: TCP
+            - containerPort: 9440
+              name: healthz
+              protocol: TCP
+            readinessProbe:
+              httpGet:
+                path: /readyz
+                port: healthz
+            resources:
+              requests:
+                cpu: 10m
+                memory: 50Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              privileged: false
+              runAsGroup: 65532
+              runAsUser: 65532
+            volumeMounts:
+            - mountPath: /tmp/k8s-webhook-server/serving-certs
+              name: cert
+              readOnly: true
+          priorityClassName: system-cluster-critical
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          serviceAccountName: manager
+          terminationGracePeriodSeconds: 10
+          tolerations:
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/master
+          - effect: NoSchedule
+            key: node-role.kubernetes.io/control-plane
+          volumes:
+          - name: cert
+            secret:
+              defaultMode: 420
+              secretName: capo-webhook-cert
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: MutatingWebhookConfiguration
+    metadata:
+      annotations:
+        exclude.release.openshift.io/internal-openshift-hosted: "true"
+        include.release.openshift.io/self-managed-high-availability: "true"
+        include.release.openshift.io/single-node-developer: "true"
+        release.openshift.io/feature-set: TechPreviewNoUpgrade
+      name: capo-mutating-webhook-configuration
+    webhooks:
+    - admissionReviewVersions:
+      - v1beta1
+      clientConfig:
+        service:
+          name: capo-webhook-service
+          namespace: openshift-cluster-api
+          path: /mutate-infrastructure-cluster-x-k8s-io-v1alpha7-openstackmachine
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: default.openstackmachine.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1alpha7
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - openstackmachines
+      sideEffects: None
+    ---
+    apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingWebhookConfiguration
+    metadata:
+      annotations:
+        exclude.release.openshift.io/internal-openshift-hosted: "true"
+        include.release.openshift.io/self-managed-high-availability: "true"
+        include.release.openshift.io/single-node-developer: "true"
+        release.openshift.io/feature-set: TechPreviewNoUpgrade
+      name: capo-validating-webhook-configuration
+    webhooks:
+    - admissionReviewVersions:
+      - v1beta1
+      clientConfig:
+        service:
+          name: capo-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1alpha7-openstackmachine
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.openstackmachine.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1alpha7
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - openstackmachines
+      sideEffects: None
+    - admissionReviewVersions:
+      - v1beta1
+      clientConfig:
+        service:
+          name: capo-webhook-service
+          namespace: openshift-cluster-api
+          path: /validate-infrastructure-cluster-x-k8s-io-v1alpha7-openstackmachinetemplate
+      failurePolicy: Fail
+      matchPolicy: Equivalent
+      name: validation.openstackmachinetemplate.infrastructure.cluster.x-k8s.io
+      rules:
+      - apiGroups:
+        - infrastructure.cluster.x-k8s.io
+        apiVersions:
+        - v1alpha7
+        operations:
+        - CREATE
+        - UPDATE
+        resources:
+        - openstackmachinetemplates
+      sideEffects: None
+kind: ConfigMap
+metadata:
+  annotations:
+    exclude.release.openshift.io/internal-openshift-hosted: "true"
+    include.release.openshift.io/self-managed-high-availability: "true"
+    include.release.openshift.io/single-node-developer: "true"
+    release.openshift.io/feature-set: TechPreviewNoUpgrade
+  labels:
+    provider.cluster.x-k8s.io/name: cluster-api-provider-openstack
+    provider.cluster.x-k8s.io/type: infrastructure
+    provider.cluster.x-k8s.io/version: v0.8.0
+  name: cluster-api-provider-openstack
+  namespace: openshift-cluster-api

@@ -34,9 +34,10 @@ patches:
       name: ignored
     spec:
       template:
-        annotations:
-          # https://github.com/openshift/enhancements/blob/master/enhancements/workload-partitioning/wide-availability-workload-partitioning.md
-          target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
+        metadata:
+          annotations:
+            # https://github.com/openshift/enhancements/blob/master/enhancements/workload-partitioning/wide-availability-workload-partitioning.md
+            target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
         spec:
           priorityClassName: "system-cluster-critical"
 

@@ -1,8 +1,0 @@
-resources:
-- ../../../config/crd
-
-components:
-- ../cluster-capi-operator
-- ../tech-preview
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization

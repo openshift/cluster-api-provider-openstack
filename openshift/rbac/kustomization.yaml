@@ -1,5 +1,5 @@
 resources:
-- ../../../config/rbac
+- ../../config/rbac
 
 components:
 - ../cluster-capi-operator
