@@ -3,4 +3,4 @@ resources:
 
 components:
 - ../cluster-capi-operator
-- ../tech-preview
+- ../common

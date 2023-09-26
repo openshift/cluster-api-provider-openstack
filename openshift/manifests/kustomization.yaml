@@ -3,7 +3,7 @@ kind: Kustomization
 
 components:
 - ../cluster-capi-operator
-- ../tech-preview
+- ../common
 
 generatorOptions:
   disableNameSuffixHash: true
