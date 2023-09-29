@@ -14,7 +14,7 @@ images:
   #newName: registry.k8s.io/capi-openstack/capi-openstack-controller
   #newTag: v0.8.0
   newName: quay.io/mbooth/cluster-api-provider-openstack
-  newTag: v0.8.0-mbooth.0
+  newTag: v0.8.0-mbooth.1
 
 patches:
 # Add webhook to manager deployment

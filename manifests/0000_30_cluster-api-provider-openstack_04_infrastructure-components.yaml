@@ -10,12 +10,16 @@ data:
         include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
         service.beta.openshift.io/serving-cert-secret-name: capo-webhook-cert
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-webhook-service
       namespace: openshift-cluster-api
     spec:
       ports:
       - port: 443
         targetPort: webhook-server
+      selector:
+        cluster.x-k8s.io/provider: infrastructure-openstack
     ---
     apiVersion: apps/v1
     kind: Deployment
@@ -26,6 +30,7 @@ data:
         include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
+        cluster.x-k8s.io/provider: infrastructure-openstack
         control-plane: capo-controller-manager
       name: capo-controller-manager
       namespace: openshift-cluster-api
@@ -33,17 +38,18 @@ data:
       replicas: 1
       selector:
         matchLabels:
+          cluster.x-k8s.io/provider: infrastructure-openstack
           control-plane: capo-controller-manager
       template:
-        annotations:
-          target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
         metadata:
           annotations:
             exclude.release.openshift.io/internal-openshift-hosted: "true"
             include.release.openshift.io/self-managed-high-availability: "true"
             include.release.openshift.io/single-node-developer: "true"
             release.openshift.io/feature-set: TechPreviewNoUpgrade
+            target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
           labels:
+            cluster.x-k8s.io/provider: infrastructure-openstack
             control-plane: capo-controller-manager
         spec:
           containers:
@@ -53,7 +59,7 @@ data:
             - --metrics-bind-addr=127.0.0.1:8080
             command:
             - /manager
-            image: registry.k8s.io/capi-openstack/capi-openstack-controller:v0.8.0:latest
+            image: quay.io/mbooth/cluster-api-provider-openstack:v0.8.0-mbooth.1
             imagePullPolicy: Always
             livenessProbe:
               httpGet:
@@ -113,6 +119,9 @@ data:
         include.release.openshift.io/self-managed-high-availability: "true"
         include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
+        service.beta.openshift.io/inject-cabundle: "true"
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-mutating-webhook-configuration
     webhooks:
     - admissionReviewVersions:
@@ -145,6 +154,9 @@ data:
         include.release.openshift.io/self-managed-high-availability: "true"
         include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
+        service.beta.openshift.io/inject-cabundle: "true"
+      labels:
+        cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-validating-webhook-configuration
     webhooks:
     - admissionReviewVersions:
@@ -197,8 +209,9 @@ metadata:
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-set: TechPreviewNoUpgrade
   labels:
+    cluster.x-k8s.io/provider: infrastructure-openstack
     provider.cluster.x-k8s.io/name: cluster-api-provider-openstack
     provider.cluster.x-k8s.io/type: infrastructure
     provider.cluster.x-k8s.io/version: v0.8.0
-  name: cluster-api-provider-openstack
+  name: openstack
   namespace: openshift-cluster-api

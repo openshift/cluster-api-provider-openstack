@@ -9,6 +9,7 @@ metadata:
     release.openshift.io/feature-set: TechPreviewNoUpgrade
     service.beta.openshift.io/inject-cabundle: "true"
   labels:
+    cluster.x-k8s.io/provider: infrastructure-openstack
     cluster.x-k8s.io/v1beta1: v1alpha5_v1alpha6_v1alpha7
   name: openstackclusters.infrastructure.cluster.x-k8s.io
 spec:
@@ -4652,6 +4653,7 @@ metadata:
     release.openshift.io/feature-set: TechPreviewNoUpgrade
     service.beta.openshift.io/inject-cabundle: "true"
   labels:
+    cluster.x-k8s.io/provider: infrastructure-openstack
     cluster.x-k8s.io/v1beta1: v1alpha5_v1alpha6_v1alpha7
   name: openstackclustertemplates.infrastructure.cluster.x-k8s.io
 spec:
@@ -6826,6 +6828,7 @@ metadata:
     release.openshift.io/feature-set: TechPreviewNoUpgrade
     service.beta.openshift.io/inject-cabundle: "true"
   labels:
+    cluster.x-k8s.io/provider: infrastructure-openstack
     cluster.x-k8s.io/v1beta1: v1alpha5_v1alpha6_v1alpha7
   name: openstackmachines.infrastructure.cluster.x-k8s.io
 spec:
@@ -8389,6 +8392,7 @@ metadata:
     release.openshift.io/feature-set: TechPreviewNoUpgrade
     service.beta.openshift.io/inject-cabundle: "true"
   labels:
+    cluster.x-k8s.io/provider: infrastructure-openstack
     cluster.x-k8s.io/v1beta1: v1alpha5_v1alpha6_v1alpha7
   name: openstackmachinetemplates.infrastructure.cluster.x-k8s.io
 spec:
