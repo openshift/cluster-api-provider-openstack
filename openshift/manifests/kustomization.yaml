@@ -13,6 +13,6 @@ generatorOptions:
     provider.cluster.x-k8s.io/version: v0.8.0
 
 configMapGenerator:
-- name: cluster-api-provider-openstack
+- name: openstack
   files:
   - components=source-manifest.yaml
