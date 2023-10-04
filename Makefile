@@ -622,6 +622,17 @@ verify-security: ## Verify code and images for vulnerabilities
 		exit 1; \
 	fi
 
+.PHONY: vendor verify-vendoring
+vendor:
+	go mod vendor
+	cd $(TOOLS_DIR); go mod vendor
+
+verify-vendoring: vendor
+	@if !(git diff --quiet HEAD); then \
+		git diff; \
+		echo "vendored files are out of date, run go mod vendor"; exit 1; \
+	fi
+
 .PHONY: compile-e2e
 compile-e2e: ## Test e2e compilation
 	go test -c -o /dev/null -tags=e2e ./test/e2e/suites/conformance
