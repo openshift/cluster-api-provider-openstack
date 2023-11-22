@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // Copyright 2014 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -11,3 +12,20 @@ func init() {
 	// Flock_t type is SYS_FCNTL64, not SYS_FCNTL.
 	fcntl64Syscall = SYS_FCNTL64
 }
+||||||| parent of b907b2097 (Add cluster-capi-operator integration)
+=======
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build (linux && 386) || (linux && arm) || (linux && mips) || (linux && mipsle) || (linux && ppc)
+// +build linux,386 linux,arm linux,mips linux,mipsle linux,ppc
+
+package unix
+
+func init() {
+	// On 32-bit Linux systems, the fcntl syscall that matches Go's
+	// Flock_t type is SYS_FCNTL64, not SYS_FCNTL.
+	fcntl64Syscall = SYS_FCNTL64
+}
+>>>>>>> b907b2097 (Add cluster-capi-operator integration)

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // Copyright 2015 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
@@ -19,3 +20,28 @@ func Getwd() (wd string, err error) {
 func Chdir(path string) error {
 	return syscall.Chdir(path)
 }
+||||||| parent of b907b2097 (Add cluster-capi-operator integration)
+=======
+// Copyright 2015 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+//go:build go1.5
+// +build go1.5
+
+package plan9
+
+import "syscall"
+
+func fixwd() {
+	syscall.Fixwd()
+}
+
+func Getwd() (wd string, err error) {
+	return syscall.Getwd()
+}
+
+func Chdir(path string) error {
+	return syscall.Chdir(path)
+}
+>>>>>>> b907b2097 (Add cluster-capi-operator integration)

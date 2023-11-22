@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -17,3 +18,25 @@ configMapGenerator:
 - name: openstack
   files:
   - components=infrastructure-components.yaml
+||||||| parent of b907b2097 (Add cluster-capi-operator integration)
+=======
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+components:
+- ../components/namespaced
+- ../components/common
+- ../components/tech-preview
+
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    provider.cluster.x-k8s.io/name: cluster-api-provider-openstack
+    provider.cluster.x-k8s.io/type: infrastructure
+    provider.cluster.x-k8s.io/version: v0.8.0
+
+configMapGenerator:
+- name: openstack
+  files:
+  - components=infrastructure-components.yaml
+>>>>>>> b907b2097 (Add cluster-capi-operator integration)

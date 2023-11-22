@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 namePrefix: capo-
 
 commonLabels:
@@ -88,3 +89,67 @@ replacements:
     - spec.versions.[name=v1alpha5].served
     - spec.versions.[name=v1alpha6].served
     - spec.versions.[name=v1alpha7].served
+||||||| parent of b907b2097 (Add cluster-capi-operator integration)
+=======
+namePrefix: capo-
+
+commonLabels:
+  cluster.x-k8s.io/provider: infrastructure-openstack
+
+resources:
+- capo
+- ../infracluster-controller
+- vars.yaml
+
+components:
+- ../components/namespaced
+- ../components/common
+- ../components/certs
+- ../components/tech-preview
+
+images:
+- name: controller
+  newName: registry.ci.openshift.org/openshift
+  newTag: openstack-cluster-api-controllers
+
+patches:
+- path: manager_webhook_patch.yaml
+
+replacements:
+# Set the webhook cert secret name in the service and the controller-manager
+# deployment where it's used
+- source:
+    kind: ConfigMap
+    name: kustomize-capo-vars
+    fieldPath: data.webhookServiceCert
+  targets:
+  - select:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: controller-manager
+    fieldPaths:
+    - spec.template.spec.volumes.[name=cert].secret.secretName
+  - select:
+      kind: Service
+      name: webhook-service
+    fieldPaths:
+    - metadata.annotations.service\.beta\.openshift\.io/serving-cert-secret-name
+    options:
+      create: true
+
+# Set versions other than v1alpha7 to not served in the CRDs
+- source:
+    version: v1
+    kind: ConfigMap
+    name: kustomize-capo-vars
+    fieldPath: data.serveOldVersions
+  targets:
+  - select:
+      group: apiextensions.k8s.io
+      version: v1
+      kind: CustomResourceDefinition
+    fieldPaths:
+    - spec.versions.[name=v1alpha5].served
+    - spec.versions.[name=v1alpha6].served
+>>>>>>> b907b2097 (Add cluster-capi-operator integration)

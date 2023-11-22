@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # See the OWNERS docs at https://go.k8s.io/owners
 
 approvers:
@@ -21,3 +22,33 @@ reviewers:
 - tallclair
 labels:
 - sig/api-machinery
+||||||| parent of b907b2097 (Add cluster-capi-operator integration)
+=======
+# See the OWNERS docs at https://go.k8s.io/owners
+
+approvers:
+- dims
+- lavalamp
+- smarterclayton
+- deads2k
+- sttts
+- liggitt
+- caesarxuchao
+reviewers:
+- dims
+- thockin
+- lavalamp
+- smarterclayton
+- wojtek-t
+- deads2k
+- derekwaynecarr
+- caesarxuchao
+- mikedanese
+- liggitt
+- gmarek
+- sttts
+- ncdc
+- tallclair
+labels:
+- sig/api-machinery
+>>>>>>> b907b2097 (Add cluster-capi-operator integration)
