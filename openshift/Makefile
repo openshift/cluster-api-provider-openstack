@@ -77,10 +77,11 @@ modules:
 
 .PHONY: test
 test:
-	go test ./...
+	go test $(shell go list ./... | grep -v /e2e)
 
 .PHONY: e2e
 e2e:
+	./hack/test.sh "./e2e/..." 30m
 
 .PHONY: ALWAYS
 ALWAYS:
