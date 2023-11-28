@@ -167,28 +167,25 @@ import (
 	"flag"
 	"os"
 
+	openshiftconfig "github.com/openshift/api/config/v1"
+	mapi "github.com/openshift/api/machine/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-
-	"k8s.io/apimachinery/pkg/fields"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	//+kubebuilder:scaffold:imports
-
-	openshiftconfig "github.com/openshift/api/config/v1"
-	mapi "github.com/openshift/api/machine/v1beta1"
-	corev1 "k8s.io/api/core/v1"
-
-	"github.com/openshift/cluster-api-provider-openstack/openshift/pkg/infracluster_controller"
+	"github.com/openshift/cluster-api-provider-openstack/openshift/pkg/infraclustercontroller"
 	caposcheme "github.com/openshift/cluster-api-provider-openstack/openshift/pkg/scheme"
+
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/scope"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
@@ -219,7 +216,7 @@ func main() {
 		HealthProbeBindAddress:  probeAddr,
 		LeaderElection:          enableLeaderElection,
 		LeaderElectionID:        "infracluster-leader-election-capo",
-		LeaderElectionNamespace: infracluster_controller.CAPINamespace,
+		LeaderElectionNamespace: infraclustercontroller.CAPINamespace,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -235,28 +232,28 @@ func main() {
 		Cache: cache.Options{
 			// Restrict namespaced watches to the Cluster API namespace
 			DefaultNamespaces: map[string]cache.Config{
-				infracluster_controller.CAPINamespace: {},
+				infraclustercontroller.CAPINamespace: {},
 			},
 
 			ByObject: map[client.Object]cache.ByObject{
 				// MAPI Machines are in their own namespace
 				&mapi.Machine{}: {
 					Namespaces: map[string]cache.Config{
-						infracluster_controller.MAPINamespace: {},
+						infraclustercontroller.MAPINamespace: {},
 					},
 				},
 
 				// We only need to watch a single cluster operator
 				&openshiftconfig.ClusterOperator{}: {
-					Field: fields.OneTermEqualSelector("metadata.name", infracluster_controller.ClusterOperatorName),
+					Field: fields.OneTermEqualSelector("metadata.name", infraclustercontroller.ClusterOperatorName),
 				},
 
 				// We only need to watch a single secret
 				&corev1.Secret{}: {
 					Namespaces: map[string]cache.Config{
-						infracluster_controller.CAPINamespace: {},
+						infraclustercontroller.CAPINamespace: {},
 					},
-					Field: fields.OneTermEqualSelector("metadata.name", infracluster_controller.CredentialsSecretName),
+					Field: fields.OneTermEqualSelector("metadata.name", infraclustercontroller.CredentialsSecretName),
 				},
 			},
 		},
@@ -277,7 +274,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&infracluster_controller.OpenShiftClusterReconciler{
+	if err := (&infraclustercontroller.OpenShiftClusterReconciler{
 		Client:       mgr.GetClient(),
 		Recorder:     mgr.GetEventRecorderFor("openshiftcluster-controller"),
 		ScopeFactory: scope.ScopeFactory,
