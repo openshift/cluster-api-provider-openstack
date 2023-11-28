@@ -1,14 +1,14 @@
 package scheme
 
 import (
+	openshiftconfig "github.com/openshift/api/config/v1"
+	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-
-	openshiftconfig "github.com/openshift/api/config/v1"
-	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
 )
 
 func DefaultScheme() *runtime.Scheme {
