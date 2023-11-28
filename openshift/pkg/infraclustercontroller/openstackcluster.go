@@ -1,4 +1,4 @@
-package infracluster_controller
+package infraclustercontroller
 
 import (
 	"context"
@@ -280,7 +280,7 @@ func (r *OpenShiftClusterReconciler) ensureInfraCluster(ctx context.Context, log
 	openStackCluster.Spec.Network.ID = defaultSubnet.NetworkID
 	// N.B. Deliberately don't add subnet here: CAPO will use all subnets in network, which should also cover dual stack deployments
 
-	routerID, err := r.getDefaultRouterIDFromSubnet(ctx, log, networkClient, defaultSubnet)
+	routerID, err := r.getDefaultRouterIDFromSubnet(ctx, networkClient, defaultSubnet)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +310,7 @@ func (r *OpenShiftClusterReconciler) ensureInfraCluster(ctx context.Context, log
 	return &openStackCluster, nil
 }
 
-func (r *OpenShiftClusterReconciler) getDefaultRouterIDFromSubnet(ctx context.Context, log logr.Logger, networkClient clients.NetworkClient, subnet *subnets.Subnet) (string, error) {
+func (r *OpenShiftClusterReconciler) getDefaultRouterIDFromSubnet(_ context.Context, networkClient clients.NetworkClient, subnet *subnets.Subnet) (string, error) {
 	// Find the port which owns the subnet's gateway IP
 	ports, err := networkClient.ListPort(ports.ListOpts{
 		NetworkID: subnet.NetworkID,
@@ -320,7 +320,7 @@ func (r *OpenShiftClusterReconciler) getDefaultRouterIDFromSubnet(ctx context.Co
 				// XXX: We should search on both subnet and IP
 				// address here, but can't because of
 				// https://github.com/gophercloud/gophercloud/issues/2807
-				//SubnetID:  subnet.ID,
+				// SubnetID:  subnet.ID,
 			},
 		},
 	})
