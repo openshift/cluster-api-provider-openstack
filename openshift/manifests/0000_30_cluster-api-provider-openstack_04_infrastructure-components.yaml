@@ -27865,7 +27865,7 @@ metadata:
     include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-set: TechPreviewNoUpgrade
   labels:
-    provider.cluster.x-k8s.io/name: cluster-api-provider-openstack
+    provider.cluster.x-k8s.io/name: openstack
     provider.cluster.x-k8s.io/type: infrastructure
     provider.cluster.x-k8s.io/version: v0.8.0
   name: openstack
