@@ -9,7 +9,7 @@ components:
 generatorOptions:
   disableNameSuffixHash: true
   labels:
-    provider.cluster.x-k8s.io/name: cluster-api-provider-openstack
+    provider.cluster.x-k8s.io/name: openstack
     provider.cluster.x-k8s.io/type: infrastructure
     provider.cluster.x-k8s.io/version: v0.8.0
 
