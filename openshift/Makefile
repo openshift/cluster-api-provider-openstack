@@ -79,5 +79,8 @@ modules:
 test:
 	go test ./...
 
+.PHONY: e2e
+e2e:
+
 .PHONY: ALWAYS
 ALWAYS:
