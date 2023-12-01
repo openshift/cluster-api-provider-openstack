@@ -83,5 +83,8 @@ test:
 e2e:
 	./hack/test.sh "./e2e/..." 30m
 
+.PHONY: e2e
+e2e:
+
 .PHONY: ALWAYS
 ALWAYS:
