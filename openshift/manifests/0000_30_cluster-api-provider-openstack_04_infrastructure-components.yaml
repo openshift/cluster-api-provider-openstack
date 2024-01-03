@@ -17144,7 +17144,6 @@ data:
         controller-gen.kubebuilder.io/version: v0.13.0
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
@@ -21860,7 +21859,6 @@ data:
         controller-gen.kubebuilder.io/version: v0.13.0
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
@@ -24113,7 +24111,6 @@ data:
         controller-gen.kubebuilder.io/version: v0.13.0
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
@@ -25746,7 +25743,6 @@ data:
         controller-gen.kubebuilder.io/version: v0.13.0
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
@@ -27101,7 +27097,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27114,7 +27109,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27127,7 +27121,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27169,7 +27162,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27221,7 +27213,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27243,7 +27234,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27287,7 +27277,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27377,7 +27366,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27398,7 +27386,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27419,7 +27406,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27440,7 +27426,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27461,7 +27446,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27481,7 +27465,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27501,7 +27484,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
         service.beta.openshift.io/serving-cert-secret-name: capo-webhook-service-cert
       labels:
@@ -27521,7 +27503,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27539,7 +27520,6 @@ data:
           annotations:
             exclude.release.openshift.io/internal-openshift-hosted: "true"
             include.release.openshift.io/self-managed-high-availability: "true"
-            include.release.openshift.io/single-node-developer: "true"
             release.openshift.io/feature-set: TechPreviewNoUpgrade
             target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
           labels:
@@ -27611,7 +27591,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -27629,7 +27608,6 @@ data:
           annotations:
             exclude.release.openshift.io/internal-openshift-hosted: "true"
             include.release.openshift.io/self-managed-high-availability: "true"
-            include.release.openshift.io/single-node-developer: "true"
             release.openshift.io/feature-set: TechPreviewNoUpgrade
             target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
           labels:
@@ -27689,7 +27667,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
@@ -27766,7 +27743,6 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        include.release.openshift.io/single-node-developer: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
@@ -27862,7 +27838,6 @@ metadata:
   annotations:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
-    include.release.openshift.io/single-node-developer: "true"
     release.openshift.io/feature-set: TechPreviewNoUpgrade
   labels:
     provider.cluster.x-k8s.io/name: openstack
