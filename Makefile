@@ -52,6 +52,7 @@ KUSTOMIZE := $(TOOLS_BIN_DIR)/kustomize
 MOCKGEN := $(TOOLS_BIN_DIR)/mockgen
 RELEASE_NOTES := $(TOOLS_BIN_DIR)/release-notes
 SETUP_ENVTEST := $(TOOLS_BIN_DIR)/setup-envtest
+GEN_CRD_API_REFERENCE_DOCS := $(TOOLS_BIN_DIR)/gen-crd-api-reference-docs
 
 # Kubebuilder
 export KUBEBUILDER_ENVTEST_KUBERNETES_VERSION ?= 1.28.0
@@ -132,13 +133,15 @@ ifdef KUBEBUILDER_ASSETS_DIR
 	setup_envtest_extra_args += --bin-dir $(KUBEBUILDER_ASSETS_DIR)
 endif
 
+.PHONY: kubebuilder_assets
+kubebuilder_assets: $(SETUP_ENVTEST)
+	@echo Fetching assets for $(KUBEBUILDER_ENVTEST_KUBERNETES_VERSION)
+	$(eval KUBEBUILDER_ASSETS ?= $(shell $(SETUP_ENVTEST) use --use-env -p path $(setup_envtest_extra_args) $(KUBEBUILDER_ENVTEST_KUBERNETES_VERSION)))
+
 .PHONY: test
-test: $(SETUP_ENVTEST) ## Run tests
-	set -xeuf -o pipefail; \
-	if [ -z "$(KUBEBUILDER_ASSETS)" ]; then \
-		KUBEBUILDER_ASSETS=`$(SETUP_ENVTEST) use --use-env -p path $(setup_envtest_extra_args) $(KUBEBUILDER_ENVTEST_KUBERNETES_VERSION)`; \
-	fi; \
-	KUBEBUILDER_ASSETS="$$KUBEBUILDER_ASSETS" go test -v ./... $(TEST_ARGS)
+TEST_PATHS ?= ./...
+test: kubebuilder_assets
+	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test -v $(TEST_PATHS) $(TEST_ARGS)
 
 E2E_TEMPLATES_DIR=test/e2e/data/infrastructure-openstack
 E2E_KUSTOMIZE_DIR=test/e2e/data/kustomize
@@ -148,8 +151,8 @@ E2E_NO_ARTIFACT_TEMPLATES_DIR=test/e2e/data/infrastructure-openstack-no-artifact
 .PHONY: e2e-templates
 e2e-templates: ## Generate cluster templates for e2e tests
 e2e-templates: $(addprefix $(E2E_NO_ARTIFACT_TEMPLATES_DIR)/, \
-		 cluster-template-v1alpha5.yaml \
 		 cluster-template-v1alpha6.yaml \
+		 cluster-template-v1alpha7.yaml \
 		 cluster-template-md-remediation.yaml \
 		 cluster-template-kcp-remediation.yaml \
 		 cluster-template-multi-az.yaml \
@@ -157,7 +160,9 @@ e2e-templates: $(addprefix $(E2E_NO_ARTIFACT_TEMPLATES_DIR)/, \
 		 cluster-template-without-lb.yaml \
 		 cluster-template.yaml \
 		 cluster-template-flatcar.yaml \
-		 cluster-template-k8s-upgrade.yaml)
+                 cluster-template-k8s-upgrade.yaml \
+		 cluster-template-flatcar-sysext.yaml \
+		 cluster-template-no-bastion.yaml)
 # Currently no templates that require CI artifacts
 # $(addprefix $(E2E_TEMPLATES_DIR)/, add-templates-here.yaml) \
 
@@ -167,15 +172,16 @@ $(E2E_NO_ARTIFACT_TEMPLATES_DIR)/cluster-template.yaml: $(E2E_KUSTOMIZE_DIR)/wit
 $(E2E_NO_ARTIFACT_TEMPLATES_DIR)/cluster-template-%.yaml: $(E2E_KUSTOMIZE_DIR)/% $(KUSTOMIZE) FORCE
 	$(KUSTOMIZE) build "$<" > "$@"
 
-e2e-prerequisites: $(GINKGO) e2e-templates e2e-image test-e2e-image-prerequisites ## Build all artifacts required by e2e tests
+e2e-prerequisites: e2e-templates e2e-image test-e2e-image-prerequisites ## Build all artifacts required by e2e tests
 
 # Can be run manually, e.g. via:
 # export OPENSTACK_CLOUD_YAML_FILE="$(pwd)/clouds.yaml"
 # E2E_GINKGO_ARGS="-stream -focus='default'" E2E_ARGS="-use-existing-cluster='true'" make test-e2e
 E2E_GINKGO_ARGS ?=
 .PHONY: test-e2e ## Run e2e tests using clusterctl
-test-e2e: e2e-prerequisites ## Run e2e tests
+test-e2e: $(GINKGO) e2e-prerequisites ## Run e2e tests
 	time $(GINKGO) -fail-fast -trace -timeout=3h -show-node-events -v -tags=e2e -nodes=$(E2E_GINKGO_PARALLEL) \
+		--output-dir="$(ARTIFACTS)" --junit-report="junit.e2e_suite.1.xml" \
 		-focus="$(E2E_GINKGO_FOCUS)" $(_SKIP_ARGS) $(E2E_GINKGO_ARGS) ./test/e2e/suites/e2e/... -- \
 			-config-path="$(E2E_CONF_PATH)" -artifacts-folder="$(ARTIFACTS)" \
 			-data-folder="$(E2E_DATA_DIR)" $(E2E_ARGS)
@@ -197,7 +203,7 @@ CONFORMANCE_E2E_ARGS ?= -kubetest.config-file=$(KUBETEST_CONF_PATH)
 CONFORMANCE_E2E_ARGS += $(E2E_ARGS)
 CONFORMANCE_GINKGO_ARGS ?= -stream
 .PHONY: test-conformance
-test-conformance: e2e-prerequisites ## Run clusterctl based conformance test on workload cluster (requires Docker).
+test-conformance: $(GINKGO) e2e-prerequisites ## Run clusterctl based conformance test on workload cluster (requires Docker).
 	time $(GINKGO) -trace -show-node-events -v -tags=e2e -focus="conformance" $(CONFORMANCE_GINKGO_ARGS) ./test/e2e/suites/conformance/... -- -config-path="$(E2E_CONF_PATH)" -artifacts-folder="$(ARTIFACTS)" --data-folder="$(E2E_DATA_DIR)" $(CONFORMANCE_E2E_ARGS)
 
 test-conformance-fast: ## Run clusterctl based conformance test on workload cluster (requires Docker) using a subset of the conformance suite in parallel.
@@ -244,30 +250,39 @@ modules: ## Runs go mod to ensure proper vendoring.
 	cd $(TOOLS_DIR); go mod tidy
 
 .PHONY: generate
-generate: ## Generate code
-	$(MAKE) generate-go
-	$(MAKE) generate-manifests
+generate: templates generate-controller-gen generate-conversion-gen generate-go generate-manifests generate-api-docs ## Generate all generated code
 
 .PHONY: generate-go
 generate-go: $(MOCKGEN)
-	$(MAKE) -B $(CONTROLLER_GEN) $(CONVERSION_GEN)
+	go generate ./...
+
+.PHONY: generate-controller-gen
+generate-controller-gen: $(CONTROLLER_GEN)
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
 		object:headerFile=./hack/boilerplate/boilerplate.generatego.txt
+
+.PHONY: generate-conversion-gen
+capo_module := sigs.k8s.io/cluster-api-provider-openstack
+generate-conversion-gen: $(CONVERSION_GEN)
 	$(CONVERSION_GEN) \
-		--input-dirs=./api/v1alpha5 \
-		--input-dirs=./api/v1alpha6 \
-		--input-dirs=./api/v1alpha7 \
+		--input-dirs=$(capo_module)/api/v1alpha5 \
+		--input-dirs=$(capo_module)/api/v1alpha6 \
+		--input-dirs=$(capo_module)/api/v1alpha7 \
+		--extra-dirs=$(capo_module)/pkg/utils/optional \
+		--extra-dirs=$(capo_module)/pkg/utils/conversioncommon \
 		--output-file-base=zz_generated.conversion \
+		--trim-path-prefix=$(capo_module)/ \
 		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt
-	go generate ./...
 
 .PHONY: generate-manifests
 generate-manifests: $(CONTROLLER_GEN) ## Generate manifests e.g. CRD, RBAC etc.
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
 		crd:crdVersions=v1 \
-		output:crd:dir=$(CRD_ROOT) \
+		output:crd:dir=$(CRD_ROOT)
+	$(CONTROLLER_GEN) \
+		paths=./pkg/webhooks/... \
 		output:webhook:dir=$(WEBHOOK_ROOT) \
 		webhook
 	$(CONTROLLER_GEN) \
@@ -275,6 +290,15 @@ generate-manifests: $(CONTROLLER_GEN) ## Generate manifests e.g. CRD, RBAC etc.
 		paths=./controllers/... \
 		output:rbac:dir=$(RBAC_ROOT) \
 		rbac:roleName=manager-role
+
+.PHONY: generate-api-docs
+generate-api-docs: generate-api-docs-v1beta1 generate-api-docs-v1alpha7 generate-api-docs-v1alpha6 generate-api-docs-v1alpha1
+generate-api-docs-%: $(GEN_CRD_API_REFERENCE_DOCS) FORCE
+	$(GEN_CRD_API_REFERENCE_DOCS) \
+		-api-dir=./api/$* \
+		-config=./docs/book/gen-crd-api-reference-docs/config.json \
+		-template-dir=./docs/book/gen-crd-api-reference-docs/template \
+		-out-file=./docs/book/src/api/$*/api.md
 
 ## --------------------------------------
 ##@ Docker
@@ -404,12 +428,13 @@ release-notes: $(RELEASE_NOTES) ## Generate release notes
 templates: ## Generate cluster templates
 templates: templates/cluster-template.yaml \
 	templates/cluster-template-without-lb.yaml \
-	templates/cluster-template-flatcar.yaml
+	templates/cluster-template-flatcar.yaml \
+	templates/cluster-template-flatcar-sysext.yaml
 
-templates/cluster-template.yaml: kustomize/v1alpha7/default $(KUSTOMIZE) FORCE
+templates/cluster-template.yaml: kustomize/v1beta1/default $(KUSTOMIZE) FORCE
 	$(KUSTOMIZE) build "$<" > "$@"
 
-templates/cluster-template-%.yaml: kustomize/v1alpha7/% $(KUSTOMIZE) FORCE
+templates/cluster-template-%.yaml: kustomize/v1beta1/% $(KUSTOMIZE) FORCE
 	$(KUSTOMIZE) build "$<" > "$@"
 
 .PHONY: release-templates

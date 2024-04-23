@@ -1,0 +1,170 @@
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: ClusterClass
+metadata:
+  name: dev-test
+spec:
+  controlPlane:
+    ref:
+      apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+      kind: KubeadmControlPlaneTemplate
+      name: dev-test-control-plane
+    machineInfrastructure:
+      ref:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: OpenStackMachineTemplate
+        name: dev-test-control-plane-machine
+  infrastructure:
+    ref:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: OpenStackClusterTemplate
+      name: dev-test-openstackcluster
+  workers:
+    machineDeployments:
+      - class: default-worker
+        template:
+          bootstrap:
+            ref:
+              apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+              kind: KubeadmConfigTemplate
+              name: dev-test-default-worker-bootstraptemplate
+          infrastructure:
+            ref:
+              apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+              kind: OpenStackMachineTemplate
+              name: dev-test-default-worker-machine
+  patches:
+  - name: controlPlaneImage
+    description: "Sets the OpenStack image that is used for creating the servers."
+    definitions:
+    - selector:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: OpenStackMachineTemplate
+        matchResources:
+          controlPlane: true
+      jsonPatches:
+      - op: add
+        path: /spec/template/spec/image/filter/name
+        valueFrom:
+          template: |
+            ubuntu-2204-kube-{{ .builtin.controlPlane.version }}
+  - name: workerImage
+    description: "Sets the OpenStack image that is used for creating the servers."
+    definitions:
+    - selector:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: OpenStackMachineTemplate
+        matchResources:
+          machineDeploymentClass:
+            names:
+            - default-worker
+      jsonPatches:
+      - op: add
+        path: /spec/template/spec/image/filter/name
+        valueFrom:
+          template: |
+            ubuntu-2204-kube-{{ .builtin.machineDeployment.version }}
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: KubeadmConfigTemplate
+metadata:
+  name: dev-test-default-worker-bootstraptemplate
+spec:
+  template:
+    spec:
+      files: []
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-provider: external
+            provider-id: openstack:///'{{ instance_id }}'
+          name: '{{ local_hostname }}'
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlaneTemplate
+metadata:
+  name: dev-test-control-plane
+spec:
+  template:
+    spec:
+      kubeadmConfigSpec:
+        clusterConfiguration:
+          apiServer:
+            extraArgs:
+              cloud-provider: external
+          controllerManager:
+            extraArgs:
+              cloud-provider: external
+        files: []
+        initConfiguration:
+          nodeRegistration:
+            kubeletExtraArgs:
+              cloud-provider: external
+              provider-id: openstack:///'{{ instance_id }}'
+            name: '{{ local_hostname }}'
+        joinConfiguration:
+          nodeRegistration:
+            kubeletExtraArgs:
+              cloud-provider: external
+              provider-id: openstack:///'{{ instance_id }}'
+            name: '{{ local_hostname }}'
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: OpenStackClusterTemplate
+metadata:
+  name: dev-test-openstackcluster
+spec:
+  template:
+    spec:
+      apiServerLoadBalancer:
+        enabled: true
+      identityRef:
+        name: dev-test-cloud-config
+        cloudName: ${OPENSTACK_CLOUD:=capo-e2e}
+      managedSecurityGroups:
+        allNodesSecurityGroupRules:
+        - description: Created by cluster-api-provider-openstack - BGP (calico)
+          direction: ingress
+          etherType: IPv4
+          name: BGP (Calico)
+          portRangeMin: 179
+          portRangeMax: 179
+          protocol: tcp
+          remoteManagedGroups:
+          - controlplane
+          - worker
+        - description: Created by cluster-api-provider-openstack - IP-in-IP (calico)
+          direction: ingress
+          etherType: IPv4
+          name: IP-in-IP (calico)
+          protocol: "4"
+          remoteManagedGroups:
+          - controlplane
+          - worker
+      managedSubnets:
+      - cidr: 10.6.0.0/24
+        dnsNameservers:
+        - 8.8.8.8
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: OpenStackMachineTemplate
+metadata:
+  name: dev-test-control-plane-machine
+spec:
+  template:
+    spec:
+      flavor: ${OPENSTACK_CONTROL_PLANE_MACHINE_FLAVOR:=m1.medium}
+      image:
+        name: overridden-by-patch
+      sshKeyName: ${OPENSTACK_SSH_KEY_NAME:=""}
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: OpenStackMachineTemplate
+metadata:
+  name: dev-test-default-worker-machine
+spec:
+  template:
+    spec:
+      flavor: ${OPENSTACK_NODE_MACHINE_FLAVOR:=m1.small}
+      image:
+        name: overridden-by-patch
+      sshKeyName: ${OPENSTACK_SSH_KEY_NAME:=""}

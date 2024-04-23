@@ -24,7 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
+	"sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
 )
 
@@ -41,8 +42,9 @@ func NewFactory(maxCacheSize int) Factory {
 
 // Factory instantiates a new Scope using credentials from either a cluster or a machine.
 type Factory interface {
-	NewClientScopeFromMachine(ctx context.Context, ctrlClient client.Client, openStackMachine *infrav1.OpenStackMachine, defaultCACert []byte, logger logr.Logger) (Scope, error)
+	NewClientScopeFromMachine(ctx context.Context, ctrlClient client.Client, openStackMachine *infrav1.OpenStackMachine, openStackCluster *infrav1.OpenStackCluster, defaultCACert []byte, logger logr.Logger) (Scope, error)
 	NewClientScopeFromCluster(ctx context.Context, ctrlClient client.Client, openStackCluster *infrav1.OpenStackCluster, defaultCACert []byte, logger logr.Logger) (Scope, error)
+	NewClientScopeFromFloatingIPPool(ctx context.Context, ctrlClient client.Client, openStackCluster *v1alpha1.OpenStackFloatingIPPool, defaultCACert []byte, logger logr.Logger) (Scope, error)
 }
 
 // Scope contains arguments common to most operations.
@@ -52,7 +54,24 @@ type Scope interface {
 	NewImageClient() (clients.ImageClient, error)
 	NewNetworkClient() (clients.NetworkClient, error)
 	NewLbClient() (clients.LbClient, error)
-	Logger() logr.Logger
 	ProjectID() string
 	ExtractToken() (*tokens.Token, error)
+}
+
+// WithLogger extends Scope with a logger.
+type WithLogger struct {
+	Scope
+
+	logger logr.Logger
+}
+
+func NewWithLogger(scope Scope, logger logr.Logger) *WithLogger {
+	return &WithLogger{
+		Scope:  scope,
+		logger: logger,
+	}
+}
+
+func (s *WithLogger) Logger() logr.Logger {
+	return s.logger
 }

@@ -111,20 +111,6 @@ providers:
   type: InfrastructureProvider
   versions:
   # This is only for clusterctl upgrade tests
-  - name: v0.6.4
-    value: "https://github.com/kubernetes-sigs/cluster-api-provider-openstack/releases/download/v0.6.4/infrastructure-components.yaml"
-    type: url
-    contract: v1beta1
-    files:
-    - sourcePath: "../data/shared/v1beta1_provider/metadata.yaml"
-    - sourcePath: "./infrastructure-openstack-no-artifact/cluster-template.yaml"
-    replacements:
-    - old: "imagePullPolicy: Always"
-      new: "imagePullPolicy: IfNotPresent"
-    - old: "--v=2"
-      new: "--v=4"
-    - old: "--leader-elect"
-      new: "--leader-elect=false\n        - --sync-period=1m"
   - name: v0.7.2
     value: "https://github.com/kubernetes-sigs/cluster-api-provider-openstack/releases/download/v0.7.2/infrastructure-components.yaml"
     type: url
@@ -139,7 +125,35 @@ providers:
       new: "--v=4"
     - old: "--leader-elect"
       new: "--leader-elect=false\n        - --sync-period=1m"
-  - name: v0.9.99
+  - name: v0.8.0
+    value: "https://github.com/kubernetes-sigs/cluster-api-provider-openstack/releases/download/v0.8.0/infrastructure-components.yaml"
+    type: url
+    contract: v1beta1
+    files:
+    - sourcePath: "../data/shared/v1beta1_provider/metadata.yaml"
+    - sourcePath: "./infrastructure-openstack-no-artifact/cluster-template.yaml"
+    replacements:
+    - old: "imagePullPolicy: Always"
+      new: "imagePullPolicy: IfNotPresent"
+    - old: "--v=2"
+      new: "--v=4"
+    - old: "--leader-elect"
+      new: "--leader-elect=false\n        - --sync-period=1m"
+  - name: v0.9.0
+    value: "https://github.com/kubernetes-sigs/cluster-api-provider-openstack/releases/download/v0.9.0/infrastructure-components.yaml"
+    type: url
+    contract: v1beta1
+    files:
+    - sourcePath: "../data/shared/v1beta1_provider/metadata.yaml"
+    - sourcePath: "./infrastructure-openstack-no-artifact/cluster-template.yaml"
+    replacements:
+    - old: "imagePullPolicy: Always"
+      new: "imagePullPolicy: IfNotPresent"
+    - old: "--v=2"
+      new: "--v=4"
+    - old: "--leader-elect"
+      new: "--leader-elect=false\n        - --sync-period=1m"
+  - name: v0.10.99
     value: ../../../config/default
     # This is the upcoming version.
     # Specify no contract so that upgrade tests that start from a specific contract won't pick it up.
@@ -164,9 +178,9 @@ providers:
 variables:
   # used to ensure we deploy to the correct management cluster
   KUBE_CONTEXT: "kind-capo-e2e"
-  KUBERNETES_VERSION: "v1.28.2"
+  KUBERNETES_VERSION: "v1.28.5"
   KUBERNETES_VERSION_UPGRADE_FROM: "v1.27.2"
-  KUBERNETES_VERSION_UPGRADE_TO: "v1.28.2"
+  KUBERNETES_VERSION_UPGRADE_TO: "v1.28.5"
   ETCD_VERSION_UPGRADE_TO: "3.5.9-0"
   COREDNS_VERSION_UPGRADE_TO: "v1.10.1"
   CONTROL_PLANE_MACHINE_TEMPLATE_UPGRADE_TO: "upgrade-to-control-plane"
@@ -176,6 +190,7 @@ variables:
   EXP_CLUSTER_RESOURCE_SET: "true"
   OPENSTACK_BASTION_IMAGE_NAME: "cirros-0.6.1-x86_64-disk"
   OPENSTACK_BASTION_MACHINE_FLAVOR: "m1.tiny"
+  OPENSTACK_BASTION_MACHINE_FLAVOR_ALT: "m1.tiny.alt"
   OPENSTACK_CLOUD: "capo-e2e"
   OPENSTACK_CLOUD_ADMIN: "capo-e2e-admin"
   OPENSTACK_CLOUD_CACERT_B64: "Cg=="
@@ -184,25 +199,30 @@ variables:
   OPENSTACK_DNS_NAMESERVERS: "8.8.8.8"
   OPENSTACK_FAILURE_DOMAIN: "testaz1"
   OPENSTACK_FAILURE_DOMAIN_ALT: "testaz2"
-  OPENSTACK_IMAGE_NAME: "ubuntu-2204-kube-v1.28.2"
+  OPENSTACK_IMAGE_NAME: "ubuntu-2204-kube-v1.28.5"
   OPENSTACK_IMAGE_NAME_UPGRADE_FROM: "ubuntu-2204-kube-v1.27.2"
   OPENSTACK_NODE_MACHINE_FLAVOR: "m1.small"
   OPENSTACK_SSH_KEY_NAME: "cluster-api-provider-openstack-sigs-k8s-io"
-  OPENSTACK_EXTERNAL_NETWORK_ID: ""
+  # The default external network created by devstack
+  OPENSTACK_EXTERNAL_NETWORK_NAME: "public"
   OPENSTACK_VOLUME_TYPE_ALT: "test-volume-type"
   CONFORMANCE_WORKER_MACHINE_COUNT: "5"
   CONFORMANCE_CONTROL_PLANE_MACHINE_COUNT: "1"
-  INIT_WITH_KUBERNETES_VERSION: "v1.28.2"
+  INIT_WITH_KUBERNETES_VERSION: "v1.28.5"
   E2E_IMAGE_URL: "http://10.0.3.15/capo-e2e-image.tar"
   # The default user for SSH connections from bastion to machines
   SSH_USER_MACHINE: "ubuntu"
   EXP_KUBEADM_BOOTSTRAP_FORMAT_IGNITION: "true"
-  OPENSTACK_FLATCAR_IMAGE_NAME: "flatcar-stable-3602.2.0-kube-v1.28.2"
+  # The Flatcar image produced by the image-builder
+  OPENSTACK_FLATCAR_IMAGE_NAME: "flatcar-stable-3815.2.0-kube-v1.28.5"
+  # A plain Flatcar from the Flatcar releases server
+  FLATCAR_IMAGE_NAME: "flatcar_production_openstack_image"
 
 intervals:
   conformance/wait-control-plane: ["30m", "10s"]
   conformance/wait-worker-nodes: ["30m", "10s"]
   default/wait-controllers: ["3m", "10s"]
+  default/wait-bastion: ["5m", "10s"]
   default/wait-cluster: ["20m", "10s"]
   default/wait-control-plane: ["30m", "10s"]
   default/wait-worker-nodes: ["30m", "10s"]

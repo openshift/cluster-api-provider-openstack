@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -32,12 +31,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/compute"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/scope"
 	"sigs.k8s.io/cluster-api-provider-openstack/test/helpers/external"
@@ -125,8 +126,9 @@ var _ = Describe("EnvTest sanity check", func() {
 })
 
 var _ = Describe("When calling getOrCreate", func() {
+	logger := GinkgoLogr
+
 	var (
-		logger           logr.Logger
 		reconsiler       OpenStackMachineReconciler
 		mockCtrl         *gomock.Controller
 		mockScopeFactory *scope.MockScopeFactory
@@ -136,22 +138,24 @@ var _ = Describe("When calling getOrCreate", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		logger = logr.Discard()
 		reconsiler = OpenStackMachineReconciler{}
 		mockCtrl = gomock.NewController(GinkgoT())
-		mockScopeFactory = scope.NewMockScopeFactory(mockCtrl, "1234", logger)
-		computeService, err = compute.NewService(mockScopeFactory)
+		mockScopeFactory = scope.NewMockScopeFactory(mockCtrl, "1234")
+		computeService, err = compute.NewService(scope.NewWithLogger(mockScopeFactory, logger))
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("should return an error if unable to get instance", func() {
-		cluster := &clusterv1.Cluster{}
 		openStackCluster := &infrav1.OpenStackCluster{}
 		machine := &clusterv1.Machine{}
-		openStackMachine := &infrav1.OpenStackMachine{}
+		openStackMachine := &infrav1.OpenStackMachine{
+			Status: infrav1.OpenStackMachineStatus{
+				InstanceID: ptr.To("machine-uuid"),
+			},
+		}
 
-		mockScopeFactory.ComputeClient.EXPECT().ListServers(gomock.Any()).Return(nil, errors.New("Test error when listing servers"))
-		instanceStatus, err := reconsiler.getOrCreate(logger, cluster, openStackCluster, machine, openStackMachine, computeService, "")
+		mockScopeFactory.ComputeClient.EXPECT().GetServer(gomock.Any()).Return(nil, errors.New("Test error when getting server"))
+		instanceStatus, err := reconsiler.getOrCreateInstance(logger, openStackCluster, machine, openStackMachine, computeService, "", []string{})
 		Expect(err).To(HaveOccurred())
 		Expect(instanceStatus).To(BeNil())
 		conditions := openStackMachine.GetConditions()
@@ -162,5 +166,19 @@ var _ = Describe("When calling getOrCreate", func() {
 				break
 			}
 		}
+	})
+
+	It("should retrieve instance by name if no ID is stored", func() {
+		openStackCluster := &infrav1.OpenStackCluster{}
+		machine := &clusterv1.Machine{}
+		openStackMachine := &infrav1.OpenStackMachine{}
+		servers := make([]clients.ServerExt, 1)
+		servers[0].ID = "machine-uuid"
+
+		mockScopeFactory.ComputeClient.EXPECT().ListServers(gomock.Any()).Return(servers, nil)
+		instanceStatus, err := reconsiler.getOrCreateInstance(logger, openStackCluster, machine, openStackMachine, computeService, "", []string{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(instanceStatus).ToNot(BeNil())
+		Expect(instanceStatus.ID()).To(Equal("machine-uuid"))
 	})
 })

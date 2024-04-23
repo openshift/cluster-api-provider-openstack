@@ -40,7 +40,7 @@ import (
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 )
 
 func SetupSpecNamespace(ctx context.Context, specName string, e2eCtx *E2EContext) *corev1.Namespace {
@@ -214,51 +214,55 @@ func (o OpenStackLogCollector) CollectMachineLog(ctx context.Context, management
 		return fmt.Errorf("error writing server JSON %s: %s", serverJSON, err)
 	}
 
-	srvUser := o.E2EContext.E2EConfig.GetVariable(SSHUserMachine)
-	executeCommands(
-		ctx,
-		o.E2EContext.Settings.ArtifactFolder,
-		o.E2EContext.Settings.Debug,
-		outputPath,
-		ip,
-		openStackCluster.Status.Bastion.FloatingIP,
-		srvUser,
-		[]command{
-			// don't do this for now, it just takes to long
-			// {
-			//	title: "systemd",
-			//	cmd:   "journalctl --no-pager --output=short-precise | grep -v  'audit:\\|audit\\['",
-			// },
-			{
-				title: "kern",
-				cmd:   "journalctl --no-pager --output=short-precise -k",
+	if openStackCluster.Status.Bastion == nil {
+		Logf("Skipping log collection for machine %q since no bastion is available", m.Name)
+	} else {
+		srvUser := o.E2EContext.E2EConfig.GetVariable(SSHUserMachine)
+		executeCommands(
+			ctx,
+			o.E2EContext.Settings.ArtifactFolder,
+			o.E2EContext.Settings.Debug,
+			outputPath,
+			ip,
+			openStackCluster.Status.Bastion.FloatingIP,
+			srvUser,
+			[]command{
+				// don't do this for now, it just takes to long
+				// {
+				//	title: "systemd",
+				//	cmd:   "journalctl --no-pager --output=short-precise | grep -v  'audit:\\|audit\\['",
+				// },
+				{
+					title: "kern",
+					cmd:   "journalctl --no-pager --output=short-precise -k",
+				},
+				{
+					title: "containerd-info",
+					cmd:   "crictl --runtime-endpoint unix:///run/containerd/containerd.sock info",
+				},
+				{
+					title: "containerd-containers",
+					cmd:   "crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps",
+				},
+				{
+					title: "containerd-pods",
+					cmd:   "crictl --runtime-endpoint unix:///run/containerd/containerd.sock pods",
+				},
+				{
+					title: "cloud-final",
+					cmd:   "journalctl --no-pager -u cloud-final",
+				},
+				{
+					title: "kubelet",
+					cmd:   "journalctl --no-pager -u kubelet.service",
+				},
+				{
+					title: "containerd",
+					cmd:   "journalctl --no-pager -u containerd.service",
+				},
 			},
-			{
-				title: "containerd-info",
-				cmd:   "crictl --runtime-endpoint unix:///run/containerd/containerd.sock info",
-			},
-			{
-				title: "containerd-containers",
-				cmd:   "crictl --runtime-endpoint unix:///run/containerd/containerd.sock ps",
-			},
-			{
-				title: "containerd-pods",
-				cmd:   "crictl --runtime-endpoint unix:///run/containerd/containerd.sock pods",
-			},
-			{
-				title: "cloud-final",
-				cmd:   "journalctl --no-pager -u cloud-final",
-			},
-			{
-				title: "kubelet",
-				cmd:   "journalctl --no-pager -u kubelet.service",
-			},
-			{
-				title: "containerd",
-				cmd:   "journalctl --no-pager -u containerd.service",
-			},
-		},
-	)
+		)
+	}
 	return nil
 }
 

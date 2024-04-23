@@ -16,6 +16,7 @@
   - [Availability zone](#availability-zone)
   - [DNS server](#dns-server)
   - [Machine flavor](#machine-flavor)
+  - [CNI security group rules](#cni-security-group-rules)
 - [Optional Configuration](#optional-configuration)
   - [Log level](#log-level)
   - [External network](#external-network)
@@ -35,6 +36,8 @@
   - [Custom pod network CIDR](#custom-pod-network-cidr)
   - [Accessing nodes through the bastion host via SSH](#accessing-nodes-through-the-bastion-host-via-ssh)
     - [Enabling the bastion host](#enabling-the-bastion-host)
+    - [Making changes to the bastion host](#making-changes-to-the-bastion-host)
+    - [Disabling the bastion](#disabling-the-bastion)
     - [Obtain floating IP address of the bastion node](#obtain-floating-ip-address-of-the-bastion-node)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
@@ -74,10 +77,33 @@ The image can be referenced by exposing it as an environment variable `OPENSTACK
 
 Some OS like [Fedora CoreOS](https://getfedora.org/en/coreos) or [Flatcar](https://www.flatcar.org/) do not use cloud-init but [Ignition](https://coreos.github.io/ignition/) to provision the instance. You need to enable the [Ignition experimental feature](https://cluster-api.sigs.k8s.io/tasks/experimental-features/ignition.html): `export EXP_KUBEADM_BOOTSTRAP_FORMAT_IGNITION=true`
 
-To use Flatcar image:
-* Build the image with the [image-builder](https://image-builder.sigs.k8s.io/capi/providers/openstack.html): `make OEM_ID=openstack build-qemu-flatcar`
-* Export the name of the uploaded image: `export OPENSTACK_FLATCAR_IMAGE_NAME=flatcar-stable-3374.2.5-kube-v1.25.6`
-* When generating the cluster configuration, use the following Cluster API [flavor](https://cluster-api.sigs.k8s.io/clusterctl/commands/generate-cluster.html?#flavors): `--flavor flatcar` (_NOTE_: Don't forget to refer to the [external-cloud-provider](https://cluster-api-openstack.sigs.k8s.io/topics/external-cloud-provider.html) section)
+Flatcar comes in two [flavor][flavor] variants:
+* `flatcar`
+
+  This variant relies on a Flatcar image built using the image-builder project: the Kubernetes version is bound to the Flatcar version and a rebuild of the image is required for each Kubernetes or Flatcar upgrade.
+
+  To build and use Flatcar image:
+    * Build the image with the [image-builder][image-builder]: `make OEM_ID=openstack build-qemu-flatcar`
+    * Upload the image
+    * Export the name of the uploaded image: `export OPENSTACK_FLATCAR_IMAGE_NAME=flatcar-stable-3374.2.5-kube-v1.25.6`
+    * When generating the cluster configuration, use the following Cluster API [flavor][flavor]: `--flavor flatcar` (_NOTE_: Don't forget to refer to the [external-cloud-provider][external-cloud-provider] section)
+
+* `flatcar-sysext`
+
+  This variant relies on a plain Flatcar image and it leverages [systemd-sysext][systemd-sysext] feature to install and update Kubernetes components: the Kubernetes version is not bound to the Flatcar version (i.e Flatcar can be independently upgraded from Kubernetes and vice versa).
+
+  The template comes with a [systemd-sysupdate][systemd-sysupdate] configuration file that will download each new patch version of Kubernetes (i.e if you start with Kubernetes 1.x.y, systemd-sysupdate will automatically pull 1.x.y+1 but not 1.x+1.y), please note that this behavior is disabled by default. To enable the Kubernetes auto-update you can:
+    * Update the template to enable the `systemd-sysupdate.timer`
+    * Or run the following command on the nodes: `sudo systemctl enable --now systemd-sysupdate.timer`
+
+  When the Kubernetes release reaches end-of-life it will not receive updates anymore. To switch to a new major version, do a `sudo rm /etc/sysupdate.kubernetes.d/kubernetes-*.conf` and download the new update config into the folder with `cd /etc/sysupdate.kubernetes.d && sudo wget https://github.com/flatcar/sysext-bakery/releases/download/latest/kubernetes-${KUBERNETES_VERSION%.*}.conf`.
+
+  To coordinate the node reboot, we recommend to use [Kured][kured]. Note that running `kubeadm upgrade apply` on the first controller and `kubeadm upgrade node` on all other nodes is not automated (yet), see the [docs](https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/).
+
+  To use Flatcar image:
+    * Upload an image on OpenStack from the Flatcar release servers (e.g for Stable, you might use this image: https://stable.release.flatcar-linux.net/amd64-usr/current/flatcar_production_openstack_image.img)
+    * Export the name of the uploaded image: `export FLATCAR_IMAGE_NAME=flatcar_production_openstack_image`
+    * When generating the cluster configuration, use the following Cluster API [flavor][flavor]: `--flavor flatcar-sysext` (_NOTE_: Don't forget to refer to the [external-cloud-provider][external-cloud-provider] section)
 
 ## SSH key pair
 
@@ -155,6 +181,41 @@ The flavors for control plane and worker node machines must be exposed as enviro
 
 The recommmend minimum value of control plane flavor's vCPU is 2 and minimum value of worker node flavor's vCPU is 1.
 
+## CNI security group rules
+
+Depending on the CNI that will be deployed on the cluster, you may need to add specific security group rules to the control plane and worker nodes. For example, if you are using Calico with BGP, you will need to add the following security group rules to the control plane and worker nodes:
+
+ ```yaml
+ apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+ kind: OpenStackCluster
+ metadata:
+   name: <cluster-name>
+   namespace: <cluster-namespace>
+ spec:
+    ...
+    managedSecurityGroups: 
+      allNodesSecurityGroupRules:
+      - remoteManagedGroups:
+        - controlplane
+        - worker
+        direction: ingress
+        etherType: IPv4
+        name: BGP (Calico)
+        portRangeMin: 179
+        portRangeMax: 179
+        protocol: tcp
+        description: "Allow BGP between control plane and workers"
+      - remoteManagedGroups:
+        - controlplane
+        - worker
+        direction: ingress
+        etherType: IPv4
+        name: IP-in-IP (Calico)
+        protocol: 4
+        description: "Allow IP-in-IP between control plane and workers"
+      allowAllInClusterTraffic: false
+ ```
+
 # Optional Configuration
 
 ## Log level
@@ -178,7 +239,7 @@ Note: If your openstack cluster does not already have a public network, you shou
 You can use a pre-existing router instead of creating a new one. When deleting a cluster a pre-existing router will not be deleted.
 
  ```yaml
- apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+ apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
  kind: OpenStackCluster
  metadata:
    name: <cluster-name>
@@ -222,7 +283,7 @@ prevent a floating IP from being allocated.
 > This can be a project-specific network, if the management cluster lives in the same project
 > as the workload cluster, or a network that is shared across multiple projects.
 >
-> In particular, this means that the cluster **cannot** use `OpenStackCluster.spec.nodeCidr`
+> In particular, this means that the cluster **cannot** use `OpenStackCluster.spec.managedSubnets`
 > to provision a new network for the cluster. Instead, use `OpenStackCluster.spec.network`
 > to explicitly specify the same network as the management cluster is on.
 
@@ -245,15 +306,14 @@ It is possible to restrict access to the Kubernetes API server on a network leve
 the allowed CIDRs by `spec.APIServerLoadBalancer.AllowedCIDRs` of `OpenStackCluster`.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackCluster
 metadata:
   name: <cluster-name>
   namespace: <cluster-namespace>
 spec:
-  allowAllInClusterTraffic: true
   apiServerLoadBalancer:
-    allowedCidrs:
+    allowedCIDRs:
     - 192.168.10/24
     - 10.10.0.0/16
 ```
@@ -264,7 +324,7 @@ All known IPs of the target cluster will be discovered dynamically (e.g. you don
 All applied CIDRs (user defined + dynamically discovered) are written back into `status.network.apiServerLoadBalancer.allowedCIDRs`
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackCluster
 metadata:
   name: <cluster-name>
@@ -297,7 +357,7 @@ If you have a complex query that you want to use to lookup a network, then you c
 By using filters to look up a network, please note that it is possible to get multiple networks as a result. This should not be a problem, however please test your filters with `openstack network list` to be certain that it returns the networks you want. Please refer to the following usage example:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -315,7 +375,7 @@ spec:
 You can specify multiple networks (or subnets) to connect your server to. To do this, simply add another entry in the networks array. The following example connects the server to 3 different networks:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -339,7 +399,7 @@ spec:
 Rather than just using a network, you have the option of specifying a specific subnet to connect your server to. The following is an example of how to specify a specific subnet of a network to use for your server.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -360,7 +420,7 @@ spec:
 A server can also be connected to networks by describing what ports to create. Describing a server's connection with `ports` allows for finer and more advanced configuration. For example, you can specify per-port security groups, fixed IPs, VNIC type or profile.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -458,7 +518,7 @@ ports:
 `port security` can be applied to specific port to enable/disable the `port security` on that port; When not set, it takes the value of the corresponding field at the network level.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -478,33 +538,58 @@ spec:
 
 Security groups are used to determine which ports of the cluster nodes are accessible from where.
 
-If `spec.managedSecurityGroups` of `OpenStackCluster` is set to `true`, two security groups named
+If `spec.managedSecurityGroups` of `OpenStackCluster` is set to a non-nil value (e.g. `{}`), two security groups named
 `k8s-cluster-${NAMESPACE}-${CLUSTER_NAME}-secgroup-controlplane` and
 `k8s-cluster-${NAMESPACE}-${CLUSTER_NAME}-secgroup-worker` will be created and added to the control
 plane and worker nodes respectively.
 
-By default, these groups have rules that allow the following traffic:
+Example of `spec.managedSecurityGroups` in `OpenStackCluster` spec when we want to enable the managed security groups:
+
+```yaml
+managedSecurityGroups: {}
+```
 
 - Control plane nodes
   - API server traffic from anywhere
   - Etcd traffic from other control plane nodes
   - Kubelet traffic from other cluster nodes
-  - Calico CNI traffic from other cluster nodes
 - Worker nodes
   - Node port traffic from anywhere
   - Kubelet traffic from other cluster nodes
-  - Calico CNI traffic from other cluster nodes
 
-To use a CNI other than Calico, the flag `OpenStackCluster.spec.allowAllInClusterTraffic` can be
-set to `true`. With this flag set, the rules for the managed security groups permit all traffic
+When the flag `OpenStackCluster.spec.managedSecurityGroups.allowAllInClusterTraffic` is
+set to `true`, the rules for the managed security groups permit all traffic
 between cluster nodes on all ports and protocols (API server and node port traffic is still
 permitted from anywhere, as with the default rules).
+
+We can add security group rules that authorize traffic from all nodes via `allNodesSecurityGroupRules`.
+It takes a list of security groups rules that should be applied to selected nodes.
+The following rule fields are mutually exclusive: `remoteManagedGroups`, `remoteGroupID` and `remoteIPPrefix`.
+
+Valid values for `remoteManagedGroups` are `controlplane`, `worker` and `bastion`.
+
+To apply a security group rule that will allow BGP between the control plane and workers, you can follow this example:
+
+```yaml
+managedSecurityGroups:
+  allNodesSecurityGroupRules:
+  - remoteManagedGroups:
+    - controlplane
+    - worker
+    direction: ingress
+    etherType: IPv4
+    name: BGP (Calico)
+    portRangeMin: 179
+    portRangeMax: 179
+    protocol: tcp
+    description: "Allow BGP between control plane and workers"
+  ```
 
 If this is not flexible enough, pre-existing security groups can be added to the
 spec of an `OpenStackMachineTemplate`, e.g.:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackMachineTemplate
 metadata:
   name: ${CLUSTER_NAME}-control-plane
@@ -520,7 +605,7 @@ spec:
 You have the ability to tag all resources created by the cluster in the `OpenStackCluster` spec. Here is an example how to configure tagging:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackCluster
 metadata:
   name: <cluster-name>
@@ -533,7 +618,7 @@ spec:
 To tag resources specific to a machine, add a value to the tags field in the `OpenStackMachineTemplate` spec like this:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -550,7 +635,7 @@ spec:
 You also have the option to add metadata to instances. Here is a usage example:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -568,7 +653,7 @@ spec:
 For example in `OpenStackMachineTemplate` set `spec.rootVolume.diskSize` to something greater than `0` means boot from volume.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1alpha7
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -608,7 +693,7 @@ spec:
   ...
   bastion:
     enabled: true
-    instance:
+    spec:
       flavor: <Flavor name>
       image:  <Image name>
       sshKeyName: <Key pair name>
@@ -629,7 +714,20 @@ spec:
         floatingIP: <Floating IP address>
 ```
 
-If `managedSecurityGroups: true`, security group rule opening 22/tcp is added to security groups for bastion, controller, and worker nodes respectively. Otherwise, you have to add `securityGroups` to the `bastion` in `OpenStackCluster` spec and `OpenStackMachineTemplate` spec template respectively.
+If `managedSecurityGroups` is set to a non-nil value (e.g. `{}`), security group rule opening 22/tcp is added to security groups for bastion, controller, and worker nodes respectively. Otherwise, you have to add `securityGroups` to the `bastion` in `OpenStackCluster` spec and `OpenStackMachineTemplate` spec template respectively.
+
+### Making changes to the bastion host
+
+Changes can be made to the bastion instance, like for example changing the flavor.
+First, you have to disable the bastion host by setting `enabled: false` in the `OpenStackCluster.Spec.Bastion` field.
+The bastion will be deleted, you can check the status of the bastion host by running `kubectl get openstackcluster` and looking at the `Bastion` field in status.
+Once it's gone, you can re-enable the bastion host by setting `enabled: true` and then making changes to the bastion instance spec by modifying the `OpenStackCluster.Spec.Bastion.Instance` field.
+The bastion host will be re-created with the new instance spec.
+
+### Disabling the bastion
+
+To disable the bastion host, set `enabled: false` in the `OpenStackCluster.Spec.Bastion` field. The bastion host will be deleted, you can check the status of the bastion host by running `kubectl get openstackcluster` and looking at the `Bastion` field in status.
+Once it's gone, you can now remove the `OpenStackCluster.Spec.Bastion` field from the `OpenStackCluster` spec.
 
 ### Obtain floating IP address of the bastion node
 
@@ -640,3 +738,10 @@ $ kubectl get openstackcluster
 NAME    CLUSTER   READY   NETWORK                                SUBNET                                 BASTION
 nonha   nonha     true    2e2a2fad-28c0-4159-8898-c0a2241a86a7   53cb77ab-86a6-4f2c-8d87-24f8411f15de   10.0.0.213
 ```
+
+[external-cloud-provider]: https://cluster-api-openstack.sigs.k8s.io/topics/external-cloud-provider.html
+[flavor]: https://cluster-api.sigs.k8s.io/clusterctl/commands/generate-cluster.html?#flavors
+[image-builder]: https://image-builder.sigs.k8s.io/capi/providers/openstack.html
+[kured]: https://github.com/kubereboot/kured
+[systemd-sysext]: https://www.flatcar.org/docs/latest/provisioning/sysext/
+[systemd-sysupdate]: https://www.freedesktop.org/software/systemd/man/latest/sysupdate.d.html
