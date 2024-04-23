@@ -22,6 +22,27 @@ images:
 patches:
 - path: manager_webhook_patch.yaml
 
+# service-ca will write the ca bundle, so we must not set it here to avoid
+# a conflict between cluster-capi-operator and service-ca
+# Note that openstackfloatingippools does not currently have a conversion
+# webhook, so attempting to patch it produces an error.
+- target:
+    kind: CustomResourceDefinition
+    name: openstackclusters.infrastructure.cluster.x-k8s.io
+  path: crd_remove_cabundle.yaml
+- target:
+    kind: CustomResourceDefinition
+    name: openstackclustertemplates.infrastructure.cluster.x-k8s.io
+  path: crd_remove_cabundle.yaml
+- target:
+    kind: CustomResourceDefinition
+    name: openstackmachines.infrastructure.cluster.x-k8s.io
+  path: crd_remove_cabundle.yaml
+- target:
+    kind: CustomResourceDefinition
+    name: openstackmachinetemplates.infrastructure.cluster.x-k8s.io
+  path: crd_remove_cabundle.yaml
+
 replacements:
 # Set the webhook cert secret name in the service and the controller-manager
 # deployment where it's used
@@ -45,7 +66,10 @@ replacements:
     options:
       create: true
 
-# Set versions other than v1alpha7 to not served in the CRDs
+# Set versions other than v1beta1 to not served in the CRDs
+# Note that we continue to serve v1alpha1 of
+# openstackfloatingippools.infrastructure.cluster.x-k8s.io as it is the most
+# recent version of that CRD
 - source:
     version: v1
     kind: ConfigMap
@@ -56,6 +80,11 @@ replacements:
       group: apiextensions.k8s.io
       version: v1
       kind: CustomResourceDefinition
+    reject:
+    # openstackfloatingippools.infrastructure.cluster.x-k8s.io doesn't have any
+    # of these versions
+    - name: openstackfloatingippools.infrastructure.cluster.x-k8s.io
     fieldPaths:
     - spec.versions.[name=v1alpha5].served
     - spec.versions.[name=v1alpha6].served
+    - spec.versions.[name=v1alpha7].served
