@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -29,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/scope"
 )
@@ -237,10 +238,9 @@ func (r *OpenShiftClusterReconciler) ensureInfraCluster(ctx context.Context, log
 	openStackCluster.Labels = map[string]string{
 		clusterv1.ClusterNameLabel: infraName,
 	}
-	openStackCluster.Spec.CloudName = CloudName
-	openStackCluster.Spec.IdentityRef = &infrav1.OpenStackIdentityReference{
-		Kind: "Secret",
-		Name: CredentialsSecretName,
+	openStackCluster.Spec.IdentityRef = infrav1.OpenStackIdentityReference{
+		Name:      CredentialsSecretName,
+		CloudName: CloudName,
 	}
 
 	if len(platformStatus.APIServerInternalIPs) == 0 {
@@ -248,10 +248,9 @@ func (r *OpenShiftClusterReconciler) ensureInfraCluster(ctx context.Context, log
 	}
 	openStackCluster.Spec.ControlPlaneEndpoint.Host = platformStatus.APIServerInternalIPs[0]
 	openStackCluster.Spec.ControlPlaneEndpoint.Port = ControlPlaneEndpointPort
-	openStackCluster.Spec.ManagedSecurityGroups = false
-	openStackCluster.Spec.DisableAPIServerFloatingIP = true
+	openStackCluster.Spec.DisableAPIServerFloatingIP = ptr.To(true)
 	openStackCluster.Spec.Tags = []string{
-		fmt.Sprintf("openshiftClusterID=%s", infraName),
+		"openshiftClusterID=" + infraName,
 	}
 
 	/*
@@ -277,16 +276,14 @@ func (r *OpenShiftClusterReconciler) ensureInfraCluster(ctx context.Context, log
 	if defaultSubnet == nil {
 		return nil, fmt.Errorf("unable to determine default subnet from control plane machines")
 	}
-	openStackCluster.Spec.Network.ID = defaultSubnet.NetworkID
+	openStackCluster.Spec.Network = &infrav1.NetworkParam{ID: &defaultSubnet.NetworkID}
 	// N.B. Deliberately don't add subnet here: CAPO will use all subnets in network, which should also cover dual stack deployments
 
 	routerID, err := r.getDefaultRouterIDFromSubnet(ctx, networkClient, defaultSubnet)
 	if err != nil {
 		return nil, err
 	}
-	openStackCluster.Spec.Router = &infrav1.RouterFilter{
-		ID: routerID,
-	}
+	openStackCluster.Spec.Router = &infrav1.RouterParam{ID: &routerID}
 
 	router, err := networkClient.GetRouter(routerID)
 	if err != nil {
@@ -299,7 +296,7 @@ func (r *OpenShiftClusterReconciler) ensureInfraCluster(ctx context.Context, log
 	// to avoid an error reconciling the external network if it isn't set.
 	// If CAPO ever no longer requires this we can just not set it and
 	// remove much of the code above. We don't actually use it.
-	openStackCluster.Spec.ExternalNetworkID = router.GatewayInfo.NetworkID
+	openStackCluster.Spec.ExternalNetwork = &infrav1.NetworkParam{ID: &router.GatewayInfo.NetworkID}
 
 	err = r.Client.Create(ctx, &openStackCluster)
 	if err != nil {
