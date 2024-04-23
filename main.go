@@ -175,7 +175,7 @@ func InitFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&showVersion, "version", false, "Show current version and exit.")
 
-	fs.StringVar(&tlsOptions.TLSMinVersion, "tls-min-version", TLSVersion12,
+	fs.StringVar(&tlsOptions.TLSMinVersion, "tls-min-version", TLSVersion13,
 		"The minimum TLS version in use by the webhook server.\n"+
 			fmt.Sprintf("Possible values are %s.", strings.Join(tlsSupportedVersions, ", ")),
 	)
