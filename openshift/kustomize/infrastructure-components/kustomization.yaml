@@ -56,6 +56,16 @@ replacements:
       group: apiextensions.k8s.io
       version: v1
       kind: CustomResourceDefinition
+    reject:
+    - name: openstackfloatingippools.infrastructure.cluster.x-k8s.io
     fieldPaths:
     - spec.versions.[name=v1alpha5].served
     - spec.versions.[name=v1alpha6].served
+    - spec.versions.[name=v1alpha7].served
+  - select:
+      group: apiextensions.k8s.io
+      version: v1
+      kind: CustomResourceDefinition
+      name: openstackfloatingippools.infrastructure.cluster.x-k8s.io
+    fieldPaths:
+    - spec.versions.*.served
