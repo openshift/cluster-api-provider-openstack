@@ -8,3 +8,8 @@ exclude:
     - "hack/**"
     - "test/**"
     - "**/*_test.go"
+ignore:
+  go/InsecureTLSConfig:
+    - "main.go":
+      reason: command line option to set insecure TLS version is not used
+      expires: 2025-04-24T00:00:00Z
