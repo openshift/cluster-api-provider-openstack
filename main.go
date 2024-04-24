@@ -424,15 +424,12 @@ func GetTLSOptionOverrideFuncs(options TLSOptions) ([]func(*tls.Config), error) 
 
 // GetTLSVersion returns the corresponding tls.Version or error.
 func GetTLSVersion(version string) (uint16, error) {
-	var v uint16
-
 	switch version {
 	case TLSVersion12:
-		v = tls.VersionTLS12
+		return tls.VersionTLS12, nil
 	case TLSVersion13:
-		v = tls.VersionTLS13
+		return tls.VersionTLS13, nil
 	default:
-		return 0, fmt.Errorf("unexpected TLS version %q (must be one of: %s)", version, strings.Join(tlsSupportedVersions, ", "))
+		return tls.VersionTLS12, fmt.Errorf("unexpected TLS version %q (must be one of: %s)", version, strings.Join(tlsSupportedVersions, ", "))
 	}
-	return v, nil
 }
