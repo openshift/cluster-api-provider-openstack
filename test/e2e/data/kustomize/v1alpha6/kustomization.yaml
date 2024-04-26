@@ -4,6 +4,7 @@ resources:
 - ../../../../../kustomize/v1alpha6/external-cloud-provider
 
 components:
+- ../common-patches/cluster-prev1beta1
 - ../common-patches/cni
 - ../common-patches/ccm
 
@@ -20,3 +21,12 @@ patches:
           - {}
   target:
     kind: OpenStackMachineTemplate
+- path: bastion.yaml
+  target:
+    kind: OpenStackCluster
+    name: \${CLUSTER_NAME}
+- patch: |-
+    - op: "remove"
+      path: "/spec/externalNetworkId"
+  target:
+    kind: OpenStackCluster

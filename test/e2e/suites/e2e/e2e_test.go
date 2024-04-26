@@ -28,10 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gophercloud/gophercloud"
-	"github.com/gophercloud/gophercloud/openstack"
 	"github.com/gophercloud/gophercloud/openstack/blockstorage/v3/volumes"
-	"github.com/gophercloud/gophercloud/openstack/blockstorage/v3/volumetypes"
 	"github.com/gophercloud/gophercloud/openstack/compute/v2/servers"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/layer3/routers"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/security/groups"
@@ -48,7 +45,7 @@ import (
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	bootstrapv1 "sigs.k8s.io/cluster-api/bootstrap/kubeadm/api/v1beta1"
 	"sigs.k8s.io/cluster-api/controllers/noderefutil"
@@ -56,8 +53,7 @@ import (
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	crclient "sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
-	capoerrors "sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/errors"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-openstack/test/e2e/shared"
 )
 
@@ -85,12 +81,12 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 	})
 
 	Describe("Workload cluster (default)", func() {
-		It("It should be creatable and deletable", func() {
+		It("should be creatable and deletable", func() {
 			shared.Logf("Creating a cluster")
 			clusterName := fmt.Sprintf("cluster-%s", namespace.Name)
 			configCluster := defaultConfigCluster(clusterName, namespace.Name)
-			configCluster.ControlPlaneMachineCount = pointer.Int64(3)
-			configCluster.WorkerMachineCount = pointer.Int64(1)
+			configCluster.ControlPlaneMachineCount = ptr.To(int64(1))
+			configCluster.WorkerMachineCount = ptr.To(int64(1))
 			configCluster.Flavor = shared.FlavorDefault
 			createCluster(ctx, configCluster, clusterResources)
 			md := clusterResources.MachineDeployments
@@ -107,7 +103,7 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 				Namespace:   namespace.Name,
 			})
 			Expect(workerMachines).To(HaveLen(1))
-			Expect(controlPlaneMachines).To(HaveLen(3))
+			Expect(controlPlaneMachines).To(HaveLen(1))
 
 			shared.Logf("Waiting for worker nodes to be in Running phase")
 			statusChecks := []framework.MachineStatusCheck{framework.MachinePhaseCheck(string(clusterv1.MachinePhaseRunning))}
@@ -122,20 +118,22 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 
 			waitForDaemonSetRunning(ctx, workloadCluster.GetClient(), "kube-system", "openstack-cloud-controller-manager")
 
-			waitForNodesReadyWithoutCCMTaint(ctx, workloadCluster.GetClient(), 4)
+			waitForNodesReadyWithoutCCMTaint(ctx, workloadCluster.GetClient(), 2)
 
-			// Tag: clusterName is declared on OpenStackCluster and gets propagated to all machines
-			// except the bastion host
+			openStackCluster, err := shared.ClusterForSpec(ctx, e2eCtx, namespace)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Tag: clusterName is declared on OpenStackCluster and gets propagated to all machines, including the bastion.
 			allServers, err := shared.DumpOpenStackServers(e2eCtx, servers.ListOpts{Tags: clusterName})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(allServers).To(HaveLen(4))
+			Expect(allServers).To(HaveLen(3))
 
 			// When listing servers with multiple tags, nova api requires a single, comma-separated string
 			// with all the tags
 			controlPlaneTags := fmt.Sprintf("%s,%s", clusterName, "control-plane")
 			controlPlaneServers, err := shared.DumpOpenStackServers(e2eCtx, servers.ListOpts{Tags: controlPlaneTags})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(controlPlaneServers).To(HaveLen(3))
+			Expect(controlPlaneServers).To(HaveLen(1))
 
 			machineTags := fmt.Sprintf("%s,%s", clusterName, "machine")
 			machineServers, err := shared.DumpOpenStackServers(e2eCtx, servers.ListOpts{Tags: machineTags})
@@ -157,6 +155,129 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 			securityGroupsList, err := shared.DumpOpenStackSecurityGroups(e2eCtx, groups.ListOpts{Tags: clusterName})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(securityGroupsList).To(HaveLen(3))
+
+			calicoSGRules, err := shared.DumpCalicoSecurityGroupRules(e2eCtx, openStackCluster)
+			Expect(err).NotTo(HaveOccurred())
+			// We expect 4 security group rules that allow Calico traffic on the control plane
+			// from both the control plane and worker machines and vice versa, that makes 8 rules.
+			Expect(calicoSGRules).To(Equal(8))
+
+			shared.Logf("Check the bastion")
+			openStackCluster, err = shared.ClusterForSpec(ctx, e2eCtx, namespace)
+			Expect(err).NotTo(HaveOccurred())
+			bastionSpec := openStackCluster.Spec.Bastion
+			Expect(openStackCluster.Status.Bastion).NotTo(BeNil(), "OpenStackCluster.Status.Bastion has not been populated")
+			bastionServerName := openStackCluster.Status.Bastion.Name
+			bastionServer, err := shared.DumpOpenStackServers(e2eCtx, servers.ListOpts{Name: bastionServerName})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(bastionServer).To(HaveLen(1), "Did not find the bastion in OpenStack")
+
+			shared.Logf("Disable the bastion")
+			openStackCluster, err = shared.ClusterForSpec(ctx, e2eCtx, namespace)
+			Expect(err).NotTo(HaveOccurred())
+			openStackClusterDisabledBastion := openStackCluster.DeepCopy()
+			openStackClusterDisabledBastion.Spec.Bastion.Enabled = ptr.To(false)
+			Expect(e2eCtx.Environment.BootstrapClusterProxy.GetClient().Update(ctx, openStackClusterDisabledBastion)).To(Succeed())
+			Eventually(
+				func() (bool, error) {
+					bastionServer, err := shared.DumpOpenStackServers(e2eCtx, servers.ListOpts{Name: bastionServerName})
+					Expect(err).NotTo(HaveOccurred())
+					if len(bastionServer) == 0 {
+						return true, nil
+					}
+					return false, errors.New("Bastion was not deleted in OpenStack")
+				}, e2eCtx.E2EConfig.GetIntervals(specName, "wait-bastion")...,
+			).Should(BeTrue())
+			Eventually(
+				func() (bool, error) {
+					openStackCluster, err = shared.ClusterForSpec(ctx, e2eCtx, namespace)
+					Expect(err).NotTo(HaveOccurred())
+					if openStackCluster.Status.Bastion == nil {
+						return true, nil
+					}
+					return false, errors.New("Bastion was not removed in OpenStackCluster.Status")
+				}, e2eCtx.E2EConfig.GetIntervals(specName, "wait-bastion")...,
+			).Should(BeTrue())
+
+			shared.Logf("Delete the bastion")
+			openStackCluster, err = shared.ClusterForSpec(ctx, e2eCtx, namespace)
+			Expect(err).NotTo(HaveOccurred())
+			openStackClusterWithoutBastion := openStackCluster.DeepCopy()
+			openStackClusterWithoutBastion.Spec.Bastion = nil
+			Expect(e2eCtx.Environment.BootstrapClusterProxy.GetClient().Update(ctx, openStackClusterWithoutBastion)).To(Succeed())
+			openStackCluster, err = shared.ClusterForSpec(ctx, e2eCtx, namespace)
+			Expect(err).NotTo(HaveOccurred())
+			Eventually(
+				func() (bool, error) {
+					openStackCluster, err = shared.ClusterForSpec(ctx, e2eCtx, namespace)
+					Expect(err).NotTo(HaveOccurred())
+					if openStackCluster.Spec.Bastion == nil {
+						return true, nil
+					}
+					return false, errors.New("Bastion was not removed in OpenStackCluster.Spec")
+				}, e2eCtx.E2EConfig.GetIntervals(specName, "wait-bastion")...,
+			).Should(BeTrue())
+
+			shared.Logf("Create the bastion with a new flavor")
+			bastionNewFlavorName := e2eCtx.E2EConfig.GetVariable(shared.OpenStackBastionFlavorAlt)
+			bastionNewFlavor, err := shared.GetFlavorFromName(e2eCtx, bastionNewFlavorName)
+			Expect(err).NotTo(HaveOccurred())
+			openStackCluster, err = shared.ClusterForSpec(ctx, e2eCtx, namespace)
+			Expect(err).NotTo(HaveOccurred())
+			openStackClusterWithNewBastionFlavor := openStackCluster.DeepCopy()
+			openStackClusterWithNewBastionFlavor.Spec.Bastion = bastionSpec
+			openStackClusterWithNewBastionFlavor.Spec.Bastion.Spec.Flavor = bastionNewFlavorName
+			Expect(e2eCtx.Environment.BootstrapClusterProxy.GetClient().Update(ctx, openStackClusterWithNewBastionFlavor)).To(Succeed())
+			Eventually(
+				func() (bool, error) {
+					bastionServer, err := shared.DumpOpenStackServers(e2eCtx, servers.ListOpts{Name: bastionServerName, Flavor: bastionNewFlavor.ID})
+					Expect(err).NotTo(HaveOccurred())
+					if len(bastionServer) == 1 {
+						return true, nil
+					}
+					return false, errors.New("Bastion with new flavor was not created in OpenStack")
+				}, e2eCtx.E2EConfig.GetIntervals(specName, "wait-bastion")...,
+			).Should(BeTrue())
+			openStackCluster, err = shared.ClusterForSpec(ctx, e2eCtx, namespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(openStackCluster.Spec.Bastion).To(Equal(openStackClusterWithNewBastionFlavor.Spec.Bastion))
+			Expect(openStackCluster.Status.Bastion).NotTo(BeNil(), "OpenStackCluster.Status.Bastion with new flavor has not been populated")
+		})
+	})
+
+	Describe("Workload cluster (no bastion)", func() {
+		It("should be creatable and deletable", func() {
+			shared.Logf("Creating a cluster")
+			clusterName := fmt.Sprintf("cluster-%s", namespace.Name)
+			configCluster := defaultConfigCluster(clusterName, namespace.Name)
+			configCluster.ControlPlaneMachineCount = ptr.To(int64(1))
+			configCluster.WorkerMachineCount = ptr.To(int64(1))
+			configCluster.Flavor = shared.FlavorNoBastion
+			createCluster(ctx, configCluster, clusterResources)
+			md := clusterResources.MachineDeployments
+
+			workerMachines := framework.GetMachinesByMachineDeployments(ctx, framework.GetMachinesByMachineDeploymentsInput{
+				Lister:            e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
+				ClusterName:       clusterName,
+				Namespace:         namespace.Name,
+				MachineDeployment: *md[0],
+			})
+			controlPlaneMachines := framework.GetControlPlaneMachinesByCluster(ctx, framework.GetControlPlaneMachinesByClusterInput{
+				Lister:      e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
+				ClusterName: clusterName,
+				Namespace:   namespace.Name,
+			})
+			Expect(workerMachines).To(HaveLen(1))
+			Expect(controlPlaneMachines).To(HaveLen(1))
+
+			shared.Logf("Waiting for worker nodes to be in Running phase")
+			statusChecks := []framework.MachineStatusCheck{framework.MachinePhaseCheck(string(clusterv1.MachinePhaseRunning))}
+			machineStatusInput := framework.WaitForMachineStatusCheckInput{
+				Getter:       e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
+				Machine:      &workerMachines[0],
+				StatusChecks: statusChecks,
+			}
+			framework.WaitForMachineStatusCheck(ctx, machineStatusInput, e2eCtx.E2EConfig.GetIntervals(specName, "wait-machine-status")...)
 		})
 	})
 
@@ -168,8 +289,8 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 			shared.Logf("Creating a cluster")
 			clusterName := fmt.Sprintf("cluster-%s", namespace.Name)
 			configCluster := defaultConfigCluster(clusterName, namespace.Name)
-			configCluster.ControlPlaneMachineCount = pointer.Int64(3)
-			configCluster.WorkerMachineCount = pointer.Int64(1)
+			configCluster.ControlPlaneMachineCount = ptr.To(int64(1))
+			configCluster.WorkerMachineCount = ptr.To(int64(1))
 			configCluster.Flavor = shared.FlavorFlatcar
 			createCluster(ctx, configCluster, clusterResources)
 			md := clusterResources.MachineDeployments
@@ -186,7 +307,7 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 				Namespace:   namespace.Name,
 			})
 			Expect(workerMachines).To(HaveLen(1))
-			Expect(controlPlaneMachines).To(HaveLen(3))
+			Expect(controlPlaneMachines).To(HaveLen(1))
 
 			shared.Logf("Waiting for worker nodes to be in Running phase")
 			statusChecks := []framework.MachineStatusCheck{framework.MachinePhaseCheck(string(clusterv1.MachinePhaseRunning))}
@@ -201,17 +322,62 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 
 			waitForDaemonSetRunning(ctx, workloadCluster.GetClient(), "kube-system", "openstack-cloud-controller-manager")
 
-			waitForNodesReadyWithoutCCMTaint(ctx, workloadCluster.GetClient(), 4)
+			waitForNodesReadyWithoutCCMTaint(ctx, workloadCluster.GetClient(), 2)
+		})
+	})
+
+	Describe("Workload cluster (flatcar-sysext)", func() {
+		It("should be creatable and deletable", func() {
+			// Flatcar default user is "core"
+			shared.SetEnvVar(shared.SSHUserMachine, "core", false)
+
+			shared.Logf("Creating a cluster")
+			clusterName := fmt.Sprintf("cluster-%s", namespace.Name)
+			configCluster := defaultConfigCluster(clusterName, namespace.Name)
+			configCluster.ControlPlaneMachineCount = ptr.To(int64(1))
+			configCluster.WorkerMachineCount = ptr.To(int64(1))
+			configCluster.Flavor = shared.FlavorFlatcarSysext
+			createCluster(ctx, configCluster, clusterResources)
+			md := clusterResources.MachineDeployments
+
+			workerMachines := framework.GetMachinesByMachineDeployments(ctx, framework.GetMachinesByMachineDeploymentsInput{
+				Lister:            e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
+				ClusterName:       clusterName,
+				Namespace:         namespace.Name,
+				MachineDeployment: *md[0],
+			})
+			controlPlaneMachines := framework.GetControlPlaneMachinesByCluster(ctx, framework.GetControlPlaneMachinesByClusterInput{
+				Lister:      e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
+				ClusterName: clusterName,
+				Namespace:   namespace.Name,
+			})
+			Expect(workerMachines).To(HaveLen(1))
+			Expect(controlPlaneMachines).To(HaveLen(1))
+
+			shared.Logf("Waiting for worker nodes to be in Running phase")
+			statusChecks := []framework.MachineStatusCheck{framework.MachinePhaseCheck(string(clusterv1.MachinePhaseRunning))}
+			machineStatusInput := framework.WaitForMachineStatusCheckInput{
+				Getter:       e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
+				Machine:      &workerMachines[0],
+				StatusChecks: statusChecks,
+			}
+			framework.WaitForMachineStatusCheck(ctx, machineStatusInput, e2eCtx.E2EConfig.GetIntervals(specName, "wait-machine-status")...)
+
+			workloadCluster := e2eCtx.Environment.BootstrapClusterProxy.GetWorkloadCluster(ctx, namespace.Name, clusterName)
+
+			waitForDaemonSetRunning(ctx, workloadCluster.GetClient(), "kube-system", "openstack-cloud-controller-manager")
+
+			waitForNodesReadyWithoutCCMTaint(ctx, workloadCluster.GetClient(), 2)
 		})
 	})
 
 	Describe("Workload cluster (without lb)", func() {
-		It("Should create port(s) with custom options", func() {
+		It("should create port(s) with custom options", func() {
 			shared.Logf("Creating a cluster")
 			clusterName := fmt.Sprintf("cluster-%s", namespace.Name)
 			configCluster := defaultConfigCluster(clusterName, namespace.Name)
-			configCluster.ControlPlaneMachineCount = pointer.Int64(1)
-			configCluster.WorkerMachineCount = pointer.Int64(1)
+			configCluster.ControlPlaneMachineCount = ptr.To(int64(1))
+			configCluster.WorkerMachineCount = ptr.To(int64(1))
 			configCluster.Flavor = shared.FlavorWithoutLB
 			createCluster(ctx, configCluster, clusterResources)
 			md := clusterResources.MachineDeployments
@@ -242,14 +408,14 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 
 			customPortOptions := &[]infrav1.PortOpts{
 				{
-					Description: "primary",
+					Description: ptr.To("primary"),
 				},
 				{
-					Description: "trunked",
-					Trunk:       pointer.Bool(true),
+					Description: ptr.To("trunked"),
+					Trunk:       ptr.To(true),
 				},
 				{
-					SecurityGroupFilters: []infrav1.SecurityGroupFilter{{Name: testSecurityGroupName}},
+					SecurityGroups: []infrav1.SecurityGroupParam{{Filter: &infrav1.SecurityGroupFilter{Name: testSecurityGroupName}}},
 				},
 			}
 
@@ -344,8 +510,8 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 			shared.Logf("Creating a cluster")
 			clusterName = fmt.Sprintf("cluster-%s", namespace.Name)
 			configCluster = defaultConfigCluster(clusterName, namespace.Name)
-			configCluster.ControlPlaneMachineCount = pointer.Int64(1)
-			configCluster.WorkerMachineCount = pointer.Int64(1)
+			configCluster.ControlPlaneMachineCount = ptr.To(int64(1))
+			configCluster.WorkerMachineCount = ptr.To(int64(1))
 			configCluster.Flavor = shared.FlavorMultiNetwork
 			createCluster(ctx, configCluster, clusterResources)
 			md = clusterResources.MachineDeployments
@@ -425,12 +591,12 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 	})
 
 	Describe("MachineDeployment misconfigurations", func() {
-		It("Should fail to create MachineDeployment with invalid subnet or invalid availability zone", func() {
+		It("should fail to create MachineDeployment with invalid subnet or invalid availability zone", func() {
 			shared.Logf("Creating a cluster")
 			clusterName := fmt.Sprintf("cluster-%s", namespace.Name)
 			configCluster := defaultConfigCluster(clusterName, namespace.Name)
-			configCluster.ControlPlaneMachineCount = pointer.Int64(1)
-			configCluster.WorkerMachineCount = pointer.Int64(0)
+			configCluster.ControlPlaneMachineCount = ptr.To(int64(1))
+			configCluster.WorkerMachineCount = ptr.To(int64(0))
 			configCluster.Flavor = shared.FlavorWithoutLB
 			createCluster(ctx, configCluster, clusterResources)
 
@@ -482,8 +648,8 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 			shared.Logf("Creating a cluster")
 			clusterName = fmt.Sprintf("cluster-%s", namespace.Name)
 			configCluster := defaultConfigCluster(clusterName, namespace.Name)
-			configCluster.ControlPlaneMachineCount = pointer.Int64(3)
-			configCluster.WorkerMachineCount = pointer.Int64(2)
+			configCluster.ControlPlaneMachineCount = ptr.To(int64(3))
+			configCluster.WorkerMachineCount = ptr.To(int64(2))
 			configCluster.Flavor = shared.FlavorMultiAZ
 			createCluster(ctx, configCluster, clusterResources)
 			md = clusterResources.MachineDeployments
@@ -493,7 +659,7 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("It should be creatable and deletable", func() {
+		It("should be creatable and deletable", func() {
 			workerMachines := framework.GetMachinesByMachineDeployments(ctx, framework.GetMachinesByMachineDeploymentsInput{
 				Lister:            e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
 				ClusterName:       clusterName,
@@ -728,13 +894,16 @@ func makeOpenStackMachineTemplate(namespace, clusterName, name string) *infrav1.
 		Spec: infrav1.OpenStackMachineTemplateSpec{
 			Template: infrav1.OpenStackMachineTemplateResource{
 				Spec: infrav1.OpenStackMachineSpec{
-					Flavor:     e2eCtx.E2EConfig.GetVariable(shared.OpenStackNodeMachineFlavor),
-					Image:      e2eCtx.E2EConfig.GetVariable(shared.OpenStackImageName),
+					Flavor: e2eCtx.E2EConfig.GetVariable(shared.OpenStackNodeMachineFlavor),
+					Image: infrav1.ImageParam{
+						Filter: &infrav1.ImageFilter{
+							Name: ptr.To(e2eCtx.E2EConfig.GetVariable(shared.OpenStackImageName)),
+						},
+					},
 					SSHKeyName: shared.DefaultSSHKeyPairName,
-					CloudName:  e2eCtx.E2EConfig.GetVariable(shared.OpenStackCloud),
 					IdentityRef: &infrav1.OpenStackIdentityReference{
-						Kind: "Secret",
-						Name: fmt.Sprintf("%s-cloud-config", clusterName),
+						Name:      fmt.Sprintf("%s-cloud-config", clusterName),
+						CloudName: e2eCtx.E2EConfig.GetVariable(shared.OpenStackCloud),
 					},
 				},
 			},
@@ -751,13 +920,16 @@ func makeOpenStackMachineTemplateWithPortOptions(namespace, clusterName, name st
 		Spec: infrav1.OpenStackMachineTemplateSpec{
 			Template: infrav1.OpenStackMachineTemplateResource{
 				Spec: infrav1.OpenStackMachineSpec{
-					Flavor:     e2eCtx.E2EConfig.GetVariable(shared.OpenStackNodeMachineFlavor),
-					Image:      e2eCtx.E2EConfig.GetVariable(shared.OpenStackImageName),
+					Flavor: e2eCtx.E2EConfig.GetVariable(shared.OpenStackNodeMachineFlavor),
+					Image: infrav1.ImageParam{
+						Filter: &infrav1.ImageFilter{
+							Name: ptr.To(e2eCtx.E2EConfig.GetVariable(shared.OpenStackImageName)),
+						},
+					},
 					SSHKeyName: shared.DefaultSSHKeyPairName,
-					CloudName:  e2eCtx.E2EConfig.GetVariable(shared.OpenStackCloud),
 					IdentityRef: &infrav1.OpenStackIdentityReference{
-						Kind: "Secret",
-						Name: fmt.Sprintf("%s-cloud-config", clusterName),
+						Name:      fmt.Sprintf("%s-cloud-config", clusterName),
+						CloudName: e2eCtx.E2EConfig.GetVariable(shared.OpenStackCloud),
 					},
 					Ports: *portOpts,
 					Tags:  machineTags,
@@ -840,7 +1012,7 @@ func makeMachineDeployment(namespace, mdName, clusterName string, failureDomain 
 						Name:       mdName,
 						Namespace:  namespace,
 					},
-					Version: pointer.String(e2eCtx.E2EConfig.GetVariable(shared.KubernetesVersion)),
+					Version: ptr.To(e2eCtx.E2EConfig.GetVariable(shared.KubernetesVersion)),
 				},
 			},
 		},
@@ -889,25 +1061,4 @@ func isCloudProviderInitialized(taints []corev1.Taint) bool {
 		}
 	}
 	return true
-}
-
-func createTestVolumeType(e2eCtx *shared.E2EContext) {
-	providerClient, clientOpts, _, err := shared.GetAdminProviderClient(e2eCtx)
-	Expect(err).NotTo(HaveOccurred())
-
-	volumeClient, err := openstack.NewBlockStorageV3(providerClient, gophercloud.EndpointOpts{Region: clientOpts.RegionName})
-	Expect(err).NotTo(HaveOccurred())
-
-	shared.Logf("Creating test volume type")
-	_, err = volumetypes.Create(volumeClient, &volumetypes.CreateOpts{
-		Name:        e2eCtx.E2EConfig.GetVariable(shared.OpenStackVolumeTypeAlt),
-		Description: "Test volume type",
-		IsPublic:    pointer.Bool(true),
-		ExtraSpecs:  map[string]string{},
-	}).Extract()
-	if capoerrors.IsConflict(err) {
-		shared.Logf("Volume type already exists. This may happen in development environments, but it is not expected in CI.")
-		return
-	}
-	Expect(err).NotTo(HaveOccurred())
 }

@@ -37,7 +37,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
+	"sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/hash"
 	"sigs.k8s.io/cluster-api-provider-openstack/version"
@@ -52,16 +53,24 @@ type providerScopeFactory struct {
 	clientCache *cache.LRUExpireCache
 }
 
-func (f *providerScopeFactory) NewClientScopeFromMachine(ctx context.Context, ctrlClient client.Client, openStackMachine *infrav1.OpenStackMachine, defaultCACert []byte, logger logr.Logger) (Scope, error) {
+func (f *providerScopeFactory) NewClientScopeFromMachine(ctx context.Context, ctrlClient client.Client, openStackMachine *infrav1.OpenStackMachine, openStackCluster *infrav1.OpenStackCluster, defaultCACert []byte, logger logr.Logger) (Scope, error) {
 	var cloud clientconfig.Cloud
 	var caCert []byte
 
+	var identityRef *infrav1.OpenStackIdentityReference
+	var namespace string
 	if openStackMachine.Spec.IdentityRef != nil {
-		var err error
-		cloud, caCert, err = getCloudFromSecret(ctx, ctrlClient, openStackMachine.Namespace, openStackMachine.Spec.IdentityRef.Name, openStackMachine.Spec.CloudName)
-		if err != nil {
-			return nil, err
-		}
+		identityRef = openStackMachine.Spec.IdentityRef
+		namespace = openStackMachine.Namespace
+	} else {
+		identityRef = &openStackCluster.Spec.IdentityRef
+		namespace = openStackCluster.Namespace
+	}
+
+	var err error
+	cloud, caCert, err = getCloudFromSecret(ctx, ctrlClient, namespace, identityRef.Name, identityRef.CloudName)
+	if err != nil {
+		return nil, err
 	}
 
 	if caCert == nil {
@@ -79,12 +88,27 @@ func (f *providerScopeFactory) NewClientScopeFromCluster(ctx context.Context, ct
 	var cloud clientconfig.Cloud
 	var caCert []byte
 
-	if openStackCluster.Spec.IdentityRef != nil {
-		var err error
-		cloud, caCert, err = getCloudFromSecret(ctx, ctrlClient, openStackCluster.Namespace, openStackCluster.Spec.IdentityRef.Name, openStackCluster.Spec.CloudName)
-		if err != nil {
-			return nil, err
-		}
+	var err error
+	cloud, caCert, err = getCloudFromSecret(ctx, ctrlClient, openStackCluster.Namespace, openStackCluster.Spec.IdentityRef.Name, openStackCluster.Spec.IdentityRef.CloudName)
+	if err != nil {
+		return nil, err
+	}
+
+	if caCert == nil {
+		caCert = defaultCACert
+	}
+
+	if f.clientCache == nil {
+		return NewProviderScope(cloud, caCert, logger)
+	}
+
+	return NewCachedProviderScope(f.clientCache, cloud, caCert, logger)
+}
+
+func (f *providerScopeFactory) NewClientScopeFromFloatingIPPool(ctx context.Context, ctrlClient client.Client, openstackFloatingIPPool *v1alpha1.OpenStackFloatingIPPool, defaultCACert []byte, logger logr.Logger) (Scope, error) {
+	cloud, caCert, err := getCloudFromSecret(ctx, ctrlClient, openstackFloatingIPPool.Namespace, openstackFloatingIPPool.Spec.IdentityRef.Name, openstackFloatingIPPool.Spec.IdentityRef.CloudName)
+	if err != nil {
+		return nil, err
 	}
 
 	if caCert == nil {
@@ -111,7 +135,6 @@ type providerScope struct {
 	providerClient     *gophercloud.ProviderClient
 	providerClientOpts *clientconfig.ClientOpts
 	projectID          string
-	logger             logr.Logger
 }
 
 func NewProviderScope(cloud clientconfig.Cloud, caCert []byte, logger logr.Logger) (Scope, error) {
@@ -124,7 +147,6 @@ func NewProviderScope(cloud clientconfig.Cloud, caCert []byte, logger logr.Logge
 		providerClient:     providerClient,
 		providerClientOpts: clientOpts,
 		projectID:          projectID,
-		logger:             logger,
 	}, nil
 }
 
@@ -154,10 +176,6 @@ func NewCachedProviderScope(cache *cache.LRUExpireCache, cloud clientconfig.Clou
 
 	cache.Add(key, scope, expiry)
 	return scope, nil
-}
-
-func (s *providerScope) Logger() logr.Logger {
-	return s.logger
 }
 
 func (s *providerScope) ProjectID() string {
@@ -194,6 +212,12 @@ func (s *providerScope) ExtractToken() (*tokens.Token, error) {
 
 func NewProviderClient(cloud clientconfig.Cloud, caCert []byte, logger logr.Logger) (*gophercloud.ProviderClient, *clientconfig.ClientOpts, string, error) {
 	clientOpts := new(clientconfig.ClientOpts)
+
+	// We explicitly disable reading auth data from env variables by setting an invalid EnvPrefix.
+	// By doing this, we make sure that the data from clouds.yaml is enough to authenticate.
+	// For more information: https://github.com/gophercloud/utils/blob/8677e053dcf1f05d0fa0a616094aace04690eb94/openstack/clientconfig/requests.go#L508
+	clientOpts.EnvPrefix = "NO_ENV_VARIABLES_"
+
 	if cloud.AuthInfo != nil {
 		clientOpts.AuthInfo = cloud.AuthInfo
 		clientOpts.AuthType = cloud.AuthType

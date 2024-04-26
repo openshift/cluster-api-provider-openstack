@@ -130,7 +130,7 @@ func main() {
 	if err := (&infraclustercontroller.OpenShiftClusterReconciler{
 		Client:       mgr.GetClient(),
 		Recorder:     mgr.GetEventRecorderFor("openshiftcluster-controller"),
-		ScopeFactory: scope.NewFactory(0),
+		ScopeFactory: scope.NewFactory(1),
 	}).SetupWithManager(mgr, controller.Options{}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenStackCluster")
 		os.Exit(1)

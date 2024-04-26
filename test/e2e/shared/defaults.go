@@ -26,7 +26,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/cluster-api/test/framework"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 )
 
 const (
@@ -35,6 +35,7 @@ const (
 	KubernetesVersion          = "KUBERNETES_VERSION"
 	CCMPath                    = "CCM"
 	CCMResources               = "CCM_RESOURCES"
+	OpenStackBastionFlavorAlt  = "OPENSTACK_BASTION_MACHINE_FLAVOR_ALT"
 	OpenStackCloudYAMLFile     = "OPENSTACK_CLOUD_YAML_FILE"
 	OpenStackCloud             = "OPENSTACK_CLOUD"
 	OpenStackCloudAdmin        = "OPENSTACK_CLOUD_ADMIN"
@@ -45,15 +46,17 @@ const (
 	OpenStackNodeMachineFlavor = "OPENSTACK_NODE_MACHINE_FLAVOR"
 	SSHUserMachine             = "SSH_USER_MACHINE"
 	FlavorDefault              = ""
+	FlavorNoBastion            = "no-bastion"
 	FlavorWithoutLB            = "without-lb"
 	FlavorMultiNetwork         = "multi-network"
 	FlavorMultiAZ              = "multi-az"
-	FlavorV1alpha5             = "v1alpha5"
 	FlavorV1alpha6             = "v1alpha6"
+	FlavorV1alpha7             = "v1alpha7"
 	FlavorMDRemediation        = "md-remediation"
 	FlavorKCPRemediation       = "kcp-remediation"
 	FlavorFlatcar              = "flatcar"
 	FlavorKubernetesUpgrade    = "k8s-upgrade"
+	FlavorFlatcarSysext        = "flatcar-sysext"
 )
 
 // DefaultScheme returns the default scheme to use for testing.

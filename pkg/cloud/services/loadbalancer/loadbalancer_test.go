@@ -17,9 +17,12 @@ limitations under the License.
 package loadbalancer
 
 import (
+	"errors"
+	"fmt"
+	"net"
 	"testing"
 
-	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/testr"
 	"github.com/golang/mock/gomock"
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/apiversions"
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/listeners"
@@ -28,19 +31,41 @@ import (
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/pools"
 	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/providers"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients/mock"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/scope"
 )
+
+const apiHostname = "api.test-cluster.test"
 
 func Test_ReconcileLoadBalancer(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
+	// Stub the call to net.LookupHost
+	lookupHost = func(host string) (addrs *string, err error) {
+		if net.ParseIP(host) != nil {
+			return &host, nil
+		} else if host == apiHostname {
+			ips := []string{"192.168.100.10"}
+			return &ips[0], nil
+		}
+		return nil, errors.New("Unknown Host " + host)
+	}
+
 	openStackCluster := &infrav1.OpenStackCluster{
 		Spec: infrav1.OpenStackClusterSpec{
-			DisableAPIServerFloatingIP: true,
+			APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+				Enabled: ptr.To(true),
+			},
+			DisableAPIServerFloatingIP: ptr.To(true),
+			ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+				Host: apiHostname,
+				Port: 6443,
+			},
 		},
 		Status: infrav1.OpenStackClusterStatus{
 			ExternalNetwork: &infrav1.NetworkStatus{
@@ -65,13 +90,6 @@ func Test_ReconcileLoadBalancer(t *testing.T) {
 				// add network api call results here
 			},
 			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
-				// return loadbalancer providers
-				providers := []providers.Provider{
-					{Name: "amphora", Description: "The Octavia Amphora driver."},
-					{Name: "octavia", Description: "Deprecated alias of the Octavia Amphora driver."},
-				}
-				m.ListLoadBalancerProviders().Return(providers, nil)
-
 				pendingLB := loadbalancers.LoadBalancer{
 					ID:                 "aaaaaaaa-bbbb-cccc-dddd-333333333333",
 					Name:               "k8s-clusterapi-cluster-AAAAA-kubeapi",
@@ -125,9 +143,10 @@ func Test_ReconcileLoadBalancer(t *testing.T) {
 	for _, tt := range lbtests {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
+			log := testr.New(t)
 
-			mockScopeFactory := scope.NewMockScopeFactory(mockCtrl, "", logr.Discard())
-			lbs, err := NewService(mockScopeFactory)
+			mockScopeFactory := scope.NewMockScopeFactory(mockCtrl, "")
+			lbs, err := NewService(scope.NewWithLogger(mockScopeFactory, log))
 			g.Expect(err).NotTo(HaveOccurred())
 
 			tt.expectNetwork(mockScopeFactory.NetworkClient.EXPECT())
@@ -137,6 +156,401 @@ func Test_ReconcileLoadBalancer(t *testing.T) {
 				g.Expect(err).To(MatchError(tt.wantError))
 			} else {
 				g.Expect(err).NotTo(HaveOccurred())
+			}
+		})
+	}
+}
+
+func Test_getAPIServerVIPAddress(t *testing.T) {
+	// Stub the call to net.LookupHost
+	lookupHost = func(host string) (addrs *string, err error) {
+		if net.ParseIP(host) != nil {
+			return &host, nil
+		} else if host == apiHostname {
+			ips := []string{"192.168.100.10"}
+			return &ips[0], nil
+		}
+		return nil, errors.New("Unknown Host " + host)
+	}
+	tests := []struct {
+		name             string
+		openStackCluster *infrav1.OpenStackCluster
+		want             *string
+		wantError        bool
+	}{
+		{
+			name:             "empty cluster returns empty VIP",
+			openStackCluster: &infrav1.OpenStackCluster{},
+			want:             nil,
+			wantError:        false,
+		},
+		{
+			name: "API server VIP is InternalIP",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Status: infrav1.OpenStackClusterStatus{
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
+						InternalIP: "1.2.3.4",
+					},
+				},
+			},
+			want:      ptr.To("1.2.3.4"),
+			wantError: false,
+		},
+		{
+			name: "API server VIP is API Server Fixed IP",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Spec: infrav1.OpenStackClusterSpec{
+					APIServerFixedIP: ptr.To("1.2.3.4"),
+				},
+			},
+			want:      ptr.To("1.2.3.4"),
+			wantError: false,
+		},
+		{
+			name: "API server VIP with valid control plane endpoint",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Spec: infrav1.OpenStackClusterSpec{
+					DisableAPIServerFloatingIP: ptr.To(true),
+					ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+						Host: apiHostname,
+						Port: 6443,
+					},
+				},
+			},
+			want:      ptr.To("192.168.100.10"),
+			wantError: false,
+		},
+		{
+			name: "API server VIP with invalid control plane endpoint",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Spec: infrav1.OpenStackClusterSpec{
+					DisableAPIServerFloatingIP: ptr.To(true),
+					ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+						Host: "invalid-api.test-cluster.test",
+						Port: 6443,
+					},
+				},
+			},
+			wantError: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			got, err := getAPIServerVIPAddress(tt.openStackCluster)
+			if tt.wantError {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(got).To(BeNil())
+			} else {
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(got).To(Equal(tt.want))
+			}
+		})
+	}
+}
+
+func Test_getAPIServerFloatingIP(t *testing.T) {
+	// Stub the call to net.LookupHost
+	lookupHost = func(host string) (addrs *string, err error) {
+		if net.ParseIP(host) != nil {
+			return &host, nil
+		} else if host == apiHostname {
+			ips := []string{"192.168.100.10"}
+			return &ips[0], nil
+		}
+		return nil, errors.New("Unknown Host " + host)
+	}
+	tests := []struct {
+		name             string
+		openStackCluster *infrav1.OpenStackCluster
+		want             *string
+		wantError        bool
+	}{
+		{
+			name:             "empty cluster returns empty FIP",
+			openStackCluster: &infrav1.OpenStackCluster{},
+			want:             nil,
+			wantError:        false,
+		},
+		{
+			name: "API server FIP is API Server LB IP",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Status: infrav1.OpenStackClusterStatus{
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
+						IP: "1.2.3.4",
+					},
+				},
+			},
+			want:      ptr.To("1.2.3.4"),
+			wantError: false,
+		},
+		{
+			name: "API server FIP is API Server Floating IP",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Spec: infrav1.OpenStackClusterSpec{
+					APIServerFloatingIP: ptr.To("1.2.3.4"),
+				},
+			},
+			want:      ptr.To("1.2.3.4"),
+			wantError: false,
+		},
+		{
+			name: "API server FIP with valid control plane endpoint",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Spec: infrav1.OpenStackClusterSpec{
+					ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+						Host: apiHostname,
+						Port: 6443,
+					},
+				},
+			},
+			want:      ptr.To("192.168.100.10"),
+			wantError: false,
+		},
+		{
+			name: "API server FIP with invalid control plane endpoint",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Spec: infrav1.OpenStackClusterSpec{
+					ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+						Host: "invalid-api.test-cluster.test",
+						Port: 6443,
+					},
+				},
+			},
+			wantError: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			got, err := getAPIServerFloatingIP(tt.openStackCluster)
+			if tt.wantError {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(got).To(BeNil())
+			} else {
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(got).To(Equal(tt.want))
+			}
+		})
+	}
+}
+
+func Test_getCanonicalAllowedCIDRs(t *testing.T) {
+	tests := []struct {
+		name             string
+		openStackCluster *infrav1.OpenStackCluster
+		want             []string
+	}{
+		{
+			name:             "allowed CIDRs are empty",
+			openStackCluster: &infrav1.OpenStackCluster{},
+			want:             []string{},
+		},
+		{
+			name: "allowed CIDRs are set",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Spec: infrav1.OpenStackClusterSpec{
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						AllowedCIDRs: []string{"1.2.3.4/32"},
+					},
+				},
+			},
+			want: []string{"1.2.3.4/32"},
+		},
+		{
+			name: "allowed CIDRs are set with bastion",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Spec: infrav1.OpenStackClusterSpec{
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						AllowedCIDRs: []string{"1.2.3.4/32"},
+					},
+				},
+				Status: infrav1.OpenStackClusterStatus{
+					Bastion: &infrav1.BastionStatus{
+						FloatingIP: "1.2.3.5",
+						IP:         "192.168.0.1",
+					},
+				},
+			},
+			want: []string{"1.2.3.4/32", "1.2.3.5/32", "192.168.0.1/32"},
+		},
+		{
+			name: "allowed CIDRs are set with network status",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Spec: infrav1.OpenStackClusterSpec{
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						AllowedCIDRs: []string{"1.2.3.4/32"},
+					},
+				},
+				Status: infrav1.OpenStackClusterStatus{
+					Network: &infrav1.NetworkStatusWithSubnets{
+						Subnets: []infrav1.Subnet{
+							{
+								CIDR: "192.168.0.0/24",
+							},
+						},
+					},
+				},
+			},
+			want: []string{"1.2.3.4/32", "192.168.0.0/24"},
+		},
+		{
+			name: "allowed CIDRs are set with network status and router IP",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Spec: infrav1.OpenStackClusterSpec{
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						AllowedCIDRs: []string{"1.2.3.4/32"},
+					},
+				},
+				Status: infrav1.OpenStackClusterStatus{
+					Network: &infrav1.NetworkStatusWithSubnets{
+						Subnets: []infrav1.Subnet{
+							{
+								CIDR: "192.168.0.0/24",
+							},
+						},
+					},
+					Router: &infrav1.Router{
+						IPs: []string{"1.2.3.5"},
+					},
+				},
+			},
+			want: []string{"1.2.3.4/32", "1.2.3.5/32", "192.168.0.0/24"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			got := getCanonicalAllowedCIDRs(tt.openStackCluster)
+			g.Expect(got).To(Equal(tt.want))
+		})
+	}
+}
+
+func Test_getOrCreateAPILoadBalancer(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	octaviaProviders := []providers.Provider{
+		{
+			Name: "ovn",
+		},
+	}
+	lbtests := []struct {
+		name               string
+		openStackCluster   *infrav1.OpenStackCluster
+		expectLoadBalancer func(m *mock.MockLbClientMockRecorder)
+		want               *loadbalancers.LoadBalancer
+		wantError          error
+	}{
+		{
+			name:             "nothing exists",
+			openStackCluster: &infrav1.OpenStackCluster{},
+			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
+				m.ListLoadBalancers(gomock.Any()).Return([]loadbalancers.LoadBalancer{}, nil)
+			},
+			want:      &loadbalancers.LoadBalancer{},
+			wantError: fmt.Errorf("network is not yet available in OpenStackCluster.Status"),
+		},
+		{
+			name:             "loadbalancer already exists",
+			openStackCluster: &infrav1.OpenStackCluster{},
+			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
+				m.ListLoadBalancers(gomock.Any()).Return([]loadbalancers.LoadBalancer{{ID: "AAAAA"}}, nil)
+			},
+			want: &loadbalancers.LoadBalancer{
+				ID: "AAAAA",
+			},
+		},
+		{
+			name: "loadbalancer created",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Status: infrav1.OpenStackClusterStatus{
+					Network: &infrav1.NetworkStatusWithSubnets{
+						Subnets: []infrav1.Subnet{
+							{ID: "aaaaaaaa-bbbb-cccc-dddd-222222222222"},
+							{ID: "aaaaaaaa-bbbb-cccc-dddd-333333333333"},
+						},
+					},
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
+						LoadBalancerNetwork: nil,
+					},
+				},
+			},
+			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
+				m.ListLoadBalancers(gomock.Any()).Return([]loadbalancers.LoadBalancer{}, nil)
+				m.ListLoadBalancerProviders().Return(octaviaProviders, nil)
+				m.CreateLoadBalancer(gomock.Any()).Return(&loadbalancers.LoadBalancer{
+					ID:          "AAAAA",
+					VipSubnetID: "aaaaaaaa-bbbb-cccc-dddd-222222222222",
+				}, nil)
+			},
+			want: &loadbalancers.LoadBalancer{
+				ID:          "AAAAA",
+				VipSubnetID: "aaaaaaaa-bbbb-cccc-dddd-222222222222",
+			},
+		},
+		{
+			name: "loadbalancer on a specific network created",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Status: infrav1.OpenStackClusterStatus{
+					Network: &infrav1.NetworkStatusWithSubnets{
+						Subnets: []infrav1.Subnet{
+							{ID: "aaaaaaaa-bbbb-cccc-dddd-222222222222"},
+						},
+					},
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
+						LoadBalancerNetwork: &infrav1.NetworkStatusWithSubnets{
+							NetworkStatus: infrav1.NetworkStatus{
+								Name: "VIPNET",
+								ID:   "VIPNET",
+							},
+							Subnets: []infrav1.Subnet{
+								{
+									Name: "vip-subnet",
+									CIDR: "10.0.0.0/24",
+									ID:   "VIPSUBNET",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
+				m.ListLoadBalancers(gomock.Any()).Return([]loadbalancers.LoadBalancer{}, nil)
+				m.ListLoadBalancerProviders().Return(octaviaProviders, nil)
+				m.CreateLoadBalancer(gomock.Any()).Return(&loadbalancers.LoadBalancer{
+					ID:           "AAAAA",
+					VipSubnetID:  "VIPSUBNET",
+					VipNetworkID: "VIPNET",
+				}, nil)
+			},
+			want: &loadbalancers.LoadBalancer{
+				ID:           "AAAAA",
+				VipSubnetID:  "VIPSUBNET",
+				VipNetworkID: "VIPNET",
+			},
+		},
+	}
+	for _, tt := range lbtests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			log := testr.New(t)
+
+			mockScopeFactory := scope.NewMockScopeFactory(mockCtrl, "")
+			lbs, err := NewService(scope.NewWithLogger(mockScopeFactory, log))
+			g.Expect(err).NotTo(HaveOccurred())
+
+			tt.expectLoadBalancer(mockScopeFactory.LbClient.EXPECT())
+			lb, err := lbs.getOrCreateAPILoadBalancer(tt.openStackCluster, "AAAAA")
+			if tt.wantError != nil {
+				g.Expect(err).To(MatchError(tt.wantError))
+			} else {
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(lb).To(Equal(tt.want))
 			}
 		})
 	}

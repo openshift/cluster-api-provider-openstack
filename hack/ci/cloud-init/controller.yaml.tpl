@@ -12,9 +12,6 @@
     VERBOSE=True
     LOG_COLOR=True
 
-    # Neutron
-    enable_plugin neutron https://github.com/openstack/neutron stable/${OPENSTACK_RELEASE}
-
     # Octavia
     enable_plugin octavia https://github.com/openstack/octavia stable/${OPENSTACK_RELEASE}
     enable_plugin octavia-dashboard https://github.com/openstack/octavia-dashboard stable/${OPENSTACK_RELEASE}
@@ -35,9 +32,17 @@
     ENABLED_SERVICES+=,g-api
 
     # Neutron
-    ENABLED_SERVICES+=,neutron-api,neutron-agent,neutron-dhcp,neutron-l3,neutron-trunk
+    enable_plugin neutron https://github.com/openstack/neutron stable/${OPENSTACK_RELEASE}
+    ENABLED_SERVICES+=,q-svc,neutron-trunk,ovn-controller,ovs-vswitchd,ovn-northd,ovsdb-server,q-ovn-metadata-agent
+    
+    DISABLED_SERVICES=q-agt,q-dhcp,q-l3,q-meta,q-metering
+    PUBLIC_BRIDGE_MTU=${MTU}
+    ENABLE_CHASSIS_AS_GW="True"
+    OVN_DBS_LOG_LEVEL="dbg"
+    Q_ML2_PLUGIN_MECHANISM_DRIVERS="ovn,logger"
+    OVN_L3_CREATE_PUBLIC_NETWORK="True"
+    Q_AGENT="ovn"
 
-    ENABLED_SERVICES+=,neutron-metadata-agent,neutron-qos
     # Octavia
     ENABLED_SERVICES+=,octavia,o-api,o-cw,o-hm,o-hk,o-da
 
@@ -50,6 +55,7 @@
 
     # Additional services
     ENABLED_SERVICES+=${OPENSTACK_ADDITIONAL_SERVICES}
+    DISABLED_SERVICES+=${OPENSTACK_DISABLED_SERVICES}
 
     # Don't download default images, just our test images
     DOWNLOAD_DEFAULT_IMAGES=False
@@ -63,8 +69,9 @@
     IMAGE_URLS="https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/amphora/2022-12-05/amphora-x64-haproxy.qcow2,"
     IMAGE_URLS+="https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/cirros/2022-12-05/cirros-0.6.1-x86_64-disk.img,"
     IMAGE_URLS+="https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/ubuntu/2023-09-29/ubuntu-2204-kube-v1.27.2.img,"
-    IMAGE_URLS+="https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/ubuntu/2023-09-29/ubuntu-2204-kube-v1.28.2.img,"
-    IMAGE_URLS+="https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/flatcar/flatcar-stable-3602.2.0-kube-v1.28.2.img"
+    IMAGE_URLS+="https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/ubuntu/2024-01-10/ubuntu-2204-kube-v1.28.5.img,"
+    IMAGE_URLS+="https://storage.googleapis.com/artifacts.k8s-staging-capi-openstack.appspot.com/test/flatcar/flatcar-stable-3815.2.0-kube-v1.28.5.img,"
+    IMAGE_URLS+="https://stable.release.flatcar-linux.net/amd64-usr/current/flatcar_production_openstack_image.img"
 
     [[post-config|$NOVA_CONF]]
     [DEFAULT]
@@ -86,13 +93,18 @@
     [DEFAULT]
     storage_availability_zone = ${PRIMARY_AZ}
 
-    [[post-config|/$NEUTRON_CORE_PLUGIN_CONF]]
-    [ml2]
-    path_mtu = ${MTU}
-
     [[post-config|$NEUTRON_CONF]]
     [DEFAULT]
+    global_physnet_mtu = ${MTU}
     service_plugins = trunk,router
+
+    # The following are required for OVN to set default DNS when a subnet is
+    # created without specifying DNS servers.
+    # Not specifying these will result in the default DNS servers being set to
+    # 127.0.0.53 which might be problematic in some environments.
+    [[post-config|/$Q_PLUGIN_CONF_FILE]]
+    [ovn]
+    dns_servers = ${OPENSTACK_DNS_NAMESERVERS}
 - path: /tmp/register-worker.sh
   permissions: "0755"
   content: |
@@ -150,13 +162,23 @@
         openstack aggregate add host "$aggregateid" "$host"
     done
 
+    # Create the volume type
+    VOLUME_TYPE_NAME="test-volume-type"
+    if openstack volume type create --description "Test volume type" --public "${VOLUME_TYPE_NAME}" &> /dev/null; then
+        echo "Volume type '${VOLUME_TYPE_NAME}' created successfully."
+    else
+        echo "Error: Failed to create volume type '${VOLUME_TYPE_NAME}'."
+    fi
+
     # the flavors are created in a way that we can execute at least 2 e2e tests in parallel (overall we have 32 vCPUs)
     openstack flavor delete m1.tiny
     openstack flavor create --ram 512 --disk 1 --ephemeral 1 --vcpus 1 --public --id 1 m1.tiny --property hw_rng:allowed='True'
     openstack flavor delete m1.small
     openstack flavor create --ram 4192 --disk 20 --ephemeral 5 --vcpus 2 --public --id 2 m1.small --property hw_rng:allowed='True'
     openstack flavor delete m1.medium
-    openstack flavor create --ram 6144 --disk 20 --ephemeral 5 --vcpus 4 --public --id 3 m1.medium --property hw_rng:allowed='True'
+    openstack flavor create --ram 6144 --disk 20 --ephemeral 5 --vcpus 2 --public --id 3 m1.medium --property hw_rng:allowed='True'
+    # Create an additional flavor for the e2e tests that will be used by the e2e bastion tests
+    openstack flavor create --ram 512 --disk 1 --ephemeral 1 --vcpus 1 --public --id 10 m1.tiny.alt --property hw_rng:allowed='True'
 
     # Adjust the CPU quota
     openstack quota set --cores 32 demo
