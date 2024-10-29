@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2" //nolint:revive
+	. "github.com/onsi/gomega"    //nolint:revive
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1 "github.com/openshift/api/machine/v1beta1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
