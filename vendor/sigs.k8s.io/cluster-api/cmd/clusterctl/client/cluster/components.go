@@ -23,11 +23,14 @@ import (
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -66,6 +69,9 @@ type ComponentsClient interface {
 	// DeleteWebhookNamespace deletes the core provider webhook namespace (eg. capi-webhook-system).
 	// This is required when upgrading to v1alpha4 where webhooks are included in the controller itself.
 	DeleteWebhookNamespace(ctx context.Context) error
+
+	// ValidateNoObjectsExist checks if custom resources of the custom resource definitions exist and returns an error if so.
+	ValidateNoObjectsExist(ctx context.Context, provider clusterctlv1.Provider) error
 }
 
 // providerComponents implements ComponentsClient.
@@ -92,7 +98,7 @@ func (p *providerComponents) Create(ctx context.Context, objs []unstructured.Uns
 
 func (p *providerComponents) createObj(ctx context.Context, obj unstructured.Unstructured) error {
 	log := logf.Log
-	c, err := p.proxy.NewClient()
+	c, err := p.proxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -130,7 +136,7 @@ func (p *providerComponents) createObj(ctx context.Context, obj unstructured.Uns
 
 func (p *providerComponents) Delete(ctx context.Context, options DeleteOptions) error {
 	log := logf.Log
-	log.Info("Deleting", "Provider", options.Provider.Name, "Version", options.Provider.Version, "Namespace", options.Provider.Namespace)
+	log.Info("Deleting", "Provider", klog.KObj(&options.Provider), "providerVersion", options.Provider.Version)
 
 	// Fetch all the components belonging to a provider.
 	// We want that the delete operation is able to clean-up everything.
@@ -199,7 +205,7 @@ func (p *providerComponents) Delete(ctx context.Context, options DeleteOptions) 
 	}
 
 	// Delete all the provider components.
-	cs, err := p.proxy.NewClient()
+	cs, err := p.proxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -241,7 +247,7 @@ func (p *providerComponents) DeleteWebhookNamespace(ctx context.Context) error {
 	log := logf.Log
 	log.V(5).Info("Deleting", "namespace", webhookNamespaceName)
 
-	c, err := p.proxy.NewClient()
+	c, err := p.proxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -252,6 +258,58 @@ func (p *providerComponents) DeleteWebhookNamespace(ctx context.Context) error {
 			return nil
 		}
 		return errors.Wrapf(err, "failed to delete namespace %s", webhookNamespaceName)
+	}
+
+	return nil
+}
+
+func (p *providerComponents) ValidateNoObjectsExist(ctx context.Context, provider clusterctlv1.Provider) error {
+	log := logf.Log
+	log.Info("Checking for CRs", "Provider", klog.KObj(&provider), "providerVersion", provider.Version)
+
+	proxyClient, err := p.proxy.NewClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Fetch all the components belonging to a provider.
+	// We want that the delete operation is able to clean-up everything.
+	labels := map[string]string{
+		clusterctlv1.ClusterctlLabel: "",
+		clusterv1.ProviderNameLabel:  provider.ManifestLabel(),
+	}
+
+	customResources := &apiextensionsv1.CustomResourceDefinitionList{}
+	if err := proxyClient.List(ctx, customResources, client.MatchingLabels(labels)); err != nil {
+		return err
+	}
+
+	// Filter the resources according to the delete options
+	crsHavingObjects := []string{}
+	for _, crd := range customResources.Items {
+		storageVersion, err := storageVersionForCRD(&crd)
+		if err != nil {
+			return err
+		}
+
+		list := &unstructured.UnstructuredList{}
+		list.SetGroupVersionKind(schema.GroupVersionKind{
+			Group:   crd.Spec.Group,
+			Version: storageVersion,
+			Kind:    crd.Spec.Names.ListKind,
+		})
+
+		if err := proxyClient.List(ctx, list); err != nil {
+			return err
+		}
+
+		if len(list.Items) > 0 {
+			crsHavingObjects = append(crsHavingObjects, crd.Kind)
+		}
+	}
+
+	if len(crsHavingObjects) > 0 {
+		return fmt.Errorf("found existing objects for provider CRDs %q: [%s]. Please delete these objects first before running clusterctl delete with --include-crd", provider.GetName(), strings.Join(crsHavingObjects, ", "))
 	}
 
 	return nil

@@ -26,7 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/utils/pointer"
+	"k8s.io/klog/v2"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -377,12 +378,12 @@ func (u *providerUpgrader) doUpgrade(ctx context.Context, upgradePlan *UpgradePl
 			return err
 		}
 
-		c, err := u.proxy.NewClient()
+		c, err := u.proxy.NewClient(ctx)
 		if err != nil {
 			return err
 		}
 
-		if err := newCRDMigrator(c).Run(ctx, components.Objs()); err != nil {
+		if err := NewCRDMigrator(c).Run(ctx, components.Objs()); err != nil {
 			return err
 		}
 	}
@@ -452,9 +453,9 @@ func (u *providerUpgrader) doUpgrade(ctx context.Context, upgradePlan *UpgradePl
 
 func (u *providerUpgrader) scaleDownProvider(ctx context.Context, provider clusterctlv1.Provider) error {
 	log := logf.Log
-	log.Info("Scaling down", "Provider", provider.Name, "Version", provider.Version, "Namespace", provider.Namespace)
+	log.Info("Scaling down", "Provider", klog.KObj(&provider), "providerVersion", &provider.Version)
 
-	cs, err := u.proxy.NewClient()
+	cs, err := u.proxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -473,7 +474,7 @@ func (u *providerUpgrader) scaleDownProvider(ctx context.Context, provider clust
 
 	// Scale down provider Deployments.
 	for _, deployment := range deploymentList.Items {
-		log.V(5).Info("Scaling down", "Deployment", deployment.Name, "Namespace", deployment.Namespace)
+		log.V(5).Info("Scaling down", "Deployment", klog.KObj(&deployment))
 		if err := scaleDownDeployment(ctx, cs, deployment); err != nil {
 			return err
 		}
@@ -496,7 +497,7 @@ func scaleDownDeployment(ctx context.Context, c client.Client, deploy appsv1.Dep
 		}
 
 		// Scale down.
-		deployment.Spec.Replicas = pointer.Int32(0)
+		deployment.Spec.Replicas = ptr.To[int32](0)
 		if err := c.Update(ctx, deployment); err != nil {
 			return errors.Wrapf(err, "failed to update Deployment/%s", deploy.GetName())
 		}

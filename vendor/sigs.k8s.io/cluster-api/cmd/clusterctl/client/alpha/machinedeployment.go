@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -38,7 +39,7 @@ import (
 // getMachineDeployment retrieves the MachineDeployment object corresponding to the name and namespace specified.
 func getMachineDeployment(ctx context.Context, proxy cluster.Proxy, name, namespace string) (*clusterv1.MachineDeployment, error) {
 	mdObj := &clusterv1.MachineDeployment{}
-	c, err := proxy.NewClient()
+	c, err := proxy.NewClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +62,7 @@ func setRolloutAfterOnMachineDeployment(ctx context.Context, proxy cluster.Proxy
 
 // patchMachineDeployment applies a patch to a machinedeployment.
 func patchMachineDeployment(ctx context.Context, proxy cluster.Proxy, name, namespace string, patch client.Patch) error {
-	cFrom, err := proxy.NewClient()
+	cFrom, err := proxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -121,7 +122,7 @@ func findMachineDeploymentRevision(toRevision int64, allMSs []*clusterv1.Machine
 // getMachineSetsForDeployment returns a list of MachineSets associated with a MachineDeployment.
 func getMachineSetsForDeployment(ctx context.Context, proxy cluster.Proxy, md *clusterv1.MachineDeployment) ([]*clusterv1.MachineSet, error) {
 	log := logf.Log
-	c, err := proxy.NewClient()
+	c, err := proxy.NewClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -134,26 +135,27 @@ func getMachineSetsForDeployment(ctx context.Context, proxy cluster.Proxy, md *c
 	filtered := make([]*clusterv1.MachineSet, 0, len(machineSets.Items))
 	for idx := range machineSets.Items {
 		ms := &machineSets.Items[idx]
+		log := log.WithValues("MachineSet", klog.KObj(ms))
 
 		// Skip this MachineSet if its controller ref is not pointing to this MachineDeployment
 		if !metav1.IsControlledBy(ms, md) {
-			log.V(5).Info("Skipping MachineSet, controller ref does not match MachineDeployment", "machineset", ms.Name)
+			log.V(5).Info("Skipping MachineSet, controller ref does not match MachineDeployment")
 			continue
 		}
 
 		selector, err := metav1.LabelSelectorAsSelector(&md.Spec.Selector)
 		if err != nil {
-			log.V(5).Info("Skipping MachineSet, failed to get label selector from spec selector", "machineset", ms.Name)
+			log.V(5).Info("Skipping MachineSet, failed to get label selector from spec selector")
 			continue
 		}
 		// If a MachineDeployment with a nil or empty selector creeps in, it should match nothing, not everything.
 		if selector.Empty() {
-			log.V(5).Info("Skipping MachineSet as the selector is empty", "machineset", ms.Name)
+			log.V(5).Info("Skipping MachineSet as the selector is empty")
 			continue
 		}
 		// Skip this MachineSet if selector does not match
 		if !selector.Matches(labels.Set(ms.Labels)) {
-			log.V(5).Info("Skipping MachineSet, label mismatch", "machineset", ms.Name)
+			log.V(5).Info("Skipping MachineSet, label mismatch")
 			continue
 		}
 		filtered = append(filtered, ms)

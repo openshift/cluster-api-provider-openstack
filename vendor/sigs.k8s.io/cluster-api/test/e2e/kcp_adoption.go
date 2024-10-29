@@ -29,7 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -66,6 +66,10 @@ type KCPAdoptionSpecInput struct {
 	// resources must have the kcp-adoption.step2: "" applied to them.
 	// If not specified, "kcp-adoption" is used.
 	Flavor *string
+
+	// Allows to inject a function to be run after test namespace is created.
+	// If not specified, this is a no-op.
+	PostNamespaceCreated func(managementClusterProxy framework.ClusterProxy, workloadClusterNamespace string)
 }
 
 type ClusterProxy interface {
@@ -82,7 +86,7 @@ func KCPAdoptionSpec(ctx context.Context, inputGetter func() KCPAdoptionSpecInpu
 		namespace     *corev1.Namespace
 		cancelWatches context.CancelFunc
 		cluster       *clusterv1.Cluster
-		replicas      = pointer.Int64(1)
+		replicas      = ptr.To[int64](1)
 	)
 
 	SetDefaultEventuallyTimeout(15 * time.Minute)
@@ -98,7 +102,7 @@ func KCPAdoptionSpec(ctx context.Context, inputGetter func() KCPAdoptionSpecInpu
 		Expect(input.E2EConfig.Variables).To(HaveKey(KubernetesVersion))
 
 		// Setup a Namespace where to host objects for this spec and create a watcher for the namespace events.
-		namespace, cancelWatches = setupSpecNamespace(ctx, specName, input.BootstrapClusterProxy, input.ArtifactFolder)
+		namespace, cancelWatches = framework.SetupSpecNamespace(ctx, specName, input.BootstrapClusterProxy, input.ArtifactFolder, input.PostNamespaceCreated)
 	})
 
 	It("Should adopt up-to-date control plane Machines without modification", func() {
@@ -113,28 +117,34 @@ func KCPAdoptionSpec(ctx context.Context, inputGetter func() KCPAdoptionSpecInpu
 		if input.InfrastructureProvider != nil {
 			infrastructureProvider = *input.InfrastructureProvider
 		}
-
+		must := func(r *labels.Requirement, err error) labels.Requirement {
+			if err != nil {
+				panic(err)
+			}
+			return *r
+		}
 		workloadClusterTemplate := clusterctl.ConfigCluster(ctx, clusterctl.ConfigClusterInput{
 			// pass reference to the management cluster hosting this test
 			KubeconfigPath: input.BootstrapClusterProxy.GetKubeconfigPath(),
 			// pass the clusterctl config file that points to the local provider repository created for this test,
 			ClusterctlConfigPath: input.ClusterctlConfigPath,
 			// select template
-			Flavor: pointer.StringDeref(input.Flavor, "kcp-adoption"),
+			Flavor: ptr.Deref(input.Flavor, "kcp-adoption"),
 			// define template variables
 			Namespace:                namespace.Name,
 			ClusterName:              clusterName,
 			KubernetesVersion:        input.E2EConfig.GetVariable(KubernetesVersion),
 			InfrastructureProvider:   infrastructureProvider,
 			ControlPlaneMachineCount: replicas,
-			WorkerMachineCount:       pointer.Int64(0),
+			WorkerMachineCount:       ptr.To[int64](0),
 			// setup clusterctl logs folder
 			LogFolder: filepath.Join(input.ArtifactFolder, "clusters", input.BootstrapClusterProxy.GetName()),
 		})
 		Expect(workloadClusterTemplate).ToNot(BeNil(), "Failed to get the cluster template")
 
 		By("Applying the cluster template yaml to the cluster with the 'initial' selector")
-		Expect(input.BootstrapClusterProxy.Apply(ctx, workloadClusterTemplate, "--selector", "kcp-adoption.step1")).ShouldNot(HaveOccurred())
+		selector := labels.NewSelector().Add(must(labels.NewRequirement("kcp-adoption.step1", selection.Exists, nil)))
+		Expect(input.BootstrapClusterProxy.CreateOrUpdate(ctx, workloadClusterTemplate, framework.WithLabelSelector(selector))).ShouldNot(HaveOccurred())
 
 		cluster = framework.DiscoveryAndWaitForCluster(ctx, framework.DiscoveryAndWaitForClusterInput{
 			Getter:    client,
@@ -155,7 +165,8 @@ func KCPAdoptionSpec(ctx context.Context, inputGetter func() KCPAdoptionSpecInpu
 		}, WaitForControlPlaneIntervals...)
 
 		By("Applying the cluster template yaml to the cluster with the 'kcp' selector")
-		Expect(input.BootstrapClusterProxy.Apply(ctx, workloadClusterTemplate, "--selector", "kcp-adoption.step2")).ShouldNot(HaveOccurred())
+		selector = labels.NewSelector().Add(must(labels.NewRequirement("kcp-adoption.step2", selection.Exists, nil)))
+		Expect(input.BootstrapClusterProxy.CreateOrUpdate(ctx, workloadClusterTemplate, framework.WithLabelSelector(selector))).ShouldNot(HaveOccurred())
 
 		var controlPlane *controlplanev1.KubeadmControlPlane
 		Eventually(func() *controlplanev1.KubeadmControlPlane {
@@ -173,12 +184,6 @@ func KCPAdoptionSpec(ctx context.Context, inputGetter func() KCPAdoptionSpecInpu
 		})
 
 		By("Taking stable ownership of the Machines")
-		must := func(r *labels.Requirement, err error) labels.Requirement {
-			if err != nil {
-				panic(err)
-			}
-			return *r
-		}
 		machines := clusterv1.MachineList{}
 		Expect(client.List(ctx, &machines,
 			ctrlclient.InNamespace(namespace.Name),
@@ -190,7 +195,6 @@ func KCPAdoptionSpec(ctx context.Context, inputGetter func() KCPAdoptionSpecInpu
 		)).To(Succeed())
 
 		for _, m := range machines.Items {
-			m := m
 			Expect(&m).To(HaveControllerRef(framework.ObjectToKind(controlPlane), controlPlane))
 			// TODO there is a missing unit test here
 			Expect(m.CreationTimestamp.Time).To(BeTemporally("<", controlPlane.CreationTimestamp.Time),
@@ -226,7 +230,6 @@ func KCPAdoptionSpec(ctx context.Context, inputGetter func() KCPAdoptionSpecInpu
 		}
 
 		for _, s := range secrets.Items {
-			s := s
 			// We don't check the data, and removing it from the object makes assertions much easier to read
 			s.Data = nil
 
@@ -249,6 +252,6 @@ func KCPAdoptionSpec(ctx context.Context, inputGetter func() KCPAdoptionSpecInpu
 
 	AfterEach(func() {
 		// Dumps all the resources in the spec namespace, then cleanups the cluster object and the spec namespace itself.
-		dumpSpecResourcesAndCleanup(ctx, specName, input.BootstrapClusterProxy, input.ArtifactFolder, namespace, cancelWatches, cluster, input.E2EConfig.GetIntervals, input.SkipCleanup)
+		framework.DumpSpecResourcesAndCleanup(ctx, specName, input.BootstrapClusterProxy, input.ArtifactFolder, namespace, cancelWatches, cluster, input.E2EConfig.GetIntervals, input.SkipCleanup)
 	})
 }

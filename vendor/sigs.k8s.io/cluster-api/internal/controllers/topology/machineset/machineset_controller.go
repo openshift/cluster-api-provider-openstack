@@ -18,6 +18,7 @@ package machineset
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,14 +27,17 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	tlog "sigs.k8s.io/cluster-api/internal/log"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/labels"
 	clog "sigs.k8s.io/cluster-api/util/log"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
@@ -42,7 +46,7 @@ import (
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io;bootstrap.cluster.x-k8s.io,resources=*,verbs=delete
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machinedeployments,verbs=get;list;watch
-// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machinesets;machinesets/finalizers,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machinesets,verbs=get;list;watch;update;patch
 
 // Reconciler deletes referenced templates during deletion of topology-owned MachineSets.
 // The templates are only deleted, if they are not used in other MachineDeployments or MachineSets which are not in deleting state,
@@ -57,14 +61,32 @@ type Reconciler struct {
 }
 
 func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
-	err := ctrl.NewControllerManagedBy(mgr).
-		For(&clusterv1.MachineSet{}).
+	clusterToMachineSets, err := util.ClusterToTypedObjectsMapper(mgr.GetClient(), &clusterv1.MachineSetList{}, mgr.GetScheme())
+	if err != nil {
+		return err
+	}
+
+	err = ctrl.NewControllerManagedBy(mgr).
+		For(&clusterv1.MachineSet{},
+			builder.WithPredicates(
+				predicates.All(ctrl.LoggerFrom(ctx),
+					predicates.ResourceIsTopologyOwned(ctrl.LoggerFrom(ctx)),
+					predicates.ResourceNotPaused(ctrl.LoggerFrom(ctx))),
+			),
+		).
 		Named("topology/machineset").
 		WithOptions(options).
-		WithEventFilter(predicates.All(ctrl.LoggerFrom(ctx),
-			predicates.ResourceNotPausedAndHasFilterLabel(ctrl.LoggerFrom(ctx), r.WatchFilterValue),
-			predicates.ResourceIsTopologyOwned(ctrl.LoggerFrom(ctx)),
-		)).
+		WithEventFilter(predicates.ResourceHasFilterLabel(ctrl.LoggerFrom(ctx), r.WatchFilterValue)).
+		Watches(
+			&clusterv1.Cluster{},
+			handler.EnqueueRequestsFromMapFunc(clusterToMachineSets),
+			builder.WithPredicates(
+				predicates.All(ctrl.LoggerFrom(ctx),
+					predicates.ClusterUnpaused(ctrl.LoggerFrom(ctx)),
+					predicates.ClusterHasTopology(ctrl.LoggerFrom(ctx)),
+				),
+			),
+		).
 		Complete(r)
 	if err != nil {
 		return errors.Wrap(err, "failed setting up with a controller manager")
@@ -120,14 +142,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Re
 		return ctrl.Result{}, nil
 	}
 
+	// Return early if the MachineSet is not topology owned.
+	if !labels.IsTopologyOwned(ms) {
+		log.Info(fmt.Sprintf("Reconciliation is skipped because the MachineSet does not have the %q label", clusterv1.ClusterTopologyOwnedLabel))
+		return ctrl.Result{}, nil
+	}
+
 	// Create a patch helper to add or remove the finalizer from the MachineSet.
 	patchHelper, err := patch.NewHelper(ms, r.Client)
 	if err != nil {
-		return ctrl.Result{}, errors.Wrapf(err, "failed to create patch helper for %s", tlog.KObj{Obj: ms})
+		return ctrl.Result{}, err
 	}
 	defer func() {
 		if err := patchHelper.Patch(ctx, ms); err != nil {
-			reterr = kerrors.NewAggregate([]error{reterr, errors.Wrapf(err, "failed to patch %s", tlog.KObj{Obj: ms})})
+			reterr = kerrors.NewAggregate([]error{reterr, err})
 		}
 	}()
 

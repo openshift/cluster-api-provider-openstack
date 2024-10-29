@@ -280,7 +280,7 @@ func (o *objectMover) checkProvisioningCompleted(ctx context.Context, graph *obj
 
 // getClusterObj retrieves the clusterObj corresponding to a node with type Cluster.
 func getClusterObj(ctx context.Context, proxy Proxy, cluster *node, clusterObj *clusterv1.Cluster) error {
-	c, err := proxy.NewClient()
+	c, err := proxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -291,14 +291,14 @@ func getClusterObj(ctx context.Context, proxy Proxy, cluster *node, clusterObj *
 
 	if err := c.Get(ctx, clusterObjKey, clusterObj); err != nil {
 		return errors.Wrapf(err, "error reading Cluster %s/%s",
-			clusterObj.GetNamespace(), clusterObj.GetName())
+			cluster.identity.Namespace, cluster.identity.Name)
 	}
 	return nil
 }
 
 // getMachineObj retrieves the machineObj corresponding to a node with type Machine.
 func getMachineObj(ctx context.Context, proxy Proxy, machine *node, machineObj *clusterv1.Machine) error {
-	c, err := proxy.NewClient()
+	c, err := proxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -361,7 +361,7 @@ func (o *objectMover) move(ctx context.Context, graph *objectGraph, toProxy Prox
 
 	// Create all objects group by group, ensuring all the ownerReferences are re-created.
 	log.Info("Creating objects in the target cluster")
-	for groupIndex := 0; groupIndex < len(moveSequence.groups); groupIndex++ {
+	for groupIndex := range len(moveSequence.groups) {
 		if err := o.createGroup(ctx, moveSequence.getGroup(groupIndex), toProxy, mutators...); err != nil {
 			return err
 		}
@@ -419,7 +419,7 @@ func (o *objectMover) toDirectory(ctx context.Context, graph *objectGraph, direc
 
 	// Save all objects group by group
 	log.Info(fmt.Sprintf("Saving files to %s", directory))
-	for groupIndex := 0; groupIndex < len(moveSequence.groups); groupIndex++ {
+	for groupIndex := range len(moveSequence.groups) {
 		if err := o.backupGroup(ctx, moveSequence.getGroup(groupIndex), directory); err != nil {
 			return err
 		}
@@ -459,7 +459,7 @@ func (o *objectMover) fromDirectory(ctx context.Context, graph *objectGraph, toP
 
 	// Create all objects group by group, ensuring all the ownerReferences are re-created.
 	log.Info("Restoring objects into the target cluster")
-	for groupIndex := 0; groupIndex < len(moveSequence.groups); groupIndex++ {
+	for groupIndex := range len(moveSequence.groups) {
 		if err := o.restoreGroup(ctx, moveSequence.getGroup(groupIndex), toProxy); err != nil {
 			return err
 		}
@@ -617,7 +617,7 @@ func waitReadyForMove(ctx context.Context, proxy Proxy, nodes []*node, dryRun bo
 
 	log := logf.Log
 
-	c, err := proxy.NewClient()
+	c, err := proxy.NewClient(ctx)
 	if err != nil {
 		return errors.Wrap(err, "error creating client")
 	}
@@ -672,7 +672,7 @@ func waitReadyForMove(ctx context.Context, proxy Proxy, nodes []*node, dryRun bo
 
 // patchCluster applies a patch to a node referring to a Cluster object.
 func patchCluster(ctx context.Context, proxy Proxy, n *node, patch client.Patch, mutators ...ResourceMutatorFunc) error {
-	cFrom, err := proxy.NewClient()
+	cFrom, err := proxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -707,7 +707,7 @@ func patchCluster(ctx context.Context, proxy Proxy, n *node, patch client.Patch,
 }
 
 func pauseClusterClass(ctx context.Context, proxy Proxy, n *node, pause bool, mutators ...ResourceMutatorFunc) error {
-	cFrom, err := proxy.NewClient()
+	cFrom, err := proxy.NewClient(ctx)
 	if err != nil {
 		return errors.Wrap(err, "error creating client")
 	}
@@ -741,7 +741,7 @@ func pauseClusterClass(ctx context.Context, proxy Proxy, n *node, pause bool, mu
 
 	patchHelper, err := patch.NewHelper(clusterClass, cFrom)
 	if err != nil {
-		return errors.Wrapf(err, "error creating patcher for ClusterClass %s/%s", n.identity.Namespace, n.identity.Name)
+		return err
 	}
 
 	// Update the annotation to the desired state
@@ -759,11 +759,8 @@ func pauseClusterClass(ctx context.Context, proxy Proxy, n *node, pause bool, mu
 
 	// Update the ClusterClass with the new annotations.
 	clusterClass.SetAnnotations(ccAnnotations)
-	if err := patchHelper.Patch(ctx, clusterClass); err != nil {
-		return errors.Wrapf(err, "error patching ClusterClass %s/%s", n.identity.Namespace, n.identity.Name)
-	}
 
-	return nil
+	return patchHelper.Patch(ctx, clusterClass)
 }
 
 // ensureNamespaces ensures all the expected target namespaces are in place before creating objects.
@@ -802,7 +799,7 @@ func (o *objectMover) ensureNamespaces(ctx context.Context, graph *objectGraph, 
 func (o *objectMover) ensureNamespace(ctx context.Context, toProxy Proxy, namespace string) error {
 	log := logf.Log
 
-	cs, err := toProxy.NewClient()
+	cs, err := toProxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -940,7 +937,7 @@ func (o *objectMover) createTargetObject(ctx context.Context, nodeToCreate *node
 		return nil
 	}
 
-	cFrom, err := o.fromProxy.NewClient()
+	cFrom, err := o.fromProxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -949,12 +946,10 @@ func (o *objectMover) createTargetObject(ctx context.Context, nodeToCreate *node
 	obj := &unstructured.Unstructured{}
 	obj.SetAPIVersion(nodeToCreate.identity.APIVersion)
 	obj.SetKind(nodeToCreate.identity.Kind)
-	objKey := client.ObjectKey{
-		Namespace: nodeToCreate.identity.Namespace,
-		Name:      nodeToCreate.identity.Name,
-	}
+	obj.SetName(nodeToCreate.identity.Name)
+	obj.SetNamespace(nodeToCreate.identity.Namespace)
 
-	if err := cFrom.Get(ctx, objKey, obj); err != nil {
+	if err := cFrom.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
 		return errors.Wrapf(err, "error reading %q %s/%s",
 			obj.GroupVersionKind(), obj.GetNamespace(), obj.GetName())
 	}
@@ -970,12 +965,12 @@ func (o *objectMover) createTargetObject(ctx context.Context, nodeToCreate *node
 
 	// FIXME Workaround for https://github.com/kubernetes/kubernetes/issues/32220. Remove when the issue is fixed.
 	// If the resource already exists, the API server ordinarily returns an AlreadyExists error. Due to the above issue, if the resource has a non-empty metadata.generateName field, the API server returns a ServerTimeoutError. To ensure that the API server returns an AlreadyExists error, we set the metadata.generateName field to an empty string.
-	if len(obj.GetName()) > 0 && len(obj.GetGenerateName()) > 0 {
+	if obj.GetName() != "" && obj.GetGenerateName() != "" {
 		obj.SetGenerateName("")
 	}
 
 	// Creates the targetObj into the target management cluster.
-	cTo, err := toProxy.NewClient()
+	cTo, err := toProxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1009,7 +1004,7 @@ func (o *objectMover) createTargetObject(ctx context.Context, nodeToCreate *node
 			existingTargetObj := &unstructured.Unstructured{}
 			existingTargetObj.SetAPIVersion(obj.GetAPIVersion())
 			existingTargetObj.SetKind(obj.GetKind())
-			if err := cTo.Get(ctx, objKey, existingTargetObj); err != nil {
+			if err := cTo.Get(ctx, client.ObjectKeyFromObject(obj), existingTargetObj); err != nil {
 				return errors.Wrapf(err, "error reading resource for %q %s/%s",
 					existingTargetObj.GroupVersionKind(), existingTargetObj.GetNamespace(), existingTargetObj.GetName())
 			}
@@ -1037,7 +1032,7 @@ func (o *objectMover) backupTargetObject(ctx context.Context, nodeToCreate *node
 	log := logf.Log
 	log.V(1).Info("Saving", nodeToCreate.identity.Kind, nodeToCreate.identity.Name, "Namespace", nodeToCreate.identity.Namespace)
 
-	cFrom, err := o.fromProxy.NewClient()
+	cFrom, err := o.fromProxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1089,7 +1084,7 @@ func (o *objectMover) restoreTargetObject(ctx context.Context, nodeToCreate *nod
 	log.V(1).Info("Restoring", nodeToCreate.identity.Kind, nodeToCreate.identity.Name, "Namespace", nodeToCreate.identity.Namespace)
 
 	// Creates the targetObj into the target management cluster.
-	cTo, err := toProxy.NewClient()
+	cTo, err := toProxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1206,7 +1201,7 @@ func (o *objectMover) deleteSourceObject(ctx context.Context, nodeToDelete *node
 		return nil
 	}
 
-	cFrom, err := o.fromProxy.NewClient()
+	cFrom, err := o.fromProxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -1318,6 +1313,9 @@ func patchTopologyManagedFields(ctx context.Context, oldManagedFields []metav1.M
 	return nil
 }
 
+// applyMutators applies mutators to an object.
+// Note: TypeMeta must always be set in the object because otherwise after conversion the
+// resulting Unstructured would have an empty GVK.
 func applyMutators(object client.Object, mutators ...ResourceMutatorFunc) (*unstructured.Unstructured, error) {
 	if object == nil {
 		return nil, nil
@@ -1329,7 +1327,13 @@ func applyMutators(object client.Object, mutators ...ResourceMutatorFunc) (*unst
 	}
 	u.SetUnstructuredContent(to)
 	for _, mutator := range mutators {
-		if err := mutator(u); err != nil {
+		var err error
+		if mutator != nil {
+			err = mutator(u)
+		} else {
+			err = errors.New("mutator is nil")
+		}
+		if err != nil {
 			return nil, errors.Wrapf(err, "error applying resource mutator to %q %s/%s",
 				u.GroupVersionKind(), object.GetNamespace(), object.GetName())
 		}

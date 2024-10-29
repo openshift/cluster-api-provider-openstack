@@ -148,7 +148,7 @@ func (n *node) captureAdditionalInformation(obj *unstructured.Unstructured) erro
 			if n.additionalInfo == nil {
 				n.additionalInfo = map[string]interface{}{}
 			}
-			n.additionalInfo[clusterTopologyNameKey] = cluster.Spec.Topology.Class
+			n.additionalInfo[clusterTopologyNameKey] = cluster.GetClassKey().Name
 		}
 	}
 
@@ -405,7 +405,7 @@ func getKindAPIString(typeMeta metav1.TypeMeta) string {
 }
 
 func getCRDList(ctx context.Context, proxy Proxy, crdList *apiextensionsv1.CustomResourceDefinitionList) error {
-	c, err := proxy.NewClient()
+	c, err := proxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -462,7 +462,7 @@ func (o *objectGraph) Discovery(ctx context.Context, namespace string) error {
 			continue
 		}
 
-		log.V(5).Info(typeMeta.Kind, "Count", len(objList.Items))
+		log.V(5).Info(typeMeta.Kind, "count", len(objList.Items))
 		for i := range objList.Items {
 			obj := objList.Items[i]
 			if err := o.addObj(&obj); err != nil {
@@ -471,7 +471,7 @@ func (o *objectGraph) Discovery(ctx context.Context, namespace string) error {
 		}
 	}
 
-	log.V(1).Info("Total objects", "Count", len(o.uidToNode))
+	log.V(1).Info("Total objects", "count", len(o.uidToNode))
 
 	// Completes the graph by searching for soft ownership relations such as secrets linked to the cluster
 	// by a naming convention (without any explicit OwnerReference).
@@ -484,7 +484,7 @@ func (o *objectGraph) Discovery(ctx context.Context, namespace string) error {
 }
 
 func getObjList(ctx context.Context, proxy Proxy, typeMeta metav1.TypeMeta, selectors []client.ListOption, objList *unstructured.UnstructuredList) error {
-	c, err := proxy.NewClient()
+	c, err := proxy.NewClient(ctx)
 	if err != nil {
 		return err
 	}

@@ -40,9 +40,9 @@ import (
 	expv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 	runtimecatalog "sigs.k8s.io/cluster-api/exp/runtime/catalog"
 	runtimehooksv1 "sigs.k8s.io/cluster-api/exp/runtime/hooks/api/v1alpha1"
+	"sigs.k8s.io/cluster-api/exp/topology/desiredstate"
+	"sigs.k8s.io/cluster-api/exp/topology/scope"
 	"sigs.k8s.io/cluster-api/feature"
-	"sigs.k8s.io/cluster-api/internal/controllers/topology/cluster/patches"
-	"sigs.k8s.io/cluster-api/internal/controllers/topology/cluster/scope"
 	"sigs.k8s.io/cluster-api/internal/controllers/topology/cluster/structuredmerge"
 	"sigs.k8s.io/cluster-api/internal/hooks"
 	tlog "sigs.k8s.io/cluster-api/internal/log"
@@ -51,13 +51,14 @@ import (
 	"sigs.k8s.io/cluster-api/internal/webhooks"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
+	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/cluster-api/util/predicates"
 )
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io;bootstrap.cluster.x-k8s.io;controlplane.cluster.x-k8s.io,resources=*,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusterclasses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusterclasses,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machinedeployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machinepools,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=cluster.x-k8s.io,resources=machinehealthchecks,verbs=get;list;watch;create;update;patch;delete
@@ -77,15 +78,11 @@ type Reconciler struct {
 	// WatchFilterValue is the label value used to filter events prior to reconciliation.
 	WatchFilterValue string
 
-	// UnstructuredCachingClient provides a client that forces caching of unstructured objects,
-	// thus allowing to optimize reads for templates or provider specific objects in a managed topology.
-	UnstructuredCachingClient client.Client
-
 	externalTracker external.ObjectTracker
 	recorder        record.EventRecorder
 
-	// patchEngine is used to apply patches during computeDesiredState.
-	patchEngine patches.Engine
+	// desiredStateGenerator is used to generate the desired state.
+	desiredStateGenerator desiredstate.Generator
 
 	patchHelperFactory structuredmerge.PatchHelperFactoryFunc
 }
@@ -125,8 +122,8 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opt
 		Controller: c,
 		Cache:      mgr.GetCache(),
 	}
-	r.patchEngine = patches.NewEngine(r.RuntimeClient)
-	r.recorder = mgr.GetEventRecorderFor("topology/cluster")
+	r.desiredStateGenerator = desiredstate.NewGenerator(r.Client, r.Tracker, r.RuntimeClient)
+	r.recorder = mgr.GetEventRecorderFor("topology/cluster-controller")
 	if r.patchHelperFactory == nil {
 		r.patchHelperFactory = serverSideApplyPatchHelperFactory(r.Client, ssa.NewCache())
 	}
@@ -135,7 +132,7 @@ func (r *Reconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, opt
 
 // SetupForDryRun prepares the Reconciler for a dry run execution.
 func (r *Reconciler) SetupForDryRun(recorder record.EventRecorder) {
-	r.patchEngine = patches.NewEngine(r.RuntimeClient)
+	r.desiredStateGenerator = desiredstate.NewGenerator(r.Client, r.Tracker, r.RuntimeClient)
 	r.recorder = recorder
 	r.patchHelperFactory = dryRunPatchHelperFactory(r.Client)
 }
@@ -191,7 +188,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Re
 			patch.WithForceOverwriteConditions{},
 		}
 		if err := patchHelper.Patch(ctx, cluster, options...); err != nil {
-			reterr = kerrors.NewAggregate([]error{reterr, errors.Wrap(err, "failed to patch cluster")})
+			reterr = kerrors.NewAggregate([]error{reterr, err})
 			return
 		}
 	}()
@@ -209,7 +206,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Re
 		// the current cluster because of concurrent access.
 		if errors.Is(err, remote.ErrClusterLocked) {
 			log.V(5).Info("Requeuing because another worker has the lock on the ClusterCacheTracker")
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: time.Minute}, nil
 		}
 	}
 	return result, err
@@ -221,9 +218,9 @@ func (r *Reconciler) reconcile(ctx context.Context, s *scope.Scope) (ctrl.Result
 
 	// Get ClusterClass.
 	clusterClass := &clusterv1.ClusterClass{}
-	key := client.ObjectKey{Name: s.Current.Cluster.Spec.Topology.Class, Namespace: s.Current.Cluster.Namespace}
+	key := s.Current.Cluster.GetClassKey()
 	if err := r.Client.Get(ctx, key, clusterClass); err != nil {
-		return ctrl.Result{}, errors.Wrapf(err, "failed to retrieve ClusterClass %s", s.Current.Cluster.Spec.Topology.Class)
+		return ctrl.Result{}, errors.Wrapf(err, "failed to retrieve ClusterClass %s", key)
 	}
 
 	s.Blueprint.ClusterClass = clusterClass
@@ -231,14 +228,18 @@ func (r *Reconciler) reconcile(ctx context.Context, s *scope.Scope) (ctrl.Result
 	// is not up to date.
 	// Note: This doesn't require requeue as a change to ClusterClass observedGeneration will cause an additional reconcile
 	// in the Cluster.
+	if !conditions.Has(clusterClass, clusterv1.ClusterClassVariablesReconciledCondition) ||
+		conditions.IsFalse(clusterClass, clusterv1.ClusterClassVariablesReconciledCondition) {
+		return ctrl.Result{}, errors.Errorf("ClusterClass is not successfully reconciled: status of %s condition on ClusterClass must be \"True\"", clusterv1.ClusterClassVariablesReconciledCondition)
+	}
 	if clusterClass.GetGeneration() != clusterClass.Status.ObservedGeneration {
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, errors.Errorf("ClusterClass is not successfully reconciled: ClusterClass.status.observedGeneration must be %d, but is %d", clusterClass.GetGeneration(), clusterClass.Status.ObservedGeneration)
 	}
 
 	// Default and Validate the Cluster variables based on information from the ClusterClass.
 	// This step is needed as if the ClusterClass does not exist at Cluster creation some fields may not be defaulted or
 	// validated in the webhook.
-	if errs := webhooks.DefaultAndValidateVariables(s.Current.Cluster, clusterClass); len(errs) > 0 {
+	if errs := webhooks.DefaultAndValidateVariables(ctx, s.Current.Cluster, nil, clusterClass); len(errs) > 0 {
 		return ctrl.Result{}, apierrors.NewInvalid(clusterv1.GroupVersion.WithKind("Cluster").GroupKind(), s.Current.Cluster.Name, errs)
 	}
 
@@ -272,7 +273,7 @@ func (r *Reconciler) reconcile(ctx context.Context, s *scope.Scope) (ctrl.Result
 	}
 
 	// Computes the desired state of the Cluster and store it in the request scope.
-	s.Desired, err = r.computeDesiredState(ctx, s)
+	s.Desired, err = r.desiredStateGenerator.Generate(ctx, s)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "error computing the desired state of the Cluster topology")
 	}
@@ -434,7 +435,7 @@ func serverSideApplyPatchHelperFactory(c client.Client, ssaCache ssa.Cache) stru
 
 // dryRunPatchHelperFactory makes use of a two-ways patch and is used in situations where we cannot rely on managed fields.
 func dryRunPatchHelperFactory(c client.Client) structuredmerge.PatchHelperFactoryFunc {
-	return func(ctx context.Context, original, modified client.Object, opts ...structuredmerge.HelperOption) (structuredmerge.PatchHelper, error) {
+	return func(_ context.Context, original, modified client.Object, opts ...structuredmerge.HelperOption) (structuredmerge.PatchHelper, error) {
 		return structuredmerge.NewTwoWaysPatchHelper(original, modified, c, opts...)
 	}
 }
