@@ -20,19 +20,29 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/gophercloud/gophercloud/v2/openstack/identity/v3/tokens"
+	"k8s.io/apimachinery/pkg/util/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
 )
 
-// ScopeFactory is the default scope factory. It generates service clients which make OpenStack API calls against a running cloud.
-var ScopeFactory Factory = providerScopeFactory{}
+// NewFactory creates the default scope factory. It generates service clients which make OpenStack API calls against a running cloud.
+func NewFactory(maxCacheSize int) Factory {
+	var c *cache.LRUExpireCache
+	if maxCacheSize > 0 {
+		c = cache.NewLRUExpireCache(maxCacheSize)
+	}
+	return &providerScopeFactory{
+		clientCache: c,
+	}
+}
 
-// Factory instantiates a new Scope using credentials from either a cluster or a machine.
+// Factory instantiates a new Scope using credentials from an IdentityRefProvider.
 type Factory interface {
-	NewClientScopeFromMachine(ctx context.Context, ctrlClient client.Client, openStackMachine *infrav1.OpenStackMachine, defaultCACert []byte, logger logr.Logger) (Scope, error)
-	NewClientScopeFromCluster(ctx context.Context, ctrlClient client.Client, openStackCluster *infrav1.OpenStackCluster, defaultCACert []byte, logger logr.Logger) (Scope, error)
+	// NewClientScopeFromObject creates a new scope from the first object which returns an OpenStackIdentityRef
+	NewClientScopeFromObject(ctx context.Context, ctrlClient client.Client, defaultCACert []byte, logger logr.Logger, objects ...infrav1.IdentityRefProvider) (Scope, error)
 }
 
 // Scope contains arguments common to most operations.
@@ -42,6 +52,24 @@ type Scope interface {
 	NewImageClient() (clients.ImageClient, error)
 	NewNetworkClient() (clients.NetworkClient, error)
 	NewLbClient() (clients.LbClient, error)
-	Logger() logr.Logger
 	ProjectID() string
+	ExtractToken() (*tokens.Token, error)
+}
+
+// WithLogger extends Scope with a logger.
+type WithLogger struct {
+	Scope
+
+	logger logr.Logger
+}
+
+func NewWithLogger(scope Scope, logger logr.Logger) *WithLogger {
+	return &WithLogger{
+		Scope:  scope,
+		logger: logger,
+	}
+}
+
+func (s *WithLogger) Logger() logr.Logger {
+	return s.logger
 }
