@@ -1,8 +1,8 @@
 package e2e
 
 import (
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/ginkgo/v2" //nolint:revive
+	. "github.com/onsi/gomega"    //nolint:revive
 	"github.com/onsi/gomega/format"
 	configv1 "github.com/openshift/api/config/v1"
 	mapiv1alpha1 "github.com/openshift/api/machine/v1alpha1"
@@ -123,7 +123,7 @@ func createOpenStackMachineTemplate(cl client.Client, mapiProviderSpec *mapiv1al
 	// We intentionally omit ports so the machine will default its network
 	// from the OpenStackCluster created by the infracluster controller.
 	openStackMachineSpec := infrav1.OpenStackMachineSpec{
-		Flavor: mapiProviderSpec.Flavor,
+		Flavor: ptr.To(mapiProviderSpec.Flavor),
 		IdentityRef: &infrav1.OpenStackIdentityReference{
 			CloudName: infraclustercontroller.CloudName,
 			Name:      infraclustercontroller.CredentialsSecretName,
