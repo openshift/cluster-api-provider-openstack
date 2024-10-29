@@ -86,12 +86,6 @@ github.com/google/pprof/profile
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
-# github.com/gophercloud/gophercloud v1.7.0
-## explicit; go 1.14
-github.com/gophercloud/gophercloud
-github.com/gophercloud/gophercloud/openstack/networking/v2/ports
-github.com/gophercloud/gophercloud/openstack/networking/v2/subnets
-github.com/gophercloud/gophercloud/pagination
 # github.com/gophercloud/gophercloud/v2 v2.1.0
 ## explicit; go 1.22
 github.com/gophercloud/gophercloud/v2
