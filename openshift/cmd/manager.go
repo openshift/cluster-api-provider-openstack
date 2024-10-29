@@ -24,6 +24,7 @@ import (
 	mapi "github.com/openshift/api/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -42,8 +43,9 @@ import (
 )
 
 var (
-	scheme   = caposcheme.DefaultScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme            = caposcheme.DefaultScheme()
+	setupLog          = ctrl.Log.WithName("setup")
+	scopeCacheMaxSize int
 )
 
 func main() {
@@ -62,6 +64,8 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	scopeFactory := scope.NewFactory(scopeCacheMaxSize)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                  scheme,
@@ -130,7 +134,7 @@ func main() {
 	if err := (&infraclustercontroller.OpenShiftClusterReconciler{
 		Client:       mgr.GetClient(),
 		Recorder:     mgr.GetEventRecorderFor("openshiftcluster-controller"),
-		ScopeFactory: scope.ScopeFactory,
+		ScopeFactory: scopeFactory,
 	}).SetupWithManager(mgr, controller.Options{}); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenStackCluster")
 		os.Exit(1)
