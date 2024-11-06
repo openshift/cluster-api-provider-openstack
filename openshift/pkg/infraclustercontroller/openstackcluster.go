@@ -355,6 +355,10 @@ func (r *OpenShiftClusterReconciler) getDefaultSubnetFromMachines(ctx context.Co
 		return nil, fmt.Errorf("listing control plane machines: %w", err)
 	}
 
+	if len(mapiMachines.Items) == 0 {
+		return nil, fmt.Errorf("no control plane machines found")
+	}
+
 	apiServerInternalIPs := make([]net.IP, len(platformStatus.APIServerInternalIPs))
 	for i, ipStr := range platformStatus.APIServerInternalIPs {
 		apiServerInternalIPs[i] = net.ParseIP(ipStr)
