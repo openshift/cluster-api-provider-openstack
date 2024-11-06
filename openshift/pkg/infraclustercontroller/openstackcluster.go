@@ -384,6 +384,9 @@ func (r *OpenShiftClusterReconciler) getDefaultSubnetFromMachines(ctx context.Co
 		if err != nil {
 			return nil, fmt.Errorf("listing ports for instance %s: %w", instanceID, err)
 		}
+		if len(ports) == 0 {
+			return nil, fmt.Errorf("no ports found for instance %s", instanceID)
+		}
 		for _, port := range ports {
 			log := log.WithValues("port", port.ID)
 
