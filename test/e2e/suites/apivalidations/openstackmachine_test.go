@@ -27,7 +27,6 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	infrav1alpha6 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
 	infrav1alpha7 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 )
@@ -39,7 +38,8 @@ var _ = Describe("OpenStackMachine API validations", func() {
 		// Initialise a basic machine object in the correct namespace
 		machine := &infrav1.OpenStackMachine{
 			Spec: infrav1.OpenStackMachineSpec{
-				Image: infrav1.ImageParam{Filter: &infrav1.ImageFilter{Name: ptr.To("test-image")}},
+				Image:  infrav1.ImageParam{Filter: &infrav1.ImageFilter{Name: ptr.To("test-image")}},
+				Flavor: ptr.To("flavor-name"),
 			},
 		}
 		machine.Namespace = namespace.Name
@@ -51,8 +51,17 @@ var _ = Describe("OpenStackMachine API validations", func() {
 		namespace = createNamespace()
 	})
 
-	It("should allow the smallest permissible machine spec", func() {
-		Expect(k8sClient.Create(ctx, defaultMachine())).To(Succeed(), "OpenStackMachine creation should succeed")
+	It("should allow to create a machine with correct spec", func() {
+		machine := defaultMachine()
+
+		By("Creating the smallest permissible machine spec")
+		Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "OpenStackMachine creation should succeed")
+
+		machine = defaultMachine()
+		machine.Spec.IdentityRef = &infrav1.OpenStackIdentityReference{Name: "foobar", CloudName: "staging"}
+
+		By("Creating a machine with spec.identityRef")
+		Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "OpenStackMachine creation with spec.identityRef should succeed")
 	})
 
 	It("should only allow the providerID to be set once", func() {
@@ -68,6 +77,29 @@ var _ = Describe("OpenStackMachine API validations", func() {
 		By("Modifying the providerID")
 		machine.Spec.ProviderID = ptr.To("bar")
 		Expect(k8sClient.Update(ctx, machine)).NotTo(Succeed(), "Updating providerID should fail")
+	})
+
+	It("should allow the identityRef to be set several times", func() {
+		machine := defaultMachine()
+
+		By("Creating a bare machine")
+		Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "OpenStackMachine creation should succeed")
+
+		By("Setting the identityRef")
+		machine.Spec.IdentityRef = ptr.To(infrav1.OpenStackIdentityReference{Name: "foo", CloudName: "staging"})
+		Expect(k8sClient.Update(ctx, machine)).To(Succeed(), "Setting the identityRef should succeed")
+
+		By("Updating the identityRef.Name")
+		machine.Spec.IdentityRef = ptr.To(infrav1.OpenStackIdentityReference{Name: "bar", CloudName: "staging"})
+		Expect(k8sClient.Update(ctx, machine)).To(Succeed(), "Updating the identityRef.Name should succeed")
+
+		By("Updating the identityRef.CloudName")
+		machine.Spec.IdentityRef = ptr.To(infrav1.OpenStackIdentityReference{Name: "bar", CloudName: "production"})
+		Expect(k8sClient.Update(ctx, machine)).To(Succeed(), "Updating the identityRef.CloudName should succeed")
+
+		By("Clearing the identityRef")
+		machine.Spec.IdentityRef = nil
+		Expect(k8sClient.Update(ctx, machine)).To(Succeed(), "Clearing the identityRef should succeed")
 	})
 
 	It("should not allow server metadata to exceed 255 characters", func() {
@@ -101,6 +133,48 @@ var _ = Describe("OpenStackMachine API validations", func() {
 		Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "Creating a machine with max metadata key and value should succeed")
 	})
 
+	It("should allow server identityRef Region field or unset on creation", func() {
+		machine := defaultMachine()
+
+		By("Creating a machine with identityRef Region field set on creation")
+		machine.Spec.IdentityRef = &infrav1.OpenStackIdentityReference{
+			Name:      "secretName",
+			CloudName: "cloudName",
+			Region:    "regionName",
+		}
+		Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "Creating a machine with a spec.identityRef.Region field should be allowed")
+
+		By("Updating the identityRef Region field")
+		machine.Spec.IdentityRef.Region = "anotherRegionName"
+		Expect(k8sClient.Update(ctx, machine)).NotTo(Succeed(), "Updating spec.identityRef.Region field should fail")
+
+		machine = defaultMachine()
+		By("Creating a machine with identityRef Region field not set on creation")
+		machine.Spec.IdentityRef = &infrav1.OpenStackIdentityReference{
+			Name:      "secretName",
+			CloudName: "cloudName",
+		}
+		Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "Creating a machine without a spec.identityRef.Region field should be allowed")
+
+		By("Setting the identityRef Region field")
+		machine.Spec.IdentityRef.Region = "regionName"
+		Expect(k8sClient.Update(ctx, machine)).NotTo(Succeed(), "Setting spec.identityRef.Region field should fail")
+	})
+
+	Context("flavors", func() {
+		It("should require either a flavor or flavorID", func() {
+			machine := defaultMachine()
+
+			By("Creating a machine with no flavor or flavor id")
+			machine.Spec.Flavor = nil
+			Expect(k8sClient.Create(ctx, machine)).NotTo(Succeed(), "Creating a machine with no flavor name or id should fail")
+
+			By("Creating a machine with a flavor id")
+			machine.Spec.FlavorID = ptr.To("6aa02f56-c595-4d2f-9f8e-3c6296a4bed9")
+			Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "Creating a machine with a flavor id should succeed")
+		})
+	})
+
 	Context("volumes", func() {
 		It("should not allow volume with zero size", func() {
 			machine := defaultMachine()
@@ -117,6 +191,45 @@ var _ = Describe("OpenStackMachine API validations", func() {
 				},
 			}
 			Expect(k8sClient.Create(ctx, machine)).NotTo(Succeed(), "Creating a machine with a zero size additional block device should fail")
+		})
+
+		It("should allow to create machine with spec.RootVolume and non-root device name in spec.AdditionalBlockDevices", func() {
+			machine := defaultMachine()
+			machine.Spec.RootVolume = &infrav1.RootVolume{SizeGiB: 50, BlockDeviceVolume: infrav1.BlockDeviceVolume{}}
+			machine.Spec.AdditionalBlockDevices = []infrav1.AdditionalBlockDevice{
+				{Name: "user", SizeGiB: 30, Storage: infrav1.BlockDeviceStorage{}},
+			}
+
+			By("Creating a machine with spec.RootVolume and non-root device name in spec.AdditionalBlockDevices")
+			Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "OpenStackMachine creation with non-root device name in spec.AdditionalBlockDevices should succeed")
+		})
+
+		It("should not allow to create machine with spec.RootVolume and root device name in spec.AdditionalBlockDevices", func() {
+			machine := defaultMachine()
+			machine.Spec.RootVolume = &infrav1.RootVolume{SizeGiB: 50, BlockDeviceVolume: infrav1.BlockDeviceVolume{}}
+			machine.Spec.AdditionalBlockDevices = []infrav1.AdditionalBlockDevice{
+				{Name: "root", SizeGiB: 30, Storage: infrav1.BlockDeviceStorage{}},
+			}
+
+			By("Creating a machine with spec.RootVolume and root device name in spec.AdditionalBlockDevices")
+			Expect(k8sClient.Create(ctx, machine)).NotTo(Succeed(), "OpenStackMachine creation with root device name in spec.AdditionalBlockDevices should not succeed")
+		})
+
+		It("should not allow to create machine with both SecurityGroups and DisablePortSecurity", func() {
+			machine := defaultMachine()
+			machine.Spec.Ports = []infrav1.PortOpts{
+				{
+					SecurityGroups: []infrav1.SecurityGroupParam{{
+						Filter: &infrav1.SecurityGroupFilter{Name: "test-security-group"},
+					}},
+					ResolvedPortSpecFields: infrav1.ResolvedPortSpecFields{
+						DisablePortSecurity: ptr.To(true),
+					},
+				},
+			}
+
+			By("Creating a machine with both SecurityGroups and DisablePortSecurity")
+			Expect(k8sClient.Create(ctx, machine)).NotTo(Succeed(), "OpenStackMachine creation with both SecurityGroups and DisablePortSecurity should not succeed")
 		})
 
 		/* FIXME: These tests are failing
@@ -284,6 +397,158 @@ var _ = Describe("OpenStackMachine API validations", func() {
 		})
 	})
 
+	Context("schedulerHints", func() {
+		It("should allow empty schedulerHints", func() {
+			machine := defaultMachine()
+			machine.Spec.SchedulerHintAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{}
+			Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "Creating a machine with an empty SchedulerHintAdditionalProperties should succeed.")
+		})
+
+		It("should not allow item with empty name", func() {
+			machine := defaultMachine()
+			machine.Spec.SchedulerHintAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+				{
+					Name: "",
+					Value: infrav1.SchedulerHintAdditionalValue{
+						Type: infrav1.SchedulerHintTypeBool,
+						Bool: ptr.To(false),
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, machine)).NotTo(Succeed(), "Creating a machine with SchedulerHintAdditionalProperties including an item with empty name should fail.")
+		})
+
+		It("should not allow item with empty value", func() {
+			machine := defaultMachine()
+			machine.Spec.SchedulerHintAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+				{
+					Name: "test-hints",
+				},
+			}
+			Expect(k8sClient.Create(ctx, machine)).NotTo(Succeed(), "Creating a machine with SchedulerHintAdditionalProperties including an item with empty value should fail.")
+		})
+
+		It("should allow correct SchedulerHintAdditionalProperties", func() {
+			machineB := defaultMachine()
+			machineB.Spec.SchedulerHintAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+				{
+					Name: "test-hints",
+					Value: infrav1.SchedulerHintAdditionalValue{
+						Type: infrav1.SchedulerHintTypeBool,
+						Bool: ptr.To(true),
+					},
+				},
+			}
+			By("Creating SchedulerHint with bool type")
+			Expect(k8sClient.Create(ctx, machineB)).To(Succeed(), "Creating a machine with bool type scheduler hint property should succeed.")
+			machineN := defaultMachine()
+			machineN.Spec.SchedulerHintAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+				{
+					Name: "test-hints",
+					Value: infrav1.SchedulerHintAdditionalValue{
+						Type:   infrav1.SchedulerHintTypeNumber,
+						Number: ptr.To(1),
+					},
+				},
+			}
+			By("Creating SchedulerHint with number type")
+			Expect(k8sClient.Create(ctx, machineN)).To(Succeed(), "Creating a machine with number type scheduler hint property should succeed.")
+			machineS := defaultMachine()
+			machineS.Spec.SchedulerHintAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+				{
+					Name: "test-hints",
+					Value: infrav1.SchedulerHintAdditionalValue{
+						Type:   infrav1.SchedulerHintTypeString,
+						String: ptr.To("test-hint"),
+					},
+				},
+			}
+			By("Creating SchedulerHint with string type")
+			Expect(k8sClient.Create(ctx, machineS)).To(Succeed(), "Creating a machine with string type scheduler hint property should succeed.")
+		})
+
+		It("should not allow incorrect SchedulerHintAdditionalProperties with bool type", func() {
+			machineBN := defaultMachine()
+			machineBN.Spec.SchedulerHintAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+				{
+					Name: "test-hints",
+					Value: infrav1.SchedulerHintAdditionalValue{
+						Type:   infrav1.SchedulerHintTypeBool,
+						Number: ptr.To(1),
+					},
+				},
+			}
+			By("Creating SchedulerHint with bool type and number value")
+			Expect(k8sClient.Create(ctx, machineBN)).NotTo(Succeed(), "Creating a machine with bool type but number value scheduler hint property should fail.")
+			machineBS := defaultMachine()
+			machineBS.Spec.SchedulerHintAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+				{
+					Name: "test-hints",
+					Value: infrav1.SchedulerHintAdditionalValue{
+						Type:   infrav1.SchedulerHintTypeBool,
+						String: ptr.To("test-hint"),
+					},
+				},
+			}
+			By("Creating SchedulerHint with bool type and string value")
+			Expect(k8sClient.Create(ctx, machineBS)).NotTo(Succeed(), "Creating a machine with bool type but string value scheduler hint property should fail.")
+		})
+
+		It("should not allow incorrect SchedulerHintAdditionalProperties with number type", func() {
+			machineNB := defaultMachine()
+			machineNB.Spec.SchedulerHintAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+				{
+					Name: "test-hints",
+					Value: infrav1.SchedulerHintAdditionalValue{
+						Type: infrav1.SchedulerHintTypeNumber,
+						Bool: ptr.To(true),
+					},
+				},
+			}
+			By("Creating SchedulerHint with number type and bool value")
+			Expect(k8sClient.Create(ctx, machineNB)).NotTo(Succeed(), "Creating a machine with number type but bool value scheduler hint property should fail.")
+			machineNS := defaultMachine()
+			machineNS.Spec.SchedulerHintAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+				{
+					Name: "test-hints",
+					Value: infrav1.SchedulerHintAdditionalValue{
+						Type:   infrav1.SchedulerHintTypeNumber,
+						String: ptr.To("test-hint"),
+					},
+				},
+			}
+			By("Creating SchedulerHint with number type and string value")
+			Expect(k8sClient.Create(ctx, machineNS)).NotTo(Succeed(), "Creating a machine with number type but string value scheduler hint property should fail.")
+		})
+
+		It("should not allow incorrect SchedulerHintAdditionalProperties with string type", func() {
+			machineSB := defaultMachine()
+			machineSB.Spec.SchedulerHintAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+				{
+					Name: "test-hints",
+					Value: infrav1.SchedulerHintAdditionalValue{
+						Type: infrav1.SchedulerHintTypeString,
+						Bool: ptr.To(true),
+					},
+				},
+			}
+			By("Creating SchedulerHint with string type and bool value")
+			Expect(k8sClient.Create(ctx, machineSB)).NotTo(Succeed(), "Creating a machine with string type but bool value scheduler hint property should fail.")
+			machineSN := defaultMachine()
+			machineSN.Spec.SchedulerHintAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+				{
+					Name: "test-hints",
+					Value: infrav1.SchedulerHintAdditionalValue{
+						Type:   infrav1.SchedulerHintTypeString,
+						Number: ptr.To(1),
+					},
+				},
+			}
+			By("Creating SchedulerHint with string type and number value")
+			Expect(k8sClient.Create(ctx, machineSN)).NotTo(Succeed(), "Creating a machine with string type but number value scheduler hint property should fail.")
+		})
+	})
+
 	Context("v1alpha7", func() {
 		It("should downgrade cleanly from infrav1", func() {
 			infrav1Machine := &infrav1.OpenStackMachine{}
@@ -294,38 +559,14 @@ var _ = Describe("OpenStackMachine API validations", func() {
 				Name:      "test-credentials",
 			}
 			infrav1Machine.Spec.Image.ID = ptr.To("de9872ee-0c2c-44ed-9414-90163c8b0e0d")
+			infrav1Machine.Spec.Flavor = ptr.To("flavor-name")
 			Expect(createObj(infrav1Machine)).To(Succeed(), "infrav1 OpenStackMachine creation should succeed")
 
-			// Just fetching the object as v1alpha6 doesn't trigger
+			// Just fetching the object as v1alpha7 doesn't trigger
 			// validation failure, so we first fetch it and then
 			// patch the object with identical contents. The patch
 			// triggers a validation failure.
-			machine := &infrav1alpha7.OpenStackMachine{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: infrav1Machine.Name, Namespace: infrav1Machine.Namespace}, machine)).To(Succeed(), "OpenStackMachine fetch should succeed")
-
-			setObjectGVK(machine)
-			machine.ManagedFields = nil
-			Expect(k8sClient.Patch(ctx, machine, client.Apply, client.FieldOwner("test"), client.ForceOwnership)).To(Succeed(), format.Object(machine, 4))
-		})
-	})
-
-	Context("v1alpha6", func() {
-		It("should downgrade cleanly from infrav1", func() {
-			infrav1Machine := &infrav1.OpenStackMachine{}
-			infrav1Machine.Namespace = namespace.Name
-			infrav1Machine.GenerateName = clusterNamePrefix
-			infrav1Machine.Spec.IdentityRef = &infrav1.OpenStackIdentityReference{
-				CloudName: "test-cloud",
-				Name:      "test-credentials",
-			}
-			infrav1Machine.Spec.Image.ID = ptr.To("de9872ee-0c2c-44ed-9414-90163c8b0e0d")
-			Expect(createObj(infrav1Machine)).To(Succeed(), "infrav1 OpenStackMachine creation should succeed")
-
-			// Just fetching the object as v1alpha6 doesn't trigger
-			// validation failure, so we first fetch it and then
-			// patch the object with identical contents. The patch
-			// triggers a validation failure.
-			machine := &infrav1alpha6.OpenStackMachine{} //nolint:staticcheck
+			machine := &infrav1alpha7.OpenStackMachine{} //nolint: staticcheck
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: infrav1Machine.Name, Namespace: infrav1Machine.Namespace}, machine)).To(Succeed(), "OpenStackMachine fetch should succeed")
 
 			setObjectGVK(machine)

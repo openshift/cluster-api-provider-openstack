@@ -40,13 +40,6 @@ rules:
   resources:
   - clusters
   - clusters/status
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cluster.x-k8s.io
-  resources:
   - machines
   - machines/status
   verbs:
@@ -57,6 +50,9 @@ rules:
   - infrastructure.cluster.x-k8s.io
   resources:
   - openstackclusters
+  - openstackfloatingippools
+  - openstackmachines
+  - openstackservers
   verbs:
   - create
   - delete
@@ -69,46 +65,9 @@ rules:
   - infrastructure.cluster.x-k8s.io
   resources:
   - openstackclusters/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
-  - openstackfloatingippools
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
   - openstackfloatingippools/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
-  - openstackmachines
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - infrastructure.cluster.x-k8s.io
-  resources:
   - openstackmachines/status
+  - openstackservers/status
   verbs:
   - get
   - patch
@@ -138,3 +97,23 @@ rules:
   - list
   - update
   - watch
+- apiGroups:
+  - openstack.k-orc.cloud
+  resources:
+  - images
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - openstack.k-orc.cloud
+  resources:
+  - images/status
+  verbs:
+  - get
+  - patch
+  - update

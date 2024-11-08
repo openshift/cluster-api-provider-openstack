@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha7
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -31,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	"sigs.k8s.io/cluster-api-provider-openstack/internal/futures"
 	testhelpers "sigs.k8s.io/cluster-api-provider-openstack/test/helpers"
 )
 
@@ -89,9 +89,16 @@ func TestFuzzyConversion(t *testing.T) {
 					}
 				}
 			},
+
+			func(identityRef *infrav1.OpenStackIdentityReference, c fuzz.Continue) {
+				c.FuzzNoCustom(identityRef)
+
+				// None of the following identityRef fields have ever been set in v1alpha7
+				identityRef.Region = ""
+			},
 		}
 
-		return futures.SlicesConcat(v1alpha7FuzzerFuncs, testhelpers.InfraV1FuzzerFuncs())
+		return slices.Concat(v1alpha7FuzzerFuncs, testhelpers.InfraV1FuzzerFuncs())
 	}
 
 	t.Run("for OpenStackCluster", runParallel(utilconversion.FuzzTestFunc(utilconversion.FuzzTestFuncInput{
@@ -191,10 +198,10 @@ func TestMachineConversionControllerSpecFields(t *testing.T) {
 		{
 			name: "Non-ignored change",
 			modifyUp: func(up *infrav1.OpenStackMachine) {
-				up.Spec.Flavor = "new-flavor"
+				up.Spec.Flavor = ptr.To("new-flavor")
 			},
 			testAfter: func(g gomega.Gomega, after *OpenStackMachine) {
-				g.Expect(after.Spec.Flavor).To(gomega.Equal("new-flavor"))
+				g.Expect(after.Spec.Flavor).To(gomega.Equal(ptr.To("new-flavor")))
 			},
 			expectIdentityRefDiff: true,
 		},
@@ -222,11 +229,11 @@ func TestMachineConversionControllerSpecFields(t *testing.T) {
 			name: "Set ProviderID and non-ignored change",
 			modifyUp: func(up *infrav1.OpenStackMachine) {
 				up.Spec.ProviderID = ptr.To("new-provider-id")
-				up.Spec.Flavor = "new-flavor"
+				up.Spec.Flavor = ptr.To("new-flavor")
 			},
 			testAfter: func(g gomega.Gomega, after *OpenStackMachine) {
 				g.Expect(after.Spec.ProviderID).To(gomega.Equal(ptr.To("new-provider-id")))
-				g.Expect(after.Spec.Flavor).To(gomega.Equal("new-flavor"))
+				g.Expect(after.Spec.Flavor).To(gomega.Equal(ptr.To("new-flavor")))
 			},
 			expectIdentityRefDiff: true,
 		},

@@ -273,13 +273,13 @@ holds the fixed IP to be used as a VIP.</p>
 <td>
 <code>apiServerPort</code><br/>
 <em>
-int
+uint16
 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>APIServerPort is the port on which the listener on the APIServer
-will be created</p>
+will be created. If specified, it must be an integer between 0 and 65535.</p>
 </td>
 </tr>
 <tr>
@@ -574,6 +574,18 @@ string
 </tr>
 <tr>
 <td>
+<code>flavorID</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<p>FlavorID allows flavors to be specified by ID.  This field takes precedence
+over Flavor.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>image</code><br/>
 <em>
 <a href="#infrastructure.cluster.x-k8s.io/v1beta1.ImageParam">
@@ -742,6 +754,22 @@ Kubernetes core/v1.TypedLocalObjectReference
 <p>floatingIPPoolRef is a reference to a IPPool that will be assigned
 to an IPAddressClaim. Once the IPAddressClaim is fulfilled, the FloatingIP
 will be assigned to the OpenStackMachine.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>schedulerHintAdditionalProperties</code><br/>
+<em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.SchedulerHintAdditionalProperty">
+[]SchedulerHintAdditionalProperty
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>SchedulerHintAdditionalProperties are arbitrary key/value pairs that provide additional hints
+to the OpenStack scheduler. These hints can influence how instances are placed on the infrastructure,
+such as specifying certain host aggregates or availability zones.</p>
 </td>
 </tr>
 </table>
@@ -943,6 +971,18 @@ string
 <td>
 <em>(Optional)</em>
 <p>AvailabilityZone is the failure domain that will be used to create the APIServerLoadBalancer Spec.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>flavor</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Flavor is the flavor name that will be used to create the APIServerLoadBalancer Spec.</p>
 </td>
 </tr>
 </tbody>
@@ -1305,7 +1345,9 @@ bool
 </td>
 <td>
 <em>(Optional)</em>
-<p>OVSHWOffload enables or disables the OVS hardware offload feature.</p>
+<p>OVSHWOffload enables or disables the OVS hardware offload feature.
+This flag is not required on OpenStack clouds since Yoga as Nova will set it automatically when the port is attached.
+See: <a href="https://bugs.launchpad.net/nova/+bug/2020813">https://bugs.launchpad.net/nova/+bug/2020813</a></p>
 </td>
 </tr>
 <tr>
@@ -1616,6 +1658,11 @@ address in any subnet of the port&rsquo;s network.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="infrastructure.cluster.x-k8s.io/v1beta1.IdentityRefProvider">IdentityRefProvider
+</h3>
+<p>
+<p>IdentityRefProvider is an interface for obtaining OpenStack credentials from an API object</p>
+</p>
 <h3 id="infrastructure.cluster.x-k8s.io/v1beta1.ImageFilter">ImageFilter
 </h3>
 <p>
@@ -1666,7 +1713,8 @@ string
 <a href="#infrastructure.cluster.x-k8s.io/v1beta1.OpenStackMachineSpec">OpenStackMachineSpec</a>)
 </p>
 <p>
-<p>ImageParam describes a glance image. It can be specified by ID or filter.</p>
+<p>ImageParam describes a glance image. It can be specified by ID, filter, or a
+reference to an ORC Image.</p>
 </p>
 <table>
 <thead>
@@ -1702,6 +1750,21 @@ ImageFilter
 <p>Filter describes a query for an image. If specified, the combination
 of name and tags must return a single matching image or an error will
 be raised.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imageRef</code><br/>
+<em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.ResourceReference">
+ResourceReference
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImageRef is a reference to an ORC Image in the same namespace as the
+referring object.</p>
 </td>
 </tr>
 </tbody>
@@ -2343,13 +2406,13 @@ holds the fixed IP to be used as a VIP.</p>
 <td>
 <code>apiServerPort</code><br/>
 <em>
-int
+uint16
 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>APIServerPort is the port on which the listener on the APIServer
-will be created</p>
+will be created. If specified, it must be an integer between 0 and 65535.</p>
 </td>
 </tr>
 <tr>
@@ -2925,13 +2988,13 @@ holds the fixed IP to be used as a VIP.</p>
 <td>
 <code>apiServerPort</code><br/>
 <em>
-int
+uint16
 </em>
 </td>
 <td>
 <em>(Optional)</em>
 <p>APIServerPort is the port on which the listener on the APIServer
-will be created</p>
+will be created. If specified, it must be an integer between 0 and 65535.</p>
 </td>
 </tr>
 <tr>
@@ -3137,6 +3200,20 @@ string
 <p>CloudName specifies the name of the entry in the clouds.yaml file to use.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>region</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Region specifies an OpenStack region to use. If specified, it overrides
+any value in clouds.yaml. If specified for an OpenStackMachine, its
+value will be included in providerID.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="infrastructure.cluster.x-k8s.io/v1beta1.OpenStackMachineSpec">OpenStackMachineSpec
@@ -3178,6 +3255,18 @@ string
 </td>
 <td>
 <p>The flavor reference for the flavor for your server instance.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>flavorID</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<p>FlavorID allows flavors to be specified by ID.  This field takes precedence
+over Flavor.</p>
 </td>
 </tr>
 <tr>
@@ -3350,6 +3439,22 @@ Kubernetes core/v1.TypedLocalObjectReference
 <p>floatingIPPoolRef is a reference to a IPPool that will be assigned
 to an IPAddressClaim. Once the IPAddressClaim is fulfilled, the FloatingIP
 will be assigned to the OpenStackMachine.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>schedulerHintAdditionalProperties</code><br/>
+<em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.SchedulerHintAdditionalProperty">
+[]SchedulerHintAdditionalProperty
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>SchedulerHintAdditionalProperties are arbitrary key/value pairs that provide additional hints
+to the OpenStack scheduler. These hints can influence how instances are placed on the infrastructure,
+such as specifying certain host aggregates or availability zones.</p>
 </td>
 </tr>
 </tbody>
@@ -3555,6 +3660,18 @@ string
 </tr>
 <tr>
 <td>
+<code>flavorID</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<p>FlavorID allows flavors to be specified by ID.  This field takes precedence
+over Flavor.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>image</code><br/>
 <em>
 <a href="#infrastructure.cluster.x-k8s.io/v1beta1.ImageParam">
@@ -3723,6 +3840,22 @@ Kubernetes core/v1.TypedLocalObjectReference
 <p>floatingIPPoolRef is a reference to a IPPool that will be assigned
 to an IPAddressClaim. Once the IPAddressClaim is fulfilled, the FloatingIP
 will be assigned to the OpenStackMachine.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>schedulerHintAdditionalProperties</code><br/>
+<em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.SchedulerHintAdditionalProperty">
+[]SchedulerHintAdditionalProperty
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>SchedulerHintAdditionalProperties are arbitrary key/value pairs that provide additional hints
+to the OpenStack scheduler. These hints can influence how instances are placed on the infrastructure,
+such as specifying certain host aggregates or availability zones.</p>
 </td>
 </tr>
 </table>
@@ -4003,6 +4136,18 @@ string
 <td>
 <em>(Optional)</em>
 <p>ImageID is the ID of the image to use for the machine and is calculated based on ImageFilter.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>flavorID</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>FlavorID is the ID of the flavor to use.</p>
 </td>
 </tr>
 <tr>
@@ -4294,6 +4439,35 @@ depends on the specific OpenStack implementation.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="infrastructure.cluster.x-k8s.io/v1beta1.ResourceReference">ResourceReference
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.ImageParam">ImageParam</a>)
+</p>
+<p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>name</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Name is the name of the referenced resource</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="infrastructure.cluster.x-k8s.io/v1beta1.RootVolume">RootVolume
 </h3>
 <p>
@@ -4506,6 +4680,147 @@ RouterFilter
 </td>
 </tr>
 </tbody>
+</table>
+<h3 id="infrastructure.cluster.x-k8s.io/v1beta1.SchedulerHintAdditionalProperty">SchedulerHintAdditionalProperty
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.OpenStackMachineSpec">OpenStackMachineSpec</a>)
+</p>
+<p>
+<p>SchedulerHintAdditionalProperty represents a single additional property for a scheduler hint.
+It includes a Name to identify the property and a Value that can be of various types.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>name</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Name is the name of the scheduler hint property.
+It is a unique identifier for the property.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>value</code><br/>
+<em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.SchedulerHintAdditionalValue">
+SchedulerHintAdditionalValue
+</a>
+</em>
+</td>
+<td>
+<p>Value is the value of the scheduler hint property, which can be of various types
+(e.g., bool, string, int). The type is indicated by the Value.Type field.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="infrastructure.cluster.x-k8s.io/v1beta1.SchedulerHintAdditionalValue">SchedulerHintAdditionalValue
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.SchedulerHintAdditionalProperty">SchedulerHintAdditionalProperty</a>)
+</p>
+<p>
+<p>SchedulerHintAdditionalValue represents the value of a scheduler hint property.
+The value can be of various types: Bool, String, or Number.
+The Type field indicates the type of the value being used.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>type</code><br/>
+<em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.SchedulerHintValueType">
+SchedulerHintValueType
+</a>
+</em>
+</td>
+<td>
+<p>Type represents the type of the value.
+Valid values are Bool, String, and Number.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>bool</code><br/>
+<em>
+bool
+</em>
+</td>
+<td>
+<p>Bool is the boolean value of the scheduler hint, used when Type is &ldquo;Bool&rdquo;.
+This field is required if type is &lsquo;Bool&rsquo;, and must not be set otherwise.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>number</code><br/>
+<em>
+int
+</em>
+</td>
+<td>
+<p>Number is the integer value of the scheduler hint, used when Type is &ldquo;Number&rdquo;.
+This field is required if type is &lsquo;Number&rsquo;, and must not be set otherwise.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>string</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<p>String is the string value of the scheduler hint, used when Type is &ldquo;String&rdquo;.
+This field is required if type is &lsquo;String&rsquo;, and must not be set otherwise.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="infrastructure.cluster.x-k8s.io/v1beta1.SchedulerHintValueType">SchedulerHintValueType
+(<code>string</code> alias)</p></h3>
+<p>
+(<em>Appears on:</em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.SchedulerHintAdditionalValue">SchedulerHintAdditionalValue</a>)
+</p>
+<p>
+<p>SchedulerHintValueType is the type that represents allowed values for the Type field.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr><td><p>&#34;Bool&#34;</p></td>
+<td></td>
+</tr><tr><td><p>&#34;Number&#34;</p></td>
+<td></td>
+</tr><tr><td><p>&#34;String&#34;</p></td>
+<td></td>
+</tr></tbody>
 </table>
 <h3 id="infrastructure.cluster.x-k8s.io/v1beta1.SecurityGroupFilter">SecurityGroupFilter
 </h3>

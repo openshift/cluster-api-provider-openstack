@@ -28,59 +28,23 @@ import (
 	"sigs.k8s.io/cluster-api-provider-openstack/test/e2e/shared"
 )
 
-const OldCAPIVersion = "v1.4.6"
-
-var _ = Describe("When testing clusterctl upgrades (v0.7=>current) [clusterctl-upgrade]", func() {
-	ctx := context.TODO()
-	shared.SetEnvVar("DOWNLOAD_E2E_IMAGE", "true", false)
-
-	capi_e2e.ClusterctlUpgradeSpec(ctx, func() capi_e2e.ClusterctlUpgradeSpecInput {
-		return capi_e2e.ClusterctlUpgradeSpecInput{
-			E2EConfig:                       e2eCtx.E2EConfig,
-			ClusterctlConfigPath:            e2eCtx.Environment.ClusterctlConfigPath,
-			BootstrapClusterProxy:           e2eCtx.Environment.BootstrapClusterProxy,
-			ArtifactFolder:                  e2eCtx.Settings.ArtifactFolder,
-			SkipCleanup:                     false,
-			InitWithBinary:                  "https://github.com/kubernetes-sigs/cluster-api/releases/download/" + OldCAPIVersion + "/clusterctl-{OS}-{ARCH}",
-			InitWithProvidersContract:       "v1beta1",
-			InitWithInfrastructureProviders: []string{"openstack:v0.7.2"},
-			InitWithCoreProvider:            "cluster-api:" + OldCAPIVersion,
-			InitWithBootstrapProviders:      []string{"kubeadm:" + OldCAPIVersion},
-			InitWithControlPlaneProviders:   []string{"kubeadm:" + OldCAPIVersion},
-			MgmtFlavor:                      shared.FlavorDefault,
-			WorkloadFlavor:                  shared.FlavorV1alpha6,
-		}
-	})
-})
-
-var _ = Describe("When testing clusterctl upgrades (v0.8=>current) [clusterctl-upgrade]", func() {
-	ctx := context.TODO()
-	shared.SetEnvVar("DOWNLOAD_E2E_IMAGE", "true", false)
-
-	capi_e2e.ClusterctlUpgradeSpec(ctx, func() capi_e2e.ClusterctlUpgradeSpecInput {
-		return capi_e2e.ClusterctlUpgradeSpecInput{
-			E2EConfig:                       e2eCtx.E2EConfig,
-			ClusterctlConfigPath:            e2eCtx.Environment.ClusterctlConfigPath,
-			BootstrapClusterProxy:           e2eCtx.Environment.BootstrapClusterProxy,
-			ArtifactFolder:                  e2eCtx.Settings.ArtifactFolder,
-			SkipCleanup:                     false,
-			InitWithBinary:                  "https://github.com/kubernetes-sigs/cluster-api/releases/download/" + OldCAPIVersion + "/clusterctl-{OS}-{ARCH}",
-			InitWithProvidersContract:       "v1beta1",
-			InitWithInfrastructureProviders: []string{"openstack:v0.8.0"},
-			InitWithCoreProvider:            "cluster-api:" + OldCAPIVersion,
-			InitWithBootstrapProviders:      []string{"kubeadm:" + OldCAPIVersion},
-			InitWithControlPlaneProviders:   []string{"kubeadm:" + OldCAPIVersion},
-			MgmtFlavor:                      shared.FlavorDefault,
-			WorkloadFlavor:                  shared.FlavorV1alpha7,
-		}
-	})
-})
+const OldCAPIVersion = "v1.6.0"
 
 var _ = Describe("When testing clusterctl upgrades (v0.9=>current) [clusterctl-upgrade]", func() {
-	ctx := context.TODO()
-	shared.SetEnvVar("DOWNLOAD_E2E_IMAGE", "true", false)
+	BeforeEach(func(ctx context.Context) {
+		shared.ApplyCoreImagesPlus(ctx, e2eCtx, upgradeImage)
 
-	capi_e2e.ClusterctlUpgradeSpec(ctx, func() capi_e2e.ClusterctlUpgradeSpecInput {
+		// The upgrade job can't use image references in its machine templates,
+		// so we must wait for the images to be available before running the
+		// test.
+		coreImages := shared.CoreImages(e2eCtx)
+		allImages := append(coreImages, upgradeImage)
+		shared.WaitForGlanceImagesAvailable(ctx, e2eCtx, allImages)
+
+		setDownloadE2EImageEnvVar()
+	})
+
+	capi_e2e.ClusterctlUpgradeSpec(context.TODO(), func() capi_e2e.ClusterctlUpgradeSpecInput {
 		return capi_e2e.ClusterctlUpgradeSpecInput{
 			E2EConfig:                       e2eCtx.E2EConfig,
 			ClusterctlConfigPath:            e2eCtx.Environment.ClusterctlConfigPath,
@@ -95,6 +59,7 @@ var _ = Describe("When testing clusterctl upgrades (v0.9=>current) [clusterctl-u
 			InitWithControlPlaneProviders:   []string{"kubeadm:" + OldCAPIVersion},
 			MgmtFlavor:                      shared.FlavorDefault,
 			WorkloadFlavor:                  shared.FlavorV1alpha7,
+			InitWithKubernetesVersion:       e2eCtx.E2EConfig.GetVariable(shared.KubernetesVersion),
 		}
 	})
 })

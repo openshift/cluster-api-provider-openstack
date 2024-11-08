@@ -20,13 +20,13 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr/testr"
-	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
-	"github.com/gophercloud/gophercloud"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/external"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/networks"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/subnets"
-	. "github.com/onsi/gomega"
+	"github.com/gophercloud/gophercloud/v2"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/external"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/networks"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/subnets"
+	. "github.com/onsi/gomega" //nolint:revive
+	"go.uber.org/mock/gomock"
 	"k8s.io/utils/ptr"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
@@ -301,8 +301,8 @@ func Test_ReconcileExternalNetwork(t *testing.T) {
 					},
 				},
 			},
-			expect: func(g Gomega, m *mock.MockNetworkClientMockRecorder) {
-				m.GetNetwork(fakeNetworkID).Return(nil, gophercloud.ErrDefault404{})
+			expect: func(_ Gomega, m *mock.MockNetworkClientMockRecorder) {
+				m.GetNetwork(fakeNetworkID).Return(nil, gophercloud.ErrUnexpectedResponseCode{Actual: 404})
 			},
 			want: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
@@ -342,7 +342,7 @@ func Test_ReconcileExternalNetwork(t *testing.T) {
 					DisableExternalNetwork: ptr.To(true),
 				},
 			},
-			expect: func(_ Gomega, m *mock.MockNetworkClientMockRecorder) {},
+			expect: func(Gomega, *mock.MockNetworkClientMockRecorder) {},
 			want: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					DisableExternalNetwork: ptr.To(true),

@@ -17,54 +17,71 @@ limitations under the License.
 package compute
 
 import (
+	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr/testr"
-	"github.com/golang/mock/gomock"
-	"github.com/gophercloud/gophercloud/openstack/blockstorage/v3/volumes"
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/availabilityzones"
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/flavors"
-	"github.com/gophercloud/gophercloud/openstack/compute/v2/servers"
-	"github.com/gophercloud/gophercloud/openstack/imageservice/v2/images"
-	. "github.com/onsi/gomega"
+	"github.com/google/go-cmp/cmp"
+	"github.com/gophercloud/gophercloud/v2/openstack/blockstorage/v3/volumes"
+	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/keypairs"
+	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/servers"
+	"github.com/gophercloud/gophercloud/v2/openstack/image/v2/images"
+	. "github.com/onsi/gomega" //nolint:revive
+	"go.uber.org/mock/gomock"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	orcv1alpha1 "github.com/k-orc/openstack-resource-controller/api/v1alpha1"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients/mock"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/scope"
+	capoerrors "sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/errors"
 )
 
 func TestService_getImageID(t *testing.T) {
-	imageID := "ce96e584-7ebc-46d6-9e55-987d72e3806c"
-	imageName := "test-image"
+	const (
+		imageID   = "ce96e584-7ebc-46d6-9e55-987d72e3806c"
+		imageName = "test-image"
+		namespace = "test-namespace"
+	)
 	imageTags := []string{"test-tag"}
 
+	scheme := runtime.NewScheme()
+	if err := orcv1alpha1.AddToScheme(scheme); err != nil {
+		panic(err)
+	}
+
 	tests := []struct {
-		testName string
-		image    infrav1.ImageParam
-		expect   func(m *mock.MockImageClientMockRecorder)
-		want     string
-		wantErr  bool
+		testName          string
+		image             infrav1.ImageParam
+		fakeObjects       []runtime.Object
+		expect            func(m *mock.MockImageClientMockRecorder)
+		want              *string
+		wantErr           bool
+		wantTerminalError bool
 	}{
 		{
 			testName: "Return image ID when ID given",
-			image:    infrav1.ImageParam{ID: &imageID},
-			want:     imageID,
-			expect:   func(m *mock.MockImageClientMockRecorder) {},
+			image:    infrav1.ImageParam{ID: ptr.To(imageID)},
+			want:     ptr.To(imageID),
+			expect:   func(*mock.MockImageClientMockRecorder) {},
 			wantErr:  false,
 		},
 		{
 			testName: "Return image ID when name given",
 			image: infrav1.ImageParam{
 				Filter: &infrav1.ImageFilter{
-					Name: &imageName,
+					Name: ptr.To(imageName),
 				},
 			},
-			want: imageID,
+			want: ptr.To(imageID),
 			expect: func(m *mock.MockImageClientMockRecorder) {
 				m.ListImages(images.ListOpts{Name: imageName}).Return(
 					[]images.Image{{ID: imageID, Name: imageName}},
@@ -79,7 +96,7 @@ func TestService_getImageID(t *testing.T) {
 					Tags: imageTags,
 				},
 			},
-			want: imageID,
+			want: ptr.To(imageID),
 			expect: func(m *mock.MockImageClientMockRecorder) {
 				m.ListImages(images.ListOpts{Tags: imageTags}).Return(
 					[]images.Image{{ID: imageID, Name: imageName, Tags: imageTags}},
@@ -91,7 +108,7 @@ func TestService_getImageID(t *testing.T) {
 			testName: "Return no results",
 			image: infrav1.ImageParam{
 				Filter: &infrav1.ImageFilter{
-					Name: &imageName,
+					Name: ptr.To(imageName),
 				},
 			},
 			expect: func(m *mock.MockImageClientMockRecorder) {
@@ -99,14 +116,14 @@ func TestService_getImageID(t *testing.T) {
 					[]images.Image{},
 					nil)
 			},
-			want:    "",
+			want:    nil,
 			wantErr: true,
 		},
 		{
 			testName: "Return multiple results",
 			image: infrav1.ImageParam{
 				Filter: &infrav1.ImageFilter{
-					Name: &imageName,
+					Name: ptr.To(imageName),
 				},
 			},
 			expect: func(m *mock.MockImageClientMockRecorder) {
@@ -116,14 +133,14 @@ func TestService_getImageID(t *testing.T) {
 						{ID: "123", Name: "test-image"},
 					}, nil)
 			},
-			want:    "",
+			want:    nil,
 			wantErr: true,
 		},
 		{
 			testName: "OpenStack returns error",
 			image: infrav1.ImageParam{
 				Filter: &infrav1.ImageFilter{
-					Name: &imageName,
+					Name: ptr.To(imageName),
 				},
 			},
 			expect: func(m *mock.MockImageClientMockRecorder) {
@@ -131,8 +148,107 @@ func TestService_getImageID(t *testing.T) {
 					nil,
 					fmt.Errorf("test error"))
 			},
-			want:    "",
+			want:    nil,
 			wantErr: true,
+		},
+		{
+			testName: "Image by reference does not exist",
+			image: infrav1.ImageParam{
+				ImageRef: &infrav1.ResourceReference{
+					Name: imageName,
+				},
+			},
+			want: nil,
+		},
+		{
+			testName: "Image by reference exists, is available",
+			image: infrav1.ImageParam{
+				ImageRef: &infrav1.ResourceReference{
+					Name: imageName,
+				},
+			},
+			fakeObjects: []runtime.Object{
+				&orcv1alpha1.Image{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      imageName,
+						Namespace: namespace,
+					},
+					Status: orcv1alpha1.ImageStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   orcv1alpha1.OpenStackConditionAvailable,
+								Status: metav1.ConditionTrue,
+							},
+						},
+						ID: ptr.To(imageID),
+					},
+				},
+			},
+			want: ptr.To(imageID),
+		},
+		{
+			testName: "Image by reference exists, still reconciling",
+			image: infrav1.ImageParam{
+				ImageRef: &infrav1.ResourceReference{
+					Name: imageName,
+				},
+			},
+			fakeObjects: []runtime.Object{
+				&orcv1alpha1.Image{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      imageName,
+						Namespace: namespace,
+					},
+					Status: orcv1alpha1.ImageStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   orcv1alpha1.OpenStackConditionAvailable,
+								Status: metav1.ConditionFalse,
+							},
+							{
+								Type:   orcv1alpha1.OpenStackConditionProgressing,
+								Status: metav1.ConditionTrue,
+								Reason: orcv1alpha1.OpenStackConditionReasonProgressing,
+							},
+						},
+						ID: ptr.To(imageID),
+					},
+				},
+			},
+			want: nil,
+		},
+		{
+			testName: "Image by reference exists, terminal failure",
+			image: infrav1.ImageParam{
+				ImageRef: &infrav1.ResourceReference{
+					Name: imageName,
+				},
+			},
+			fakeObjects: []runtime.Object{
+				&orcv1alpha1.Image{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      imageName,
+						Namespace: namespace,
+					},
+					Status: orcv1alpha1.ImageStatus{
+						Conditions: []metav1.Condition{
+							{
+								Type:   orcv1alpha1.OpenStackConditionAvailable,
+								Status: metav1.ConditionFalse,
+							},
+							{
+								Type:    orcv1alpha1.OpenStackConditionProgressing,
+								Status:  metav1.ConditionFalse,
+								Reason:  orcv1alpha1.OpenStackConditionReasonUnrecoverableError,
+								Message: "test error",
+							},
+						},
+						ID: ptr.To(imageID),
+					},
+				},
+			},
+			want:              nil,
+			wantTerminalError: true,
 		},
 	}
 	for _, tt := range tests {
@@ -145,15 +261,31 @@ func TestService_getImageID(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to create service: %v", err)
 			}
-			tt.expect(mockScopeFactory.ImageClient.EXPECT())
+			if tt.expect != nil {
+				tt.expect(mockScopeFactory.ImageClient.EXPECT())
+			}
 
-			got, err := s.GetImageID(tt.image)
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(tt.fakeObjects...).Build()
+
+			got, err := s.GetImageID(context.TODO(), fakeClient, namespace, tt.image)
+
+			if tt.wantTerminalError {
+				tt.wantErr = true
+			}
+
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Service.getImageID() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got != tt.want {
-				t.Errorf("Service.getImageID() = %v, want %v", got, tt.want)
+
+			var terminalError *capoerrors.TerminalError
+			if errors.As(err, &terminalError) != tt.wantTerminalError {
+				t.Errorf("Terminal error: wanted = %v, got = %v", tt.wantTerminalError, !tt.wantTerminalError)
+			}
+
+			// NOTE(mdbooth): there must be a simpler way to write this!
+			if (tt.want == nil && got != nil) || (tt.want != nil && (got == nil || *tt.want != *got)) {
+				t.Errorf("Service.getImageID() = '%v', want '%v'", ptr.Deref(got, ""), ptr.Deref(tt.want, ""))
 			}
 		})
 	}
@@ -187,7 +319,7 @@ func getDefaultInstanceSpec() *InstanceSpec {
 	return &InstanceSpec{
 		Name:       openStackMachineName,
 		ImageID:    imageUUID,
-		Flavor:     flavorName,
+		FlavorID:   flavorUUID,
 		SSHKeyName: sshKeyName,
 		UserData:   "user-data",
 		Metadata: map[string]string{
@@ -201,78 +333,62 @@ func getDefaultInstanceSpec() *InstanceSpec {
 }
 
 func TestService_ReconcileInstance(t *testing.T) {
-	RegisterTestingT(t)
-
-	getDefaultServerMap := func() map[string]interface{} {
-		// Add base64 user data to the create options the same way gophercloud does
-		userData := base64.StdEncoding.EncodeToString([]byte("user-data"))
-
-		return map[string]interface{}{
-			"server": map[string]interface{}{
-				"name":              openStackMachineName,
-				"imageRef":          imageUUID,
-				"flavorRef":         flavorUUID,
-				"availability_zone": failureDomain,
-				"networks": []map[string]interface{}{
-					{"port": portUUID},
-				},
-				"config_drive": true,
-				"key_name":     sshKeyName,
-				"tags":         []interface{}{"test-tag"},
-				"metadata": map[string]interface{}{
-					"test-metadata": "test-value",
-				},
-				"user_data": &userData,
-				"block_device_mapping_v2": []map[string]interface{}{
-					{
-						"delete_on_termination": true,
-						"destination_type":      "local",
-						"source_type":           "image",
-						"uuid":                  imageUUID,
-						"boot_index":            float64(0),
-					},
-				},
+	getDefaultServerCreateOpts := func() servers.CreateOpts {
+		return servers.CreateOpts{
+			Name:             openStackMachineName,
+			ImageRef:         imageUUID,
+			FlavorRef:        flavorUUID,
+			UserData:         []byte(base64.StdEncoding.EncodeToString([]byte("user-data"))),
+			AvailabilityZone: failureDomain,
+			Networks:         []servers.Network{{Port: portUUID}},
+			Metadata: map[string]string{
+				"test-metadata": "test-value",
 			},
-			"os:scheduler_hints": map[string]interface{}{
-				"group": serverGroupUUID,
+			ConfigDrive: ptr.To(true),
+			Tags:        []string{"test-tag"},
+			BlockDevice: []servers.BlockDevice{
+				{
+					SourceType:          "image",
+					UUID:                imageUUID,
+					DeleteOnTermination: true,
+					DestinationType:     "local",
+				},
 			},
 		}
 	}
 
-	returnedServer := func(status string) *clients.ServerExt {
-		return &clients.ServerExt{
-			Server: servers.Server{
-				ID:      instanceUUID,
-				Name:    openStackMachineName,
-				Status:  status,
-				KeyName: sshKeyName,
-			},
-			ServerAvailabilityZoneExt: availabilityzones.ServerAvailabilityZoneExt{},
+	withSSHKey := func(builder servers.CreateOptsBuilder) servers.CreateOptsBuilder {
+		return keypairs.CreateOptsExt{
+			CreateOptsBuilder: builder,
+			KeyName:           sshKeyName,
 		}
 	}
 
-	// Expected calls when using default flavor
-	expectDefaultFlavor := func(computeRecorder *mock.MockComputeClientMockRecorder) {
-		f := flavors.Flavor{
-			ID:    flavorUUID,
-			VCPUs: 2,
+	getDefaultSchedulerHintOpts := func() servers.SchedulerHintOpts {
+		return servers.SchedulerHintOpts{
+			Group: serverGroupUUID,
 		}
-		computeRecorder.GetFlavorFromName(flavorName).Return(&f, nil)
+	}
+
+	returnedServer := func(status string) *servers.Server {
+		return &servers.Server{
+			ID:      instanceUUID,
+			Name:    openStackMachineName,
+			Status:  status,
+			KeyName: sshKeyName,
+		}
 	}
 
 	// Expected calls and custom match function for creating a server
-	expectCreateServer := func(computeRecorder *mock.MockComputeClientMockRecorder, expectedCreateOpts map[string]interface{}, wantError bool) {
-		// This nonsense is because ConfigDrive is a bool pointer, so we
-		// can't assert its exact contents with gomock.
-		// Instead we call ToServerCreateMap() on it to obtain a
-		// map[string]interface{} of the create options, and then use
-		// gomega to assert the contents of the map, which is more flexible.
+	expectCreateServer := func(g Gomega, computeRecorder *mock.MockComputeClientMockRecorder, expectedCreateOpts servers.CreateOptsBuilder, expectedSchedulerHintOpts servers.SchedulerHintOptsBuilder, wantError bool) {
+		computeRecorder.CreateServer(gomock.Any(), gomock.Any()).DoAndReturn(func(createOpts servers.CreateOptsBuilder, schedulerHintOpts servers.SchedulerHintOptsBuilder) (*servers.Server, error) {
+			createOptsMap, _ := createOpts.ToServerCreateMap()
+			expectedCreateOptsMap, _ := expectedCreateOpts.ToServerCreateMap()
+			g.Expect(createOptsMap).To(Equal(expectedCreateOptsMap), cmp.Diff(createOptsMap, expectedCreateOptsMap))
 
-		computeRecorder.CreateServer(gomock.Any()).DoAndReturn(func(createOpts servers.CreateOptsBuilder) (*clients.ServerExt, error) {
-			optsMap, err := createOpts.ToServerCreateMap()
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(optsMap).To(Equal(expectedCreateOpts))
+			schedulerHintOptsMap, _ := schedulerHintOpts.ToSchedulerHintsMap()
+			expectedSchedulerHintOptsMap, _ := expectedSchedulerHintOpts.ToSchedulerHintsMap()
+			g.Expect(schedulerHintOptsMap).To(Equal(expectedSchedulerHintOptsMap), cmp.Diff(schedulerHintOptsMap, expectedSchedulerHintOptsMap))
 
 			if wantError {
 				return nil, fmt.Errorf("test error")
@@ -313,16 +429,14 @@ func TestService_ReconcileInstance(t *testing.T) {
 	tests := []struct {
 		name            string
 		getInstanceSpec func() *InstanceSpec
-		expect          func(r *recorders)
+		expect          func(g Gomega, r *recorders)
 		wantErr         bool
 	}{
 		{
 			name:            "Defaults",
 			getInstanceSpec: getDefaultInstanceSpec,
-			expect: func(r *recorders) {
-				expectDefaultFlavor(r.compute)
-
-				expectCreateServer(r.compute, getDefaultServerMap(), false)
+			expect: func(g Gomega, r *recorders) {
+				expectCreateServer(g, r.compute, withSSHKey(getDefaultServerCreateOpts()), getDefaultSchedulerHintOpts(), false)
 			},
 			wantErr: false,
 		},
@@ -335,9 +449,7 @@ func TestService_ReconcileInstance(t *testing.T) {
 				}
 				return s
 			},
-			expect: func(r *recorders) {
-				expectDefaultFlavor(r.compute)
-
+			expect: func(g Gomega, r *recorders) {
 				r.volume.ListVolumes(volumes.ListOpts{Name: fmt.Sprintf("%s-root", openStackMachineName)}).
 					Return([]volumes.Volume{}, nil)
 				r.volume.CreateVolume(volumes.CreateOpts{
@@ -345,23 +457,21 @@ func TestService_ReconcileInstance(t *testing.T) {
 					Description: fmt.Sprintf("Root volume for %s", openStackMachineName),
 					Name:        fmt.Sprintf("%s-root", openStackMachineName),
 					ImageID:     imageUUID,
-					Multiattach: false,
 				}).Return(&volumes.Volume{ID: rootVolumeUUID}, nil)
 				expectVolumePollSuccess(r.volume, rootVolumeUUID)
 
-				createMap := getDefaultServerMap()
-				serverMap := createMap["server"].(map[string]interface{})
-				serverMap["imageRef"] = ""
-				serverMap["block_device_mapping_v2"] = []map[string]interface{}{
+				createOpts := getDefaultServerCreateOpts()
+				createOpts.ImageRef = ""
+				createOpts.BlockDevice = []servers.BlockDevice{
 					{
-						"delete_on_termination": true,
-						"destination_type":      "volume",
-						"source_type":           "volume",
-						"uuid":                  rootVolumeUUID,
-						"boot_index":            float64(0),
+						SourceType:          "volume",
+						UUID:                rootVolumeUUID,
+						BootIndex:           0,
+						DeleteOnTermination: true,
+						DestinationType:     "volume",
 					},
 				}
-				expectCreateServer(r.compute, createMap, false)
+				expectCreateServer(g, r.compute, withSSHKey(createOpts), getDefaultSchedulerHintOpts(), false)
 
 				// Don't delete ports because the server is created: DeleteInstance will do it
 			},
@@ -381,9 +491,7 @@ func TestService_ReconcileInstance(t *testing.T) {
 				s.RootVolume.Type = "test-volume-type"
 				return s
 			},
-			expect: func(r *recorders) {
-				expectDefaultFlavor(r.compute)
-
+			expect: func(g Gomega, r *recorders) {
 				r.volume.ListVolumes(volumes.ListOpts{Name: fmt.Sprintf("%s-root", openStackMachineName)}).
 					Return([]volumes.Volume{}, nil)
 				r.volume.CreateVolume(volumes.CreateOpts{
@@ -393,23 +501,21 @@ func TestService_ReconcileInstance(t *testing.T) {
 					Description:      fmt.Sprintf("Root volume for %s", openStackMachineName),
 					Name:             fmt.Sprintf("%s-root", openStackMachineName),
 					ImageID:          imageUUID,
-					Multiattach:      false,
 				}).Return(&volumes.Volume{ID: rootVolumeUUID}, nil)
 				expectVolumePollSuccess(r.volume, rootVolumeUUID)
 
-				createMap := getDefaultServerMap()
-				serverMap := createMap["server"].(map[string]interface{})
-				serverMap["imageRef"] = ""
-				serverMap["block_device_mapping_v2"] = []map[string]interface{}{
+				createOpts := getDefaultServerCreateOpts()
+				createOpts.ImageRef = ""
+				createOpts.BlockDevice = []servers.BlockDevice{
 					{
-						"delete_on_termination": true,
-						"destination_type":      "volume",
-						"source_type":           "volume",
-						"uuid":                  rootVolumeUUID,
-						"boot_index":            float64(0),
+						SourceType:          "volume",
+						UUID:                rootVolumeUUID,
+						BootIndex:           0,
+						DeleteOnTermination: true,
+						DestinationType:     "volume",
 					},
 				}
-				expectCreateServer(r.compute, createMap, false)
+				expectCreateServer(g, r.compute, withSSHKey(createOpts), getDefaultSchedulerHintOpts(), false)
 
 				// Don't delete ports because the server is created: DeleteInstance will do it
 			},
@@ -428,9 +534,7 @@ func TestService_ReconcileInstance(t *testing.T) {
 				s.RootVolume.Type = "test-volume-type"
 				return s
 			},
-			expect: func(r *recorders) {
-				expectDefaultFlavor(r.compute)
-
+			expect: func(g Gomega, r *recorders) {
 				r.volume.ListVolumes(volumes.ListOpts{Name: fmt.Sprintf("%s-root", openStackMachineName)}).
 					Return([]volumes.Volume{}, nil)
 				r.volume.CreateVolume(volumes.CreateOpts{
@@ -440,23 +544,21 @@ func TestService_ReconcileInstance(t *testing.T) {
 					Description:      fmt.Sprintf("Root volume for %s", openStackMachineName),
 					Name:             fmt.Sprintf("%s-root", openStackMachineName),
 					ImageID:          imageUUID,
-					Multiattach:      false,
 				}).Return(&volumes.Volume{ID: rootVolumeUUID}, nil)
 				expectVolumePollSuccess(r.volume, rootVolumeUUID)
 
-				createMap := getDefaultServerMap()
-				serverMap := createMap["server"].(map[string]interface{})
-				serverMap["imageRef"] = ""
-				serverMap["block_device_mapping_v2"] = []map[string]interface{}{
+				createOpts := getDefaultServerCreateOpts()
+				createOpts.ImageRef = ""
+				createOpts.BlockDevice = []servers.BlockDevice{
 					{
-						"delete_on_termination": true,
-						"destination_type":      "volume",
-						"source_type":           "volume",
-						"uuid":                  rootVolumeUUID,
-						"boot_index":            float64(0),
+						SourceType:          "volume",
+						UUID:                rootVolumeUUID,
+						BootIndex:           0,
+						DeleteOnTermination: true,
+						DestinationType:     "volume",
 					},
 				}
-				expectCreateServer(r.compute, createMap, false)
+				expectCreateServer(g, r.compute, withSSHKey(createOpts), getDefaultSchedulerHintOpts(), false)
 
 				// Don't delete ports because the server is created: DeleteInstance will do it
 			},
@@ -471,9 +573,7 @@ func TestService_ReconcileInstance(t *testing.T) {
 				}
 				return s
 			},
-			expect: func(r *recorders) {
-				expectDefaultFlavor(r.compute)
-
+			expect: func(_ Gomega, r *recorders) {
 				r.volume.ListVolumes(volumes.ListOpts{Name: fmt.Sprintf("%s-root", openStackMachineName)}).
 					Return([]volumes.Volume{}, nil)
 				r.volume.CreateVolume(volumes.CreateOpts{
@@ -481,7 +581,6 @@ func TestService_ReconcileInstance(t *testing.T) {
 					Description: fmt.Sprintf("Root volume for %s", openStackMachineName),
 					Name:        fmt.Sprintf("%s-root", openStackMachineName),
 					ImageID:     imageUUID,
-					Multiattach: false,
 				}).Return(&volumes.Volume{ID: rootVolumeUUID}, nil)
 				expectVolumePoll(r.volume, rootVolumeUUID, []string{"creating", "error"})
 			},
@@ -515,9 +614,7 @@ func TestService_ReconcileInstance(t *testing.T) {
 				}
 				return s
 			},
-			expect: func(r *recorders) {
-				expectDefaultFlavor(r.compute)
-
+			expect: func(g Gomega, r *recorders) {
 				r.volume.ListVolumes(volumes.ListOpts{Name: fmt.Sprintf("%s-root", openStackMachineName)}).
 					Return([]volumes.Volume{}, nil)
 				r.volume.CreateVolume(volumes.CreateOpts{
@@ -525,7 +622,6 @@ func TestService_ReconcileInstance(t *testing.T) {
 					Description: fmt.Sprintf("Root volume for %s", openStackMachineName),
 					Name:        fmt.Sprintf("%s-root", openStackMachineName),
 					ImageID:     imageUUID,
-					Multiattach: false,
 				}).Return(&volumes.Volume{ID: rootVolumeUUID}, nil)
 				expectVolumePollSuccess(r.volume, rootVolumeUUID)
 
@@ -535,40 +631,38 @@ func TestService_ReconcileInstance(t *testing.T) {
 					Size:        50,
 					Description: fmt.Sprintf("Additional block device for %s", openStackMachineName),
 					Name:        fmt.Sprintf("%s-etcd", openStackMachineName),
-					Multiattach: false,
 					VolumeType:  "test-volume-type",
 				}).Return(&volumes.Volume{ID: additionalBlockDeviceVolumeUUID}, nil)
 				expectVolumePollSuccess(r.volume, additionalBlockDeviceVolumeUUID)
 
-				createMap := getDefaultServerMap()
-				serverMap := createMap["server"].(map[string]interface{})
-				serverMap["imageRef"] = ""
-				serverMap["block_device_mapping_v2"] = []map[string]interface{}{
+				createOpts := getDefaultServerCreateOpts()
+				createOpts.ImageRef = ""
+				createOpts.BlockDevice = []servers.BlockDevice{
 					{
-						"source_type":           "volume",
-						"uuid":                  rootVolumeUUID,
-						"boot_index":            float64(0),
-						"delete_on_termination": true,
-						"destination_type":      "volume",
+						SourceType:          "volume",
+						UUID:                rootVolumeUUID,
+						BootIndex:           0,
+						DeleteOnTermination: true,
+						DestinationType:     "volume",
 					},
 					{
-						"source_type":           "volume",
-						"uuid":                  additionalBlockDeviceVolumeUUID,
-						"boot_index":            float64(-1),
-						"delete_on_termination": true,
-						"destination_type":      "volume",
-						"tag":                   "etcd",
+						SourceType:          "volume",
+						UUID:                additionalBlockDeviceVolumeUUID,
+						BootIndex:           -1,
+						DeleteOnTermination: true,
+						DestinationType:     "volume",
+						Tag:                 "etcd",
 					},
 					{
-						"source_type":           "blank",
-						"destination_type":      "local",
-						"boot_index":            float64(-1),
-						"delete_on_termination": true,
-						"volume_size":           float64(10),
-						"tag":                   "local-device",
+						SourceType:          "blank",
+						BootIndex:           -1,
+						DeleteOnTermination: true,
+						DestinationType:     "local",
+						VolumeSize:          10,
+						Tag:                 "local-device",
 					},
 				}
-				expectCreateServer(r.compute, createMap, false)
+				expectCreateServer(g, r.compute, withSSHKey(createOpts), getDefaultSchedulerHintOpts(), false)
 
 				// Don't delete ports because the server is created: DeleteInstance will do it
 			},
@@ -599,48 +693,44 @@ func TestService_ReconcileInstance(t *testing.T) {
 				}
 				return s
 			},
-			expect: func(r *recorders) {
-				expectDefaultFlavor(r.compute)
-
+			expect: func(g Gomega, r *recorders) {
 				r.volume.ListVolumes(volumes.ListOpts{Name: fmt.Sprintf("%s-etcd", openStackMachineName)}).
 					Return([]volumes.Volume{}, nil)
 				r.volume.CreateVolume(volumes.CreateOpts{
 					Size:        50,
 					Description: fmt.Sprintf("Additional block device for %s", openStackMachineName),
 					Name:        fmt.Sprintf("%s-etcd", openStackMachineName),
-					Multiattach: false,
 					VolumeType:  "test-volume-type",
 				}).Return(&volumes.Volume{ID: additionalBlockDeviceVolumeUUID}, nil)
 				expectVolumePollSuccess(r.volume, additionalBlockDeviceVolumeUUID)
 
-				createMap := getDefaultServerMap()
-				serverMap := createMap["server"].(map[string]interface{})
-				serverMap["block_device_mapping_v2"] = []map[string]interface{}{
+				createOpts := getDefaultServerCreateOpts()
+				createOpts.BlockDevice = []servers.BlockDevice{
 					{
-						"source_type":           "image",
-						"uuid":                  imageUUID,
-						"boot_index":            float64(0),
-						"delete_on_termination": true,
-						"destination_type":      "local",
+						SourceType:          "image",
+						UUID:                imageUUID,
+						BootIndex:           0,
+						DeleteOnTermination: true,
+						DestinationType:     "local",
 					},
 					{
-						"source_type":           "volume",
-						"uuid":                  additionalBlockDeviceVolumeUUID,
-						"boot_index":            float64(-1),
-						"delete_on_termination": true,
-						"destination_type":      "volume",
-						"tag":                   "etcd",
+						SourceType:          "volume",
+						UUID:                additionalBlockDeviceVolumeUUID,
+						BootIndex:           -1,
+						DeleteOnTermination: true,
+						DestinationType:     "volume",
+						Tag:                 "etcd",
 					},
 					{
-						"source_type":           "blank",
-						"destination_type":      "local",
-						"boot_index":            float64(-1),
-						"delete_on_termination": true,
-						"volume_size":           float64(10),
-						"tag":                   "data",
+						SourceType:          "blank",
+						BootIndex:           -1,
+						DeleteOnTermination: true,
+						DestinationType:     "local",
+						VolumeSize:          10,
+						Tag:                 "data",
 					},
 				}
-				expectCreateServer(r.compute, createMap, false)
+				expectCreateServer(g, r.compute, withSSHKey(createOpts), getDefaultSchedulerHintOpts(), false)
 
 				// Don't delete ports because the server is created: DeleteInstance will do it
 			},
@@ -668,9 +758,7 @@ func TestService_ReconcileInstance(t *testing.T) {
 				}
 				return s
 			},
-			expect: func(r *recorders) {
-				expectDefaultFlavor(r.compute)
-
+			expect: func(g Gomega, r *recorders) {
 				r.volume.ListVolumes(volumes.ListOpts{Name: fmt.Sprintf("%s-etcd", openStackMachineName)}).
 					Return([]volumes.Volume{}, nil)
 				r.volume.CreateVolume(volumes.CreateOpts{
@@ -678,31 +766,29 @@ func TestService_ReconcileInstance(t *testing.T) {
 					AvailabilityZone: "test-alternate-az",
 					Description:      fmt.Sprintf("Additional block device for %s", openStackMachineName),
 					Name:             fmt.Sprintf("%s-etcd", openStackMachineName),
-					Multiattach:      false,
 					VolumeType:       "test-volume-type",
 				}).Return(&volumes.Volume{ID: additionalBlockDeviceVolumeUUID}, nil)
 				expectVolumePollSuccess(r.volume, additionalBlockDeviceVolumeUUID)
 
-				createMap := getDefaultServerMap()
-				serverMap := createMap["server"].(map[string]interface{})
-				serverMap["block_device_mapping_v2"] = []map[string]interface{}{
+				createOpts := getDefaultServerCreateOpts()
+				createOpts.BlockDevice = []servers.BlockDevice{
 					{
-						"source_type":           "image",
-						"uuid":                  imageUUID,
-						"boot_index":            float64(0),
-						"delete_on_termination": true,
-						"destination_type":      "local",
+						SourceType:          "image",
+						UUID:                imageUUID,
+						BootIndex:           0,
+						DeleteOnTermination: true,
+						DestinationType:     "local",
 					},
 					{
-						"source_type":           "volume",
-						"uuid":                  additionalBlockDeviceVolumeUUID,
-						"boot_index":            float64(-1),
-						"delete_on_termination": true,
-						"destination_type":      "volume",
-						"tag":                   "etcd",
+						SourceType:          "volume",
+						UUID:                additionalBlockDeviceVolumeUUID,
+						BootIndex:           -1,
+						DeleteOnTermination: true,
+						DestinationType:     "volume",
+						Tag:                 "etcd",
 					},
 				}
-				expectCreateServer(r.compute, createMap, false)
+				expectCreateServer(g, r.compute, withSSHKey(createOpts), getDefaultSchedulerHintOpts(), false)
 
 				// Don't delete ports because the server is created: DeleteInstance will do it
 			},
@@ -723,14 +809,95 @@ func TestService_ReconcileInstance(t *testing.T) {
 				}
 				return s
 			},
-			expect: func(r *recorders) {
-				expectDefaultFlavor(r.compute)
+			expect: func(_ Gomega, _ *recorders) {
 			},
 			wantErr: true,
+		},
+		{
+			name: "With custom scheduler hint bool",
+			getInstanceSpec: func() *InstanceSpec {
+				s := getDefaultInstanceSpec()
+				s.SchedulerAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+					{
+						Name: "custom_hint",
+						Value: infrav1.SchedulerHintAdditionalValue{
+							Type: infrav1.SchedulerHintTypeBool,
+							Bool: ptr.To(true),
+						},
+					},
+				}
+				return s
+			},
+			expect: func(g Gomega, r *recorders) {
+				createOpts := getDefaultServerCreateOpts()
+				schedulerHintOpts := servers.SchedulerHintOpts{
+					Group: serverGroupUUID,
+					AdditionalProperties: map[string]any{
+						"custom_hint": true,
+					},
+				}
+				expectCreateServer(g, r.compute, withSSHKey(createOpts), schedulerHintOpts, false)
+			},
+			wantErr: false,
+		},
+		{
+			name: "With custom scheduler hint number",
+			getInstanceSpec: func() *InstanceSpec {
+				s := getDefaultInstanceSpec()
+				s.SchedulerAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+					{
+						Name: "custom_hint",
+						Value: infrav1.SchedulerHintAdditionalValue{
+							Type:   infrav1.SchedulerHintTypeNumber,
+							Number: ptr.To(1),
+						},
+					},
+				}
+				return s
+			},
+			expect: func(g Gomega, r *recorders) {
+				createOpts := getDefaultServerCreateOpts()
+				schedulerHintOpts := servers.SchedulerHintOpts{
+					Group: serverGroupUUID,
+					AdditionalProperties: map[string]any{
+						"custom_hint": 1,
+					},
+				}
+				expectCreateServer(g, r.compute, withSSHKey(createOpts), schedulerHintOpts, false)
+			},
+			wantErr: false,
+		},
+		{
+			name: "With custom scheduler hint string",
+			getInstanceSpec: func() *InstanceSpec {
+				s := getDefaultInstanceSpec()
+				s.SchedulerAdditionalProperties = []infrav1.SchedulerHintAdditionalProperty{
+					{
+						Name: "custom_hint",
+						Value: infrav1.SchedulerHintAdditionalValue{
+							Type:   infrav1.SchedulerHintTypeString,
+							String: ptr.To("custom hint"),
+						},
+					},
+				}
+				return s
+			},
+			expect: func(g Gomega, r *recorders) {
+				createOpts := getDefaultServerCreateOpts()
+				schedulerHintOpts := servers.SchedulerHintOpts{
+					Group: serverGroupUUID,
+					AdditionalProperties: map[string]any{
+						"custom_hint": "custom hint",
+					},
+				}
+				expectCreateServer(g, r.compute, withSSHKey(createOpts), schedulerHintOpts, false)
+			},
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
 			mockCtrl := gomock.NewController(t)
 			log := testr.New(t)
 			mockScopeFactory := scope.NewMockScopeFactory(mockCtrl, "")
@@ -740,7 +907,7 @@ func TestService_ReconcileInstance(t *testing.T) {
 			networkRecorder := mockScopeFactory.NetworkClient.EXPECT()
 			volumeRecorder := mockScopeFactory.VolumeClient.EXPECT()
 
-			tt.expect(&recorders{computeRecorder, imageRecorder, networkRecorder, volumeRecorder})
+			tt.expect(g, &recorders{computeRecorder, imageRecorder, networkRecorder, volumeRecorder})
 
 			s, err := NewService(scope.NewWithLogger(mockScopeFactory, log))
 			if err != nil {

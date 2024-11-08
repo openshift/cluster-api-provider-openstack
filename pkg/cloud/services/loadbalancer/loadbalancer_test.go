@@ -23,14 +23,15 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr/testr"
-	"github.com/golang/mock/gomock"
-	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/apiversions"
-	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/listeners"
-	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/loadbalancers"
-	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/monitors"
-	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/pools"
-	"github.com/gophercloud/gophercloud/openstack/loadbalancer/v2/providers"
-	. "github.com/onsi/gomega"
+	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/apiversions"
+	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/flavors"
+	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/listeners"
+	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/loadbalancers"
+	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/monitors"
+	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/pools"
+	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/providers"
+	. "github.com/onsi/gomega" //nolint:revive
+	"go.uber.org/mock/gomock"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 
@@ -93,7 +94,7 @@ func Test_ReconcileLoadBalancer(t *testing.T) {
 	}{
 		{
 			name: "reconcile loadbalancer in non active state should wait for active state",
-			expectNetwork: func(m *mock.MockNetworkClientMockRecorder) {
+			expectNetwork: func(*mock.MockNetworkClientMockRecorder) {
 				// add network api call results here
 			},
 			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
@@ -467,6 +468,13 @@ func Test_getOrCreateAPILoadBalancer(t *testing.T) {
 			Name: "ovn",
 		},
 	}
+	octaviaFlavors := []flavors.Flavor{
+		{
+			ID:      "aaaaaaaa-bbbb-cccc-dddd-111111111111",
+			Name:    "flavorName",
+			Enabled: true,
+		},
+	}
 	lbtests := []struct {
 		name               string
 		openStackCluster   *infrav1.OpenStackCluster
@@ -560,6 +568,40 @@ func Test_getOrCreateAPILoadBalancer(t *testing.T) {
 				ID:           "AAAAA",
 				VipSubnetID:  "VIPSUBNET",
 				VipNetworkID: "VIPNET",
+			},
+		},
+		{
+			name: "loadbalancer with specified flavor created",
+			openStackCluster: &infrav1.OpenStackCluster{
+				Spec: infrav1.OpenStackClusterSpec{
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						Flavor: ptr.To("flavorName"),
+					},
+				},
+				Status: infrav1.OpenStackClusterStatus{
+					Network: &infrav1.NetworkStatusWithSubnets{
+						Subnets: []infrav1.Subnet{
+							{ID: "aaaaaaaa-bbbb-cccc-dddd-222222222222"},
+							{ID: "aaaaaaaa-bbbb-cccc-dddd-333333333333"},
+						},
+					},
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
+						LoadBalancerNetwork: nil,
+					},
+				},
+			},
+			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
+				m.ListLoadBalancers(gomock.Any()).Return([]loadbalancers.LoadBalancer{}, nil)
+				m.ListLoadBalancerProviders().Return(octaviaProviders, nil)
+				m.ListLoadBalancerFlavors().Return(octaviaFlavors, nil)
+				m.CreateLoadBalancer(gomock.Any()).Return(&loadbalancers.LoadBalancer{
+					ID:          "AAAAA",
+					VipSubnetID: "aaaaaaaa-bbbb-cccc-dddd-222222222222",
+				}, nil)
+			},
+			want: &loadbalancers.LoadBalancer{
+				ID:          "AAAAA",
+				VipSubnetID: "aaaaaaaa-bbbb-cccc-dddd-222222222222",
 			},
 		},
 	}

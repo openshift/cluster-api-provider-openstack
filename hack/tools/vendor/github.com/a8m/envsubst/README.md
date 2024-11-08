@@ -13,7 +13,7 @@ Latest stable `envsubst` [prebuilt binaries for 64-bit Linux, or Mac OS X][relea
 
 ###### Linux and MacOS
 ```console
-curl -L https://github.com/a8m/envsubst/releases/download/v1.1.0/envsubst-`uname -s`-`uname -m` -o envsubst
+curl -L https://github.com/a8m/envsubst/releases/download/v1.2.0/envsubst-`uname -s`-`uname -m` -o envsubst
 chmod +x envsubst
 sudo mv envsubst /usr/local/bin
 ```
@@ -21,7 +21,7 @@ sudo mv envsubst /usr/local/bin
 ###### Windows
 Download the latest prebuilt binary from [releases page][releases], or if you have curl installed:
 ```console
-curl -L https://github.com/a8m/envsubst/releases/download/v1.1.0/envsubst.exe
+curl -L https://github.com/a8m/envsubst/releases/download/v1.2.0/envsubst.exe
 ```
 
 ##### With go
@@ -48,6 +48,7 @@ The flags and their restrictions are:
 | ------------| -------------- | ------------ | ------------ |
 |`-i`  | input file  | ```string | stdin``` | `stdin`
 |`-o`  | output file | ```string | stdout``` |  `stdout` 
+|`-no-digit`  | do not replace variables starting with a digit, e.g. $1 and ${1} | `flag` |  `false` 
 |`-no-unset`  | fail if a variable is not set | `flag` |  `false` 
 |`-no-empty`  | fail if a variable is set but empty | `flag` | `false`
 |`-fail-fast`  | fails at first occurence of an error, if `-no-empty` or `-no-unset` flags were **not** specified this is ignored | `flag` | `false`

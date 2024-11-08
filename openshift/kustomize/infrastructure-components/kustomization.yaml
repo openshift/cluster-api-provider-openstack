@@ -81,10 +81,10 @@ replacements:
       version: v1
       kind: CustomResourceDefinition
     reject:
-    # openstackfloatingippools.infrastructure.cluster.x-k8s.io doesn't have any
-    # of these versions
+    # The following types don't have any of these versions
     - name: openstackfloatingippools.infrastructure.cluster.x-k8s.io
+    - name: openstackservers.infrastructure.cluster.x-k8s.io
+    - name: images.openstack.k-orc.cloud
     fieldPaths:
-    - spec.versions.[name=v1alpha5].served
     - spec.versions.[name=v1alpha6].served
     - spec.versions.[name=v1alpha7].served

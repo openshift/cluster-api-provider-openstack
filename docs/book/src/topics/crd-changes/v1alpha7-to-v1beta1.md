@@ -41,8 +41,6 @@
 
 # v1alpha7 compared to v1beta1
 
-> ⚠️ v1beta1 has not been released yet.
-
 ## Migration
 
 All users are encouraged to migrate their usage of the CAPO CRDs from older versions to `v1beta1`. This includes yaml files and source code. As CAPO implements automatic conversions between the CRD versions, this migration can happen after installing the new CAPO release.
@@ -372,7 +370,8 @@ In v1beta1, `OpenStackCluster.Spec.ManagedSubnets` array field is introduced. Th
 
 ```yaml
   nodeCidr: "10.0.0.0/24"
-  dnsNameservers: "10.0.0.123"
+  dnsNameservers:
+  - "10.0.0.123"
 ```
 
 In v1beta1, this will be automatically converted to:
@@ -380,7 +379,8 @@ In v1beta1, this will be automatically converted to:
 ```yaml
   managedSubnets:
   - cidr: "10.0.0.0/24"
-    dnsNameservers: "10.0.0.123"
+    dnsNameservers:
+    - "10.0.0.123"
 ```
 
 Please note that currently `managedSubnets` can only hold one element.

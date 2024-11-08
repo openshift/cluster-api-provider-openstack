@@ -16,6 +16,7 @@ Resource Types:
 </h3>
 <p>
 <p>OpenStackCluster is the Schema for the openstackclusters API.</p>
+<p>Deprecated: v1alpha7.OpenStackCluster has been replaced by v1beta1.OpenStackCluster.</p>
 </p>
 <table>
 <thead>
@@ -413,6 +414,7 @@ OpenStackClusterStatus
 </h3>
 <p>
 <p>OpenStackClusterTemplate is the Schema for the openstackclustertemplates API.</p>
+<p>Deprecated: v1alpha7.OpenStackClusterTemplate has been replaced by v1beta1.OpenStackClusterTemplate.</p>
 </p>
 <table>
 <thead>
@@ -485,6 +487,7 @@ OpenStackClusterTemplateResource
 </h3>
 <p>
 <p>OpenStackMachine is the Schema for the openstackmachines API.</p>
+<p>Deprecated: v1alpha7.OpenStackMachine has been replaced by v1beta1.OpenStackMachine.</p>
 </p>
 <table>
 <thead>
@@ -579,6 +582,18 @@ string
 </td>
 <td>
 <p>The flavor reference for the flavor for your server instance.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>flavorID</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<p>FlavorID allows flavors to be specified by ID.  This field takes precedence
+over Flavor.</p>
 </td>
 </tr>
 <tr>
@@ -774,6 +789,7 @@ OpenStackMachineStatus
 </h3>
 <p>
 <p>OpenStackMachineTemplate is the Schema for the openstackmachinetemplates API.</p>
+<p>Deprecated: v1alpha7.OpenStackMachineTemplate has been replaced by v1beta1.OpenStackMachineTemplate.</p>
 </p>
 <table>
 <thead>
@@ -2716,6 +2732,18 @@ string
 </tr>
 <tr>
 <td>
+<code>flavorID</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<p>FlavorID allows flavors to be specified by ID.  This field takes precedence
+over Flavor.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>image</code><br/>
 <em>
 string
@@ -3067,6 +3095,18 @@ string
 </td>
 <td>
 <p>The flavor reference for the flavor for your server instance.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>flavorID</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<p>FlavorID allows flavors to be specified by ID.  This field takes precedence
+over Flavor.</p>
 </td>
 </tr>
 <tr>

@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/ports"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/subnets"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/ports"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/subnets"
 	openshiftconfig "github.com/openshift/api/config/v1"
 	mapi "github.com/openshift/api/machine/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -53,9 +53,12 @@ const (
 )
 
 type OpenShiftClusterReconciler struct {
-	Client       client.Client
-	Recorder     record.EventRecorder
-	ScopeFactory scope.Factory
+	Client         client.Client
+	Recorder       record.EventRecorder
+	ScopeFactory   scope.Factory
+	CaCertificates []byte // PEM encoded CA certificates
+
+	Scheme *runtime.Scheme
 }
 
 // Cluster-scoped RBAC
@@ -262,7 +265,7 @@ func (r *OpenShiftClusterReconciler) ensureInfraCluster(ctx context.Context, log
 	 * the existing control plane machines.
 	 */
 
-	scope, err := r.ScopeFactory.NewClientScopeFromCluster(ctx, r.Client, &openStackCluster, nil, log)
+	scope, err := r.ScopeFactory.NewClientScopeFromObject(ctx, r.Client, r.CaCertificates, log, &openStackCluster)
 	if err != nil {
 		return nil, fmt.Errorf("creating OpenStack provider scope: %w", err)
 	}
@@ -279,14 +282,14 @@ func (r *OpenShiftClusterReconciler) ensureInfraCluster(ctx context.Context, log
 	if defaultSubnet == nil {
 		return nil, fmt.Errorf("unable to determine default subnet from control plane machines")
 	}
-	openStackCluster.Spec.Network = &infrav1.NetworkParam{ID: &defaultSubnet.NetworkID}
+	openStackCluster.Spec.Network = &infrav1.NetworkParam{ID: ptr.To(defaultSubnet.NetworkID)}
 	// N.B. Deliberately don't add subnet here: CAPO will use all subnets in network, which should also cover dual stack deployments
 
 	routerID, err := r.getDefaultRouterIDFromSubnet(ctx, networkClient, defaultSubnet)
 	if err != nil {
 		return nil, err
 	}
-	openStackCluster.Spec.Router = &infrav1.RouterParam{ID: &routerID}
+	openStackCluster.Spec.Router = &infrav1.RouterParam{ID: ptr.To(routerID)}
 
 	router, err := networkClient.GetRouter(routerID)
 	if err != nil {
@@ -299,7 +302,7 @@ func (r *OpenShiftClusterReconciler) ensureInfraCluster(ctx context.Context, log
 	// to avoid an error reconciling the external network if it isn't set.
 	// If CAPO ever no longer requires this we can just not set it and
 	// remove much of the code above. We don't actually use it.
-	openStackCluster.Spec.ExternalNetwork = &infrav1.NetworkParam{ID: &router.GatewayInfo.NetworkID}
+	openStackCluster.Spec.ExternalNetwork = &infrav1.NetworkParam{ID: ptr.To(router.GatewayInfo.NetworkID)}
 
 	err = r.Client.Create(ctx, &openStackCluster)
 	if err != nil {
@@ -352,6 +355,10 @@ func (r *OpenShiftClusterReconciler) getDefaultSubnetFromMachines(ctx context.Co
 		return nil, fmt.Errorf("listing control plane machines: %w", err)
 	}
 
+	if len(mapiMachines.Items) == 0 {
+		return nil, fmt.Errorf("no control plane machines found")
+	}
+
 	apiServerInternalIPs := make([]net.IP, len(platformStatus.APIServerInternalIPs))
 	for i, ipStr := range platformStatus.APIServerInternalIPs {
 		apiServerInternalIPs[i] = net.ParseIP(ipStr)
@@ -376,6 +383,9 @@ func (r *OpenShiftClusterReconciler) getDefaultSubnetFromMachines(ctx context.Co
 		ports, err := listPortsByInstanceID(networkClient, instanceID)
 		if err != nil {
 			return nil, fmt.Errorf("listing ports for instance %s: %w", instanceID, err)
+		}
+		if len(ports) == 0 {
+			return nil, fmt.Errorf("no ports found for instance %s", instanceID)
 		}
 		for _, port := range ports {
 			log := log.WithValues("port", port.ID)

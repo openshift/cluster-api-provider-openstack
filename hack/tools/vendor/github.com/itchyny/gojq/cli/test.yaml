@@ -1,22 +1,76 @@
-- name: empty
+- name: empty input
+  args:
+    - '.'
   input: ''
   expected: ''
 
-- name: empty query
-  args :
+- name: empty args
+  input: 'null'
+  expected: |
+    null
+
+- name: missing query
+  args:
     - ''
-  input: '128'
-  expected: |
-    128
+  error: |
+    compile error: missing query (try ".")
+  exit_code: 3
 
-- name: comment only query
-  args :
+- name: query with comment
+  args:
+    - '. # comment'
+  input: 'null'
+  expected: |
+    null
+
+- name: missing query with comment
+  args:
     - '# comment'
-  input: '128'
-  expected: |
-    128
+  error: |
+    compile error: missing query (try ".")
+  exit_code: 3
 
-- name: number
+- name: query with comment with newline
+  args:
+    - |
+      # comment
+      1,
+      # comment \
+        comment \ 0 \
+        comment
+      2,
+      # comment \
+        comment \\
+      3, #      \
+        comment \\\
+        comment \\
+      4 #
+  input: 'null'
+  expected: |
+    1
+    2
+    3
+    4
+
+- name: query with comment with newline in dos format
+  args:
+    - "1, # \r\n2, # \\\r\ncomment\\\\\r\n3"
+  input: 'null'
+  expected: |
+    1
+    2
+    3
+
+- name: query with comment with newline in mac format
+  args:
+    - "1, # \r2, # \\\rcomment\\\\\r3"
+  input: 'null'
+  expected: |
+    1
+    2
+    3
+
+- name: number input
   args:
     - '.'
   input: '128'
@@ -25,11 +79,12 @@
 
 - name: number query
   args:
-    - '0, 128, 3.14, 1.2e3, 1E+3, 1E-9'
+    - '0, 128, 01000, 3.14, 1.2e3, 1E+3, 1E-9'
   input: '0'
   expected: |
     0
     128
+    1000
     3.14
     1200
     1000
@@ -45,89 +100,243 @@
         ^  invalid token "0.."
   exit_code: 3
 
-- name: string
+- name: string input
   args:
     - '.'
-  input: '"Hello, world!\n\t\uff06"'
+  input: '"Hello, world! \r\n\t\f\b\"\\\/\uff06"'
   expected: |
-    "Hello, world!\n\t＆"
+    "Hello, world! \r\n\t\f\b\"\\/＆"
 
 - name: string query
   args:
-    - '" Hello, world! \n\t\uff10 "'
-  input: '0'
+    - '" Hello, world! \r\n\t\f\b\"\\\/\uff10 "'
+  input: 'null'
   expected: |
-    " Hello, world! \n\t０ "
+    " Hello, world! \r\n\t\f\b\"\\/０ "
+
+- name: string query including newlines
+  args:
+    - "\"a\n\\(\"\nb\nc\n\")\nd\n\""
+  input: 'null'
+  expected: |
+    "a\n\nb\nc\n\nd\n"
+
+- name: string query including control characters
+  args:
+    - "\"\x01\x07\x0f\\n\", \"\x7f\\n\""
+  input: 'null'
+  expected: |
+    "\u0001\u0007\u000f\n"
+    "\u007f\n"
+
+- name: string query including surrogate pairs
+  args:
+    - '"\ud83d\ude04" | length, utf8bytelength, explode[]'
+  input: 'null'
+  expected: |
+    1
+    4
+    128516
 
 - name: string query error
   args:
     - '. + "foo'
-  input: '0'
+  input: 'null'
   error: |
     invalid query: . + "foo
         . + "foo
-            ^  invalid token "foo
+                ^  unterminated string literal
   exit_code: 3
 
 - name: string query error
   args:
     - '"foo\,bar"'
-  input: '0'
+  input: 'null'
   error: |
     invalid query: "foo\,bar"
         "foo\,bar"
-            ^  invalid token "\,"
+            ^  invalid escape sequence "\," in string literal
   exit_code: 3
 
 - name: string query error
   args:
-    - '"\u "'
-  input: '0'
+    - '"\u"'
+  input: 'null'
   error: |
-    invalid query: "\u "
-        "\u "
-        ^  invalid token "\u "
+    invalid query: "\u"
+        "\u"
+         ^  invalid escape sequence "\u" in string literal
+  exit_code: 3
+
+- name: string query error
+  args:
+    - "\"\n\\u\n\""
+  input: 'null'
+  error: |
+    invalid query: <arg>:2
+        2 | \u
+            ^  invalid escape sequence "\u" in string literal
+  exit_code: 3
+
+- name: string query error
+  args:
+    - '"\u'
+  input: 'null'
+  error: |
+    invalid query: "\u
+        "\u
+         ^  invalid escape sequence "\u" in string literal
+  exit_code: 3
+
+- name: string query error
+  args:
+    - '"\'
+  input: 'null'
+  error: |
+    invalid query: "\
+        "\
+          ^  unterminated string literal
+  exit_code: 3
+
+- name: string query error
+  args:
+    - '"\"'
+  input: 'null'
+  error: |
+    invalid query: "\"
+        "\"
+           ^  unterminated string literal
+  exit_code: 3
+
+- name: string query error
+  args:
+    - '"\u````"'
+  input: 'null'
+  error: |
+    invalid query: "\u````"
+        "\u````"
+         ^  invalid escape sequence "\u" in string literal
+  exit_code: 3
+
+- name: string query error
+  args:
+    - '"\uAA\uAA"'
+  input: 'null'
+  error: |
+    invalid query: "\uAA\uAA"
+        "\uAA\uAA"
+         ^  invalid escape sequence "\uAA" in string literal
+  exit_code: 3
+
+- name: string query error
+  args:
+    - '"\uAA@AA"'
+  input: 'null'
+  error: |
+    invalid query: "\uAA@AA"
+        "\uAA@AA"
+         ^  invalid escape sequence "\uAA" in string literal
+  exit_code: 3
+
+- name: string query error
+  args:
+    - '"\uAAGA"'
+  input: 'null'
+  error: |
+    invalid query: "\uAAGA"
+        "\uAAGA"
+         ^  invalid escape sequence "\uAA" in string literal
+  exit_code: 3
+
+- name: string query error
+  args:
+    - '"\ufffg"'
+  input: 'null'
+  error: |
+    invalid query: "\ufffg"
+        "\ufffg"
+         ^  invalid escape sequence "\ufff" in string literal
+  exit_code: 3
+
+- name: string query error
+  args:
+    - '"0\u00:00"'
+  input: 'null'
+  error: |
+    invalid query: "0\u00:00"
+        "0\u00:00"
+          ^  invalid escape sequence "\u00" in string literal
+  exit_code: 3
+
+- name: string query error
+  args:
+    - '"0\u0000\u000/0"'
+  input: 'null'
+  error: |
+    invalid query: "0\u0000\u000/0"
+        "0\u0000\u000/0"
+                ^  invalid escape sequence "\u000" in string literal
   exit_code: 3
 
 - name: string query error
   args:
     - '"\(1) \x "'
-  input: '0'
+  input: 'null'
   error: |
     invalid query: "\(1) \x "
         "\(1) \x "
-             ^  invalid token " \x "
+              ^  invalid escape sequence "\x" in string literal
   exit_code: 3
 
-- name: object
+- name: string query error
+  args:
+    - '"\a"'
+  input: 'null'
+  error: |
+    invalid query: "\a"
+        "\a"
+         ^  invalid escape sequence "\a" in string literal
+  exit_code: 3
+
+- name: string query error
+  args:
+    - '"\u\('
+  input: 'null'
+  error: |
+    invalid query: "\u\(
+        "\u\(
+         ^  invalid escape sequence "\u" in string literal
+  exit_code: 3
+
+- name: object input
   input: '{"foo": 128}'
   expected: |
     {
       "foo": 128
     }
 
-- name: object key and string escape
+- name: object input and string escape
   input: '{"foo\\u0000\\t\\n\\r\\u001f !\"#$/09:;<>?@AZ[\\\\]^_`az{|}~\\u007f": "<\\t\\n\\r>"}'
   expected: |
     {
       "foo\\u0000\\t\\n\\r\\u001f !\"#$/09:;<>?@AZ[\\\\]^_`az{|}~\\u007f": "<\\t\\n\\r>"
     }
 
-- name: object index
+- name: object indexing
   args:
     - '.foo'
   input: '{"foo": 128}'
   expected: |
     128
 
-- name: object index large number
+- name: object indexing with large number value
   args:
     - '.foo'
   input: '{"foo": 4722366482869645213696}'
   expected: |
     4722366482869645213696
 
-- name: keyword in object index
+- name: object indexing by keywords
   args:
     - '.and,.or,.try'
   input: '{"and":1,"or":2,"try":3}'
@@ -136,36 +345,40 @@
     2
     3
 
-- name: object index
+- name: object indexing by brackets
   args:
     - '.["foo"]'
   input: '{"foo": 128}'
   expected: |
     128
 
-- name: object index by string
+- name: object indexing by string
   args:
-    - '."2\(.foo[])3"'
+    - '."foo", ."2\(.foo[])3"'
   input: '{"foo":[1,2],"213":3,"223":6}'
   expected: |
+    [
+      1,
+      2
+    ]
     3
     6
 
-- name: object index by query
+- name: object indexing by query
   args:
     - '.c[.a + .b]'
   input: '{ "a": "b", "b": "c", "c": {"bc": 128} }'
   expected: |
     128
 
-- name: deep object index by query
+- name: object nested indexing by query
   args:
     - '.d[.a][.b][.c]'
   input: '{ "a": "b", "b": "c", "c": "d", "d": { "b": { "c": { "d": 128 } } } }'
   expected: |
     128
 
-- name: object index by iterator
+- name: object indexing by iterator after iterator
   args:
     - '.c[][.a[] + .b[]]'
   input: '{ "a": ["a", "b"], "b": ["c", "d"], "c": [{"ac": 1, "bc": 2, "ad": 3, "bd": 4}, {"ac": 5, "bc": 6, "ad": 7, "bd": 8}] }'
@@ -179,7 +392,7 @@
     4
     8
 
-- name: object index by string iterator
+- name: object indexing by string iterator after iterator
   args:
     - '.c[]."\(.a[])"'
   input: '{ "a": [0,1], "b": [0,2], "c": [{"0":1,"1":2},{"0":3,"1":4}] }'
@@ -189,7 +402,7 @@
     2
     4
 
-- name: object index after iterator
+- name: object indexing in object value
   args:
     - '{ message: .[].message }'
   input: '[ {"message": "Hello, world" } ]'
@@ -198,14 +411,28 @@
       "message": "Hello, world"
     }
 
-- name: object index error
+- name: object indexing error
   args:
     - '.[.a + .b]'
   input: '{"a": 10, "b": 20}'
   error: |
     expected an array but got: object ({"a":10,"b":20})
 
-- name: object index syntax error
+- name: object indexing value error
+  args:
+    - '.["foo"]'
+  input: '[]'
+  error: |
+    expected an object but got: array ([])
+
+- name: object indexing key error
+  args:
+    - '.[null]'
+  input: '{}'
+  error: |
+    expected a string for object key but got: null
+
+- name: object indexing syntax error
   args:
     - '. a'
   input: '{}'
@@ -215,106 +442,153 @@
           ^  unexpected token "a"
   exit_code: 3
 
-- name: expected object but got number
+- name: expected object but got number error
   args:
     - '.foo.bar'
   input: '{"foo": 128}'
   error: |
     expected an object but got: number (128)
 
-- name: expected object but got string
+- name: expected object but got string error
   args:
     - '"a"+"☆"*100 | .foo'
   input: '0'
   error: |
-    expected an object but got: string ("a☆☆☆☆☆☆☆☆ ...")
+    expected an object but got: string ("a☆☆☆☆☆☆☆ ...")
 
-- name: expected object in pipe
+- name: expected object error with pipe operator
   args:
     - '.foo|.bar'
   input: '{"foo": 128}'
   error: |
     expected an object but got: number (128)
 
-- name: expected object after iterator
+- name: expected object error after iterator
   args:
     - '.[]|.foo|.bar'
   input: '[128]'
   error: |
     expected an object but got: number (128)
 
-- name: object index against null
+- name: object indexing against null
   args:
     - '.foo.bar.baz'
   input: 'null'
   expected: |
     null
 
-- name: object optional
+- name: object optional indexing
   args:
     - '.foo?.bar?.baz?'
   input: '{"foo": 128}'
 
-- name: object optional error
+- name: object optional indexing error
   args:
     - '.foo.bar.baz?'
   input: '{"foo": 128}'
   error: |
     expected an object but got: number (128)
 
-- name: object optional after iterator error
+- name: object optional indexing after iterator error
   args:
     - '.[].foo?'
   input: '128'
   error: |
     cannot iterate over: number (128)
 
-- name: error after optional
+- name: object optional indexing with optional operator
+  args:
+    - '.foo??, .'
+  input: '0'
+  expected: |
+    0
+
+- name: error after optional operator
   args:
     - '1? | .foo'
   input: 'null'
   error: |
     expected an object but got: number (1)
 
-- name: error after optional with fork in try
+- name: error after optional operator with fork
   args:
     - '(1,2)? | .foo'
   input: 'null'
   error: |
     expected an object but got: number (1)
 
-- name: array index
+- name: array indexing
   args:
-    - '.[-5],.[-1],.[0],.[2],.[3],.[4]'
-  input: '[16, 32, 48, 64]'
+    - '.[-4,-3,-2,-1,0,1,2,3,nan]'
+  input: '[0, 1, 2]'
   expected: |
     null
-    64
-    16
-    48
-    64
+    0
+    1
+    2
+    0
+    1
+    2
+    null
     null
 
-- name: array slice
+- name: array slicing
   args:
     - -c
-    - '.[2:], .[:2], .[1:3], .[0:4], .[2:1], .[-2:], .[:-2], .[-2:-1], .[-10:], .[:10], .[10:], .[:-10]'
-  input: '[16, 32, 48, 64]'
+    - '[.[-4,-3,-2,-1,0,1,2,3:]], [.[:-4,-3,-2,-1,0,1,2,3]], [.[-1,0,1,2,3:-1,0,1,2,3]]'
+  input: '[0, 1, 2]'
   expected: |
-    [48,64]
-    [16,32]
-    [32,48]
-    [16,32,48,64]
+    [[0,1,2],[0,1,2],[1,2],[2],[0,1,2],[1,2],[2],[]]
+    [[],[],[0],[0,1],[],[0],[0,1],[0,1,2]]
+    [[],[],[],[],[2],[0,1],[],[0],[0,1],[0,1,2],[1],[],[],[1],[1,2],[],[],[],[],[2],[],[],[],[],[]]
+
+- name: array indexing and slicing by large number
+  args:
+    - -c
+    - '.[1e300,-1e300], .[-1e300,1e300:], .[:-1e300,1e300], .[-1e300:1e300], .[1e300:-1e300]'
+  input: '[0, 1, 2]'
+  expected: |
+    null
+    null
+    [0,1,2]
     []
-    [48,64]
-    [16,32]
-    [48]
-    [16,32,48,64]
-    [16,32,48,64]
     []
+    [0,1,2]
+    [0,1,2]
     []
 
-- name: array and string slice with object
+- name: array indexing and slicing by large integer
+  args:
+    - -c
+    - '. as $x | 4722366482869645213696 as $y | $x[$y,-$y], $x[-$y,$y:], $x[:-$y,$y], $x[-$y:$y], $x[$y-$y], $x[$y/$y]'
+  input: '[0, 1, 2]'
+  expected: |
+    null
+    null
+    [0,1,2]
+    []
+    []
+    [0,1,2]
+    [0,1,2]
+    0
+    1
+
+- name: array indexing and slicing by infinite
+  args:
+    - -c
+    - '.[infinite,-infinite], .[-infinite,infinite:], .[:-infinite,infinite], .[-infinite:infinite], .[infinite:-infinite]'
+  input: '[0, 1, 2]'
+  expected: |
+    null
+    null
+    [0,1,2]
+    []
+    []
+    [0,1,2]
+    [0,1,2]
+    []
+
+- name: array and string slicing by object
   args:
     - -c
     - '[.[{"start": (null,range(-3;4)), "end": (null,range(-3;4))}]]'
@@ -323,42 +597,21 @@
     [[0,1,2],[],[0],[0,1],[],[0],[0,1],[0,1,2],[0,1,2],[],[0],[0,1],[],[0],[0,1],[0,1,2],[1,2],[],[],[1],[],[],[1],[1,2],[2],[],[],[],[],[],[],[2],[0,1,2],[],[0],[0,1],[],[0],[0,1],[0,1,2],[1,2],[],[],[1],[],[],[1],[1,2],[2],[],[],[],[],[],[],[2],[],[],[],[],[],[],[],[]]
     ["abcde","ab","abc","abcd","","a","ab","abc","cde","","c","cd","","","","c","de","","","d","","","","","e","","","","","","","","abcde","ab","abc","abcd","","a","ab","abc","bcde","b","bc","bcd","","","b","bc","cde","","c","cd","","","","c","de","","","d","","","",""]
 
-- name: array slice with object against null
+- name: array slicing by object against null
   args:
     - '.[{"start": 1, "end": 2}]'
   input: 'null'
   expected: |
     null
 
-- name: array slice with object error
+- name: array slicing by object error
   args:
     - '.[{"start": 1}]'
   input: '[]'
   error: |
     expected "start" and "end" for slicing but got: object ({"start":1})
 
-- name: array slice against string error
-  args:
-    - '""[:{}]'
-  input: '0'
-  error: |
-    expected a number for indexing an array but got: object ({})
-
-- name: array index and slice with large number
-  args:
-    - -c
-    - '. as $x | 4722366482869645213696 as $y | $x[-$y], $x[$y], $x[-$y:], $x[:$y], $x[-$y:$y], $x[$y-$y], $x[$y/$y]'
-  input: '[16, 32, 48, 64]'
-  expected: |
-    null
-    null
-    [16,32,48,64]
-    [16,32,48,64]
-    [16,32,48,64]
-    16
-    32
-
-- name: iterator in array index
+- name: array nested indexing by iterator
   args:
     - -c
     - '[.[.[]],.[.[]:],.[:.[]],.[.[]:.[]],.[-.[]],.[--.[]]]'
@@ -366,7 +619,7 @@
   expected: |
     [0,1,2,[0,1,2],[1,2],[2],[],[0],[0,1],[],[0],[0,1],[],[],[1],[],[],[],0,2,1,0,1,2]
 
-- name: array index by iterator
+- name: array indexing by iterator
   args:
     - '.c[][.a[] + .b[]]'
   input: '{ "a": [0,1], "b": [0,2], "c": [[1,2,3,4],[5,6,7,8]] }'
@@ -380,7 +633,7 @@
     4
     8
 
-- name: array slice by iterator
+- name: array slicing by iterator
   args:
     - -c
     - '.c[][.a[] : .b[]]'
@@ -395,21 +648,28 @@
     [2]
     [6]
 
-- name: expected array
+- name: expected array but got object error
   args:
     - '.[0:1]'
   input: '{"foo": 128}'
   error: |
     expected an array but got: object ({"foo":128})
 
-- name: array index against null
+- name: array indexing against null
   args:
     - '.[0]'
   input: 'null'
   expected: |
     null
 
-- name: array index with array
+- name: array slicing against null
+  args:
+    - '.[0:1]'
+  input: 'null'
+  expected: |
+    null
+
+- name: array indexing by array
   args:
     - -c
     - '.[[1],[5,7,9],[],5,[3]]'
@@ -421,27 +681,55 @@
     8
     [1,9]
 
-- name: array index error
+- name: array indexing not number error
   args:
-    - '.["foo"]'
+    - '.[true]'
   input: '[]'
   error: |
-    expected an object but got: array ([])
+    expected a number for indexing an array but got: boolean (true)
 
-- name: array slice error
+- name: array slicing start error
   args:
-    - '.[:{}]'
+    - '.[[]:0]'
+  input: '[]'
+  error: |
+    expected a number for indexing an array but got: array ([])
+
+- name: array slicing end error
+  args:
+    - '.[0:{}]'
   input: '[]'
   error: |
     expected a number for indexing an array but got: object ({})
 
-- name: string index and slice
+- name: string indexing and slicing
   args:
     - -c
     - '[.[-5],.[-1],.[0],.[3],.[4],.[6],.[2:4],.[-4:-2]]'
   input: '"１２３４５"'
   expected: |
-    ["１","５","１","４","５","","３４","２３"]
+    ["１","５","１","４","５",null,"３４","２３"]
+
+- name: string indexing not number error
+  args:
+    - '.[null]'
+  input: '""'
+  error: |
+    expected a number for indexing a string but got: null
+
+- name: string slicing start error
+  args:
+    - '.[[]:]'
+  input: '""'
+  error: |
+    expected a number for indexing a string but got: array ([])
+
+- name: string slicing end error
+  args:
+    - '.[:{}]'
+  input: '""'
+  error: |
+    expected a number for indexing a string but got: object ({})
 
 - name: array construction
   args:
@@ -454,7 +742,7 @@
     [[1],[1]]
     [[[null],3],[[null],3]]
 
-- name: iterator
+- name: array iterator
   args:
     - '.foo | .[] | .'
   input: '{"foo": [1,2,{"bar":[]},[3,4,5]]}'
@@ -470,19 +758,33 @@
       5
     ]
 
-- name: iterator optional
+- name: iterator with optional operator
   args:
     - '.[]?'
-  input: '10'
+  input: '0'
 
-- name: iterator error
+- name: iterator with optional operator after indexing error
+  args:
+    - '.x[]?'
+  input: '0'
+  error: |
+    expected an object but got: number (0)
+
+- name: nested iterator
+  args:
+    - '.[][]'
+  input: '[[10]]'
+  expected: |
+    10
+
+- name: nested iterator error
   args:
     - '.[][]'
   input: '[10]'
   error: |
     cannot iterate over: number (10)
 
-- name: deep iterator optional
+- name: nested iterator with optional operator
   args:
     - '.[][]?'
   input: '[10]'
@@ -494,7 +796,7 @@
   expected: |
     128
 
-- name: object optional after iterator
+- name: object optional indexing after iterator
   args:
     - '[.[].name?]'
   input: '[ 1, { "name": 2 }, 3, { "name": 4 } ]'
@@ -513,7 +815,7 @@
       "baz": 128
     }
 
-- name: null values
+- name: null value
   args:
     - '.[] | null'
   input: '["a", 1, [], {}]'
@@ -533,7 +835,7 @@
     true
     false
 
-- name: empty value
+- name: empty function
   args:
     - '.[] | empty, empty, . + [empty,.][], [empty,.][] / 1, empty < ., . and empty, empty or .'
   input: '[0, 1]'
@@ -543,7 +845,18 @@
     2
     1
 
-- name: empty function
+- name: empty function in array construction
+  args:
+    - '[empty], [0, empty, 1]'
+  input: 'null'
+  expected: |
+    []
+    [
+      0,
+      1
+    ]
+
+- name: empty function in function declaration
   args:
     - 'def f: 1,empty,empty,2; f,f'
   input: '[0, 1]'
@@ -562,12 +875,22 @@
     [-1,-2,-3,-4722366482869645213696]
     [1,2,3,4722366482869645213696]
 
-- name: unary operators against string
+- name: unary operator against string
   args:
     - '(-.)'
   input: '"abcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcdeabcde"'
   error: |
     cannot negate: string ("abcdeabcdeabcdeabcdeabcd ...")
+
+- name: unary operator with variable binding
+  args:
+    - '[-1 as $x | 1, $x]'
+  input: 'null'
+  expected: |
+    [
+      1,
+      -1
+    ]
 
 - name: object construction
   args:
@@ -577,7 +900,7 @@
   expected: |
     {"":false,"bar":{"bar":["a","b"]},"foo":["a","b"]}
 
-- name: object construction shortcut
+- name: object construction shortcuts
   args:
     - '{foo,"bar",qux,quxx:.foo}'
   input: '{"foo": 1, "bar": 2, "baz": 3}'
@@ -599,7 +922,7 @@
       "foo": 1
     }
 
-- name: object construction with keyword
+- name: object construction by keywords
   args:
     - '{as, and, null, module}'
   input: '{"and": 1, "as": 2, "module": 3, "null": 4}'
@@ -611,10 +934,19 @@
       "null": 4
     }
 
-- name: object construction pipe in value
+- name: object construction with duplicate keys
   args:
-    - '{ "bar": { "baz": . } | . | select(true) }'
-  input: '{ "foo": 100 }'
+    - -c
+    - '{foo: 1, foo: 2, bar: 3}, {foo, bar, foo: length}'
+  input: '{"foo": 1, "bar": 2, "baz": 3}'
+  expected: |
+    {"bar":3,"foo":2}
+    {"bar":2,"foo":3}
+
+- name: object construction with pipe in value
+  args:
+    - '{"bar": {"baz":.} | select(.baz)}'
+  input: '{"foo":100}'
   expected: |
     {
       "bar": {
@@ -624,6 +956,41 @@
       }
     }
 
+- name: object construction with unary operator
+  args:
+    - '{x:-1}, {x:-.}, {x:-.|abs}'
+  input: '1'
+  expected: |
+    {
+      "x": -1
+    }
+    {
+      "x": -1
+    }
+    {
+      "x": 1
+    }
+
+- name: object construction with binary operators
+  args:
+    - '{x: 1 + 2, y: false or true, z: null // 3}'
+  input: 'null'
+  expected: |
+    {
+      "x": 3,
+      "y": true,
+      "z": 3
+    }
+
+- name: object construction with condition
+  args:
+    - '{x: if true then -. end}'
+  input: '1'
+  expected: |
+    {
+      "x": -1
+    }
+
 - name: empty object
   args:
     - '{}'
@@ -631,16 +998,17 @@
   expected: |
     {}
 
-- name: negate in object value
+- name: unary operators in object values
   args:
-    - '{ foo: -128 }'
+    - '{ x: -128, y: +128 }'
   input: '0'
   expected: |
     {
-      "foo": -128
+      "x": -128,
+      "y": 128
     }
 
-- name: iterator in object
+- name: iterator in object values
   args:
     - -c
     - '{ foo: .foo[], bar: .bar[] }'
@@ -664,7 +1032,7 @@
     {"b":"a"}
     {"b":"b"}
 
-- name: binary operator in object key and value
+- name: binary operators in object key and value
   args:
     - -c
     - '{ (.[] + .[]): (.[] + .[]) }'
@@ -709,16 +1077,14 @@
   error: |
     expected an object but got: number (10)
 
-- name: variable in object key
+- name: variable in object keys
   args:
+    - -c
     - '. as [$x, $y, $z] | {$x: 1, $y: 2, $z: 3}'
-  input: '["a", "b", "c"]'
+  input: |
+    ["a","b","c"]
   expected: |
-    {
-      "a": 1,
-      "b": 2,
-      "c": 3
-    }
+    {"a":1,"b":2,"c":3}
 
 - name: pipe in object key
   args:
@@ -743,7 +1109,7 @@
   error: |
     expected a string for object key but got: null
 
-- name: keyword in object key
+- name: keyword in object keys
   args:
     - -c
     - '{if:0,and:1,or:2,then:3,else:4,elif:5,end:6,as:7,def:8,reduce:9,foreach:10,try:11,catch:12,label:13,import:14,include:15,module:16}'
@@ -869,14 +1235,49 @@
     {"foo":2}
     {"foo":3}
 
+- name: abs function
+  args:
+    - 'abs'
+  input: |
+    0
+    42
+    -42
+    0.0
+    3.14
+    -3.14
+    4722366482869645213696
+    -4722366482869645213696
+  expected: |
+    0
+    42
+    42
+    0
+    3.14
+    3.14
+    4722366482869645213696
+    4722366482869645213696
+
 - name: length function
   args:
-    - -c
-    - 'map(length),.'
-  input: '[42, -42, {"a":1,"b":2}, [3,4,5], "Hello, world", "１２３４５", null, -4722366482869645213696]'
+    - 'length'
+  input: |
+    42
+    -42
+    {"a":1,"b":2}
+    [3,4,5]
+    "Hello, world"
+    "１２３４５"
+    null
+    -4722366482869645213696
   expected: |
-    [42,42,2,3,12,5,0,4722366482869645213696]
-    [42,-42,{"a":1,"b":2},[3,4,5],"Hello, world","１２３４５",null,-4722366482869645213696]
+    42
+    42
+    2
+    3
+    12
+    5
+    0
+    4722366482869645213696
 
 - name: length function error
   args:
@@ -887,53 +1288,70 @@
 
 - name: keys function
   args:
-    - '[.[]|keys]'
-  input: '[{"a":1,"b":2}, [3,4,5]]'
+    - 'keys'
+  input: |
+    {"a":1,"b":2}
+    [3,4,5]
   expected: |
     [
-      [
-        "a",
-        "b"
-      ],
-      [
-        0,
-        1,
-        2
-      ]
+      "a",
+      "b"
+    ]
+    [
+      0,
+      1,
+      2
     ]
 
 - name: utf8bytelength function
   args:
     - 'utf8bytelength'
-  input: '"☆１２３４５☆"'
+  input: '"" "☆１２３４５☆"'
   expected: |
+    0
     21
 
 - name: has function on objects
   args:
-    - 'map(has(.c[]))'
-  input: '[{"a":{"b":1},"c":["a","b"]}, {"c":["b","c"]}]'
+    - 'has(.c[])'
+  input: |
+    {"a":{"b":1},"c":["a","b"]}
+    {"c":["b","c"]}
   expected: |
-    [
-      true,
-      false,
-      false,
-      true
-    ]
+    true
+    false
+    false
+    true
 
 - name: has function on arrays
   args:
-    - 'map(has(2))'
-  input: '[[1, 2, 3], [1, 3]]'
+    - 'has(2, nan, infinite, -infinite)'
+  input: |
+    [1, 2, 3]
+    [1, 3]
   expected: |
-    [
-      true,
-      false
-    ]
+    true
+    false
+    false
+    false
+    false
+    false
+    false
+    false
+
+- name: has function against null
+  args:
+    - 'has(2, nan, infinite, -infinite)'
+  input: 'null'
+  expected: |
+    false
+    false
+    false
+    false
 
 - name: has/0 is not defined
   args:
-    - 'map(has)'
+    - 'has'
   input: '[0]'
   error: |
     function not defined: has/0
@@ -941,7 +1359,7 @@
 
 - name: has/2 is not defined
   args:
-    - 'map(has(1; 2))'
+    - 'has(1; 2)'
   input: '[0]'
   error: |
     function not defined: has/2
@@ -952,36 +1370,39 @@
     - 'has(0)'
   input: '{}'
   error: |
-    cannot check whether object ({}) has a key: number (0)
+    has(0) cannot be applied to: object ({})
 
 - name: in function for object
   args:
-    - 'map(in({"foo": 42}))'
-  input: '["foo", "bar"]'
+    - 'in({"foo": 42})'
+  input: '"foo" "bar"'
   expected: |
-    [
-      true,
-      false
-    ]
+    true
+    false
 
 - name: in function for array
   args:
-    - 'map(in([3, 4]))'
-  input: '[-1, 0, 1, 2]'
+    - 'in([3, 4])'
+  input: '-1 0 1 2'
   expected: |
-    [
-      false,
-      true,
-      true,
-      false
-    ]
+    false
+    true
+    true
+    false
+
+- name: in function for null
+  args:
+    - 'in(null)'
+  input: '0'
+  expected: |
+    false
 
 - name: in function type error
   args:
     - 'in([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0])'
   input: '"x"'
   error: |
-    cannot check whether array ([0,0,0,0,0,0,0,0,0,0,0,0, ...]) has a key: string ("x")
+    has("x") cannot be applied to: array ([0,0,0,0,0,0,0,0,0,0,0,0, ...])
 
 - name: map function
   args:
@@ -995,7 +1416,9 @@
   args:
     - -c
     - 'to_entries'
-  input: '[10, 20] {"a": 10, "b": []}'
+  input: |
+    [10, 20]
+    {"a": 10, "b": []}
   expected: |
     [{"key":0,"value":10},{"key":1,"value":20}]
     [{"key":"a","value":10},{"key":"b","value":[]}]
@@ -1004,9 +1427,23 @@
   args:
     - -c
     - 'from_entries'
-  input: '[{"key":"a", "value":1}, {"Key":"b", "Value":2}, {"name":"c", "value":3}, {"Name":"d", "Value":4}]'
+  input: '[{"key":"a","Key":"b","value":1},{"Key":"b","Value":2},{"key":null,"name":"c","Name":"d","value":3},{"name":false,"Name":"d","value":null,"Value":4},{"key":"e"}]'
   expected: |
-    {"a":1,"b":2,"c":3,"d":4}
+    {"a":1,"b":2,"c":3,"d":null,"e":null}
+
+- name: from_entries function missing key
+  args:
+    - 'from_entries'
+  input: '[{"value":1}]'
+  error: |
+    from_entries cannot be applied to [{"value":1}]: expected a string for object key but got: null
+
+- name: from_entries function key type error
+  args:
+    - 'from_entries'
+  input: '[{"key":{},"value":1}]'
+  error: |
+    from_entries cannot be applied to [{"key":{},"value":1}]: expected a string for object key but got: object ({})
 
 - name: with_entries function
   args:
@@ -1019,41 +1456,125 @@
 - name: add function
   args:
     - -c
-    - 'map(add)'
-  input: '[[], [1,2,3], ["a","b","c"], [[3],[4,5],[6]], [{"a":1}, {"b":2}, {"a":3}],
-           {}, {"a":1,"b":9}, {"a":"a","b":"b","c":"c"}, {"a":[1],"b":[2],"c":[3],"d":[4]}]'
+    - 'add'
+  input: |
+    []
+    [1,2,3]
+    ["a","b","c"]
+    [[3],[4,5],[6]]
+    [{"a":1}, {"b":2}, {"a":3}]
+    {}
+    {"a":1,"b":9}
+    {"a":"a","b":"b","c":"c"}
+    {"a":[1],"b":[2],"c":[3],"d":[4]}
   expected: |
-    [null,6,"abc",[3,4,5,6],{"a":3,"b":2},null,10,"abc",[1,2,3,4]]
+    null
+    6
+    "abc"
+    [3,4,5,6]
+    {"a":3,"b":2}
+    null
+    10
+    "abc"
+    [1,2,3,4]
+
+- name: add function with a variable
+  args:
+    - '. as $x | [$x, {y:1}] | add, $x'
+  input: '{"x":0}'
+  expected: |
+    {
+      "x": 0,
+      "y": 1
+    }
+    {
+      "x": 0
+    }
+
+- name: add function with slicing
+  args:
+    - -c
+    - '[.[:2], [0], .[1:]] | add'
+  input: '[1,2,3]'
+  expected: |
+    [1,2,0,2,3]
 
 - name: add function error
   args:
-    - -c
     - 'add'
   input: '[{}, [], {}]'
   error: |
     cannot add: object ({}) and array ([])
 
+- name: add function error
+  args:
+    - 'add'
+  input: '["x", null, "y", {}, "z"]'
+  error: |
+    cannot add: string ("xy") and object ({})
+
 - name: flatten/0 function
   args:
     - -c
-    - 'map(flatten)'
-  input: '[[0, [[[[[1]]]]]], [0, [1, [2]], [1, [[3], 2]]]]'
+    - 'flatten'
+  input: |
+    []
+    [0, [[[[[1]]]]]]
+    [0, [1, [2]], [1, [[3], 2]]]
+    {"x": [1], "y": [[2]], "z": [[[3]]]}
   expected: |
-    [[0,1],[0,1,2,1,3,2]]
+    []
+    [0,1]
+    [0,1,2,1,3,2]
+    [1,2,3]
+
+- name: flatten/0 function error
+  args:
+    - 'flatten, flatten("")'
+  input: '0 [[]]'
+  expected: |
+    []
+  error: |
+    flatten cannot be applied to: number (0)
+    flatten cannot be applied to: string ("")
 
 - name: flatten/1 function
   args:
     - -c
-    - 'map(flatten(2))'
-  input: '[[0, [[[[[1]]]]]], [0, [1, [2]], [1, [[3], 2]]]]'
+    - 'flatten(0, 1.5, 2)'
+  input: |
+    []
+    [0, [[[[[1]]]]]]
+    [0, [1, [2]], [1, [[3], 2]]]
+    {"x": [1], "y": [[2]], "z": [[[3]]]}
   expected: |
-    [[0,[[[1]]]],[0,1,2,1,[3],2]]
+    []
+    []
+    []
+    [0,[[[[[1]]]]]]
+    [0,1]
+    [0,[[[1]]]]
+    [0,[1,[2]],[1,[[3],2]]]
+    [0,1,2,1,3,2]
+    [0,1,2,1,[3],2]
+    [[1],[[2]],[[[3]]]]
+    [1,2,3]
+    [1,2,[3]]
+
+- name: flatten/1 function depth error
+  args:
+    - 'flatten(-1)'
+  input: '[]'
+  error: |
+    flatten depth should not be negative: -1
 
 - name: min, min_by, max, max_by functions
   args:
     - -c
     - '[min, min_by(.[1]), min_by(.[2]), max, max_by(.[1]), max_by(.[2])]'
-  input: '[] [[4,2,"a"],[3,1,"a"],[2,4,"a"],[1,3,"a"]]'
+  input: |
+    []
+    [[4,2,"a"],[3,1,"a"],[2,4,"a"],[1,3,"a"]]
   expected: |
     [null,null,null,null,null,null]
     [[1,3,"a"],[3,1,"a"],[4,2,"a"],[4,2,"a"],[2,4,"a"],[1,3,"a"]]
@@ -1076,12 +1597,24 @@
   args:
     - -c
     - 'unique, unique_by(length)'
-  input: '[7,3,5,1,4,2,5,3,6,1,7,4,3] ["cat", "dog", "hello", "world", "banana", "apple"]'
+  input: |
+    [7,3,5,1,4,2,5,3,6,1,7,4,3]
+    ["cat", "dog", "hello", "world", "banana", "apple"]
   expected: |
     [1,2,3,4,5,6,7]
     [1,2,3,4,5,6,7]
     ["apple","banana","cat","dog","hello","world"]
     ["cat","hello","banana"]
+
+- name: min, max, sort, unique functions error
+  args:
+    - 'try min catch ., try max catch ., try sort catch ., try unique catch .'
+  input: '0'
+  expected: |
+    "min cannot be applied to: number (0)"
+    "max cannot be applied to: number (0)"
+    "sort cannot be applied to: number (0)"
+    "unique cannot be applied to: number (0)"
 
 - name: arrays, objects, iterables, booleans, numbers, strings, nulls, values, scalars functions
   args:
@@ -1098,17 +1631,6 @@
     [null]
     [true,false,0,1,"","foo",[],[2,[]],{},{"foo":[]},4722366482869645213696]
     [null,true,false,0,1,"","foo",4722366482869645213696]
-
-- name: leaf_paths function
-  args:
-    - -c
-    - 'leaf_paths'
-  input: '[null,[],{},{"a":[1,[],{},true]},[3,[],1]]'
-  expected: |
-    [3,"a",0]
-    [3,"a",3]
-    [4,0]
-    [4,2]
 
 - name: recurse/0 function
   args:
@@ -1166,20 +1688,62 @@
 - name: range function
   args:
     - -c
-    - '[range(.)], [range(. + 1)], [range(3; 5)], [range(0; 10; 3)], [range(0; 10; -1)], [range(5; -5; -3)]'
-  input: '3'
+    - '[range(.)], [range(range(.))], [range(3.5)], [range(3; 5)], [range(1.5; 4)],
+       [range(-5; -1.5)], [range(3.5; 5.5)], [range(-5.5; -3.5)], [range(0; 10; 3)],
+       [range(0; 10; -1)], [range(5; -5; -3)], [range(0.25; 9.5; 2.25)], [range(-5; -9.5; -1)]'
+  input: '5'
   expected: |
-    [0,1,2]
+    [0,1,2,3,4]
+    [0,0,1,0,1,2,0,1,2,3]
     [0,1,2,3]
     [3,4]
+    [1.5,2.5,3.5]
+    [-5,-4,-3,-2]
+    [3.5,4.5]
+    [-5.5,-4.5]
     [0,3,6,9]
     []
     [5,2,-1,-4]
+    [0.25,2.5,4.75,7,9.25]
+    [-5,-6,-7,-8,-9]
 
-- name: range function with iterators in argument
+- name: range function overflow
+  args:
+    - 'range(9223372036854775700; 9223372036854775805; 10)'
+  input: 'null'
+  expected: |
+    9223372036854775700
+    9223372036854775710
+    9223372036854775720
+    9223372036854775730
+    9223372036854775740
+    9223372036854775750
+    9223372036854775760
+    9223372036854775770
+    9223372036854775780
+    9223372036854775790
+    9223372036854775800
+
+- name: range function with large numbers
+  args:
+    - 'range(0; 20000000000000000000; 2000000000000000000)'
+  input: 'null'
+  expected: |
+    0
+    2000000000000000000
+    4000000000000000000
+    6000000000000000000
+    8000000000000000000
+    10000000000000000000
+    12000000000000000000
+    14000000000000000000
+    16000000000000000000
+    18000000000000000000
+
+- name: range function with iterators in arguments
   args:
     - -c
-    - '[range(-.; .+1)] | [range(.[]; .[]; .[])] | recurse(.[26:];.[0])|.[:26] | map(.+3)'
+    - '[range(-.; .+1)] | [range(.[]; .[]; .[])] | recurse(.[26:];.[0])[:26] | map(.+3)'
   input: '3'
   expected: |
     [0,0,0,0,1,0,0,0,1,2,0,2,0,0,1,2,3,0,2,0,3,0,1,2,3,4]
@@ -1192,65 +1756,121 @@
     [5,5,5,4,5,5,5,5,5,5,6,3,6,4,2,6,5,4,3,2,1,6,3,6,4,2]
     [6,5,4,3,2,6,3,6,4,6,5,4,3,6,6,4,6,5,4,6,6,6,5,6,6,6]
 
+- name: range function error
+  args:
+    - '(null, "", [], {} | try range(.) catch .), try range(""; 0) catch ., try range(0; 1; []) catch .'
+  input: 'null'
+  expected: |
+    "range cannot be applied to: null"
+    "range cannot be applied to: string (\"\")"
+    "range cannot be applied to: array ([])"
+    "range cannot be applied to: object ({})"
+    "range cannot be applied to: string (\"\")"
+    "range cannot be applied to: array ([])"
+
 - name: tonumber function
   args:
-    - 'map(tonumber)'
-  input: '["0", "12345", "-43210", "+4.2", "05", "9.", "+.123", "-.1", "1e-2", "2.e-2", 3.14]'
+    - 'tonumber'
+  input: |
+    "0"
+    "12345"
+    "-43210"
+    "10000000000000000000"
+    "-10000000000000000000"
+    "+4.2"
+    "05"
+    "9."
+    "+.123"
+    "-.1"
+    "1e-2"
+    "2.e-2"
+    "1e300"
+    "-1e300"
+    "1e1000"
+    "-1e1000"
+    3.14
   expected: |
-    [
-      0,
-      12345,
-      -43210,
-      4.2,
-      5,
-      9,
-      0.123,
-      -0.1,
-      0.01,
-      0.02,
-      3.14
-    ]
+    0
+    12345
+    -43210
+    10000000000000000000
+    -10000000000000000000
+    4.2
+    5
+    9
+    0.123
+    -0.1
+    0.01
+    0.02
+    1e+300
+    -1e+300
+    1.7976931348623157e+308
+    -1.7976931348623157e+308
+    3.14
 
 - name: tonumber function error
   args:
-    - '.[] | try tonumber catch .'
-  input: '["", ".", " ", "1a", ".e1", "-.e"]'
+    - 'try tonumber catch .'
+  input: |
+    ""
+    "."
+    " "
+    "1a"
+    ".e1"
+    "-.e"
   expected: |
-    "invalid number: \"\""
-    "invalid number: \".\""
-    "invalid number: \" \""
-    "invalid number: \"1a\""
-    "invalid number: \".e1\""
-    "invalid number: \"-.e\""
+    "tonumber cannot be applied to \"\": invalid number"
+    "tonumber cannot be applied to \".\": invalid number"
+    "tonumber cannot be applied to \" \": invalid number"
+    "tonumber cannot be applied to \"1a\": invalid number"
+    "tonumber cannot be applied to \".e1\": invalid number"
+    "tonumber cannot be applied to \"-.e\": invalid number"
 
 - name: tostring function
   args:
-    - 'map(tostring)'
-  input: '["foo bar", 3.14, {"foo": "-43210"}, false, [1,2,3], ["<&><>"]]'
+    - 'tostring'
+  input: |
+    null
+    false
+    true
+    3.14
+    "foo bar"
+    {"foo": "-43210"}
+    [1,2,3]
+    ["<&><>"]
   expected: |
-    [
-      "foo bar",
-      "3.14",
-      "{\"foo\":\"-43210\"}",
-      "false",
-      "[1,2,3]",
-      "[\"<&><>\"]"
-    ]
+    "null"
+    "false"
+    "true"
+    "3.14"
+    "foo bar"
+    "{\"foo\":\"-43210\"}"
+    "[1,2,3]"
+    "[\"<&><>\"]"
 
 - name: type function
   args:
-    - 'map(type)'
-  input: '[null, false, true, 0, "foo", [], {}]'
+    - 'type'
+  input: |
+    null
+    false
+    true
+    0
+    3.14
+    4722366482869645213696
+    "foo"
+    []
+    {}
   expected: |
-    [
-      "null",
-      "boolean",
-      "boolean",
-      "number",
-      "string",
-      "array",
-      "object"
-    ]
+    "null"
+    "boolean"
+    "boolean"
+    "number"
+    "number"
+    "number"
+    "string"
+    "array"
+    "object"
 
 - name: reverse function
   args:
@@ -1268,7 +1888,7 @@
 - name: contains function
   args:
     - -c
-    - '.[] as $x | (null,false,true,[],[3,4],[3,1],"foo","ll",{},{"a":1},{"b":[5]}) as $y | $x | [$x,$y,contains($y)]?'
+    - '.[] as $x | (null,false,true,[],[3,4],[3,1],"foo","ll",{},{"a":1},{"a":""},{"b":[5]},{"a":3,"b":[5]}) as $y | $x | [$x,$y,contains($y)]?'
   input: '[null,false,true,[],[1,2,3],"","hello",{"a":3,"b":[4,5,6]}]'
   expected: |
     [null,null,true]
@@ -1286,7 +1906,9 @@
     ["hello","ll",true]
     [{"a":3,"b":[4,5,6]},{},true]
     [{"a":3,"b":[4,5,6]},{"a":1},false]
+    [{"a":3,"b":[4,5,6]},{"a":""},false]
     [{"a":3,"b":[4,5,6]},{"b":[5]},true]
+    [{"a":3,"b":[4,5,6]},{"a":3,"b":[5]},true]
 
 - name: contains function against unicode strings
   args:
@@ -1306,58 +1928,64 @@
     - 'nan | contains([nan])'
   input: '0'
   error: |
-    cannot check contains([null]): number (null)
+    contains([null]) cannot be applied to: number (null)
 
-- name: indices function for array
+- name: indices, index, rindex functions against null
   args:
-    - 'indices(1), indices([]), indices([1,2]), indices([3,4,5])'
-  input: '[0, 1, 2, 3, 4, 3, 2, 1, 2, 1, 2, 3, 4]'
+    - 'indices(0), index(0), rindex(0)'
+  input: 'null'
   expected: |
-    [
-      1,
-      7,
-      9
-    ]
-    []
-    [
-      1,
-      7,
-      9
-    ]
-    []
+    null
+    null
+    null
 
-- name: indices function for string
+- name: indices, index, rindex functions against array
   args:
-    - 'indices(""), indices("ell"), indices("wor"), indices("ol"), indices("３４")'
-  input: '"hello, world, hello, word １２３４５"'
-  expected: | # different from jq due to multibyte characters
+    - -c
+    - '[indices(0, 1, [1, 2, 1])], [index(0, 1, [1, 2])], [rindex(0, 1, [1, 2])]'
+  input: |
     []
-    [
-      1,
-      15
-    ]
-    [
-      7,
-      21
-    ]
-    []
-    [
-      28
-    ]
+    [0]
+    [0, 1, 2, 1, 2, 1, 0, 1, 0]
+  expected: |
+    [[],[],[]]
+    [null,null,null]
+    [null,null,null]
+    [[0],[],[]]
+    [0,null,null]
+    [0,null,null]
+    [[0,6,8],[1,3,5,7],[1,3]]
+    [0,1,1]
+    [8,7,3]
 
-- name: index, rindex functions
+- name: indices, index, rindex functions against string
   args:
-    - 'index(","), rindex(","), indices(",")'
+    - -c
+    - '[indices("", ",", "x")], [index("", ",", "x")], [rindex("", ",", "x")]'
   input: '"a,bc,def,ghij,klmno"'
   expected: |
-    1
-    13
-    [
-      1,
-      4,
-      8,
-      13
-    ]
+    [[],[1,4,8,13],[]]
+    [null,1,null]
+    [null,13,null]
+
+- name: indices, index, rindex functions against multibyte string
+  args:
+    - -c
+    - '[indices("０", "１", "３４")], [index("０", "１", "３４")], [rindex("０", "１", "３４")]'
+  input: '"０１２３４０"'
+  expected: |
+    [[0,5],[1],[3]]
+    [0,1,3]
+    [5,1,3]
+
+- name: indices, index, rindex functions type error
+  args:
+    - '(try indices([]) catch .), (try index([]) catch .), (try rindex([]) catch .)'
+  input: '{}'
+  expected: |
+    "indices([]) cannot be applied to: object ({})"
+    "index([]) cannot be applied to: object ({})"
+    "rindex([]) cannot be applied to: object ({})"
 
 - name: inside function
   args:
@@ -1373,103 +2001,231 @@
 
 - name: startswith function
   args:
-    - 'map(startswith("foo"))'
-  input: '["", "fo", "foo", "fooo", "barfoo"]'
+    - 'startswith("foo")'
+  input: |
+    ""
+    "fo"
+    "foo"
+    "fooo"
+    "barfoo"
   expected: |
-    [
-      false,
-      false,
-      true,
-      true,
-      false
-    ]
+    false
+    false
+    true
+    true
+    false
 
 - name: startswith function error
   args:
     - '("x" | try startswith({}) catch .), (10 | try startswith("x") catch .)'
   input: '0'
   expected: |
-    "startswith cannot be applied to: object ({})"
-    "startswith cannot be applied to: number (10)"
+    "startswith({}) cannot be applied to: string (\"x\")"
+    "startswith(\"x\") cannot be applied to: number (10)"
 
 - name: endswith function
   args:
-    - 'map(endswith("foo"))'
-  input: '["", "fo", "foo", "fooo", "barfoo"]'
+    - 'endswith("foo")'
+  input: |
+    ""
+    "fo"
+    "foo"
+    "fooo"
+    "barfoo"
   expected: |
-    [
-      false,
-      false,
-      true,
-      false,
-      true
-    ]
+    false
+    false
+    true
+    false
+    true
 
 - name: endswith function error
   args:
     - '("x" | try endswith({}) catch .), (10 | try endswith("x") catch .)'
   input: '0'
   expected: |
-    "endswith cannot be applied to: object ({})"
-    "endswith cannot be applied to: number (10)"
-
-- name: ltrimstr function
-  args:
-    - 'map(ltrimstr("foo")), ("x"|ltrimstr(0, null, {}))'
-  input: '["", "fo", "foo", "fooo", "barfoo", 0, null, true, {}, []]'
-  expected: |
-    [
-      "",
-      "fo",
-      "",
-      "o",
-      "barfoo",
-      0,
-      null,
-      true,
-      {},
-      []
-    ]
-    "x"
-    "x"
-    "x"
-
-- name: rtrimstr function
-  args:
-    - 'map(rtrimstr("foo")), ("x"|rtrimstr(0, null, {}))'
-  input: '["", "fo", "foo", "fooo", "barfoo", 0, null, true, {}, []]'
-  expected: |
-    [
-      "",
-      "fo",
-      "",
-      "fooo",
-      "bar",
-      0,
-      null,
-      true,
-      {},
-      []
-    ]
-    "x"
-    "x"
-    "x"
+    "endswith({}) cannot be applied to: string (\"x\")"
+    "endswith(\"x\") cannot be applied to: number (10)"
 
 - name: combinations/0 function
   args:
     - -c
     - '[combinations]'
-  input: '[[1, 2, 3], [4, 5, 6]]'
+  input: '[] [[0]] [[1, 2, 3], [4, 5, 6]]'
   expected: |
+    [[]]
+    [[0]]
     [[1,4],[1,5],[1,6],[2,4],[2,5],[2,6],[3,4],[3,5],[3,6]]
 
 - name: combinations/1 function
   args:
     - -c
     - '[combinations(3)]'
-  input: '[0, 1]'
+  input: '[] [0] [1, 2]'
   expected: |
-    [[0,0,0],[0,0,1],[0,1,0],[0,1,1],[1,0,0],[1,0,1],[1,1,0],[1,1,1]]
+    []
+    [[0,0,0]]
+    [[1,1,1],[1,1,2],[1,2,1],[1,2,2],[2,1,1],[2,1,2],[2,2,1],[2,2,2]]
+
+- name: ltrimstr function
+  args:
+    - 'ltrimstr("foo")'
+  input: |
+    ""
+    "fo"
+    "foo"
+    "fooo"
+    "barfoo"
+  expected: |
+    ""
+    "fo"
+    ""
+    "o"
+    "barfoo"
+
+- name: ltrimstr function error
+  args:
+    - '("x" | try ltrimstr({}) catch .), (10 | try ltrimstr("x") catch .)'
+  input: '0'
+  expected: |
+    "ltrimstr({}) cannot be applied to: string (\"x\")"
+    "ltrimstr(\"x\") cannot be applied to: number (10)"
+
+- name: rtrimstr function
+  args:
+    - 'rtrimstr("foo")'
+  input: |
+    ""
+    "fo"
+    "foo"
+    "fooo"
+    "barfoo"
+  expected: |
+    ""
+    "fo"
+    ""
+    "fooo"
+    "bar"
+
+- name: rtrimstr function error
+  args:
+    - '("x" | try rtrimstr({}) catch .), (10 | try rtrimstr("x") catch .)'
+  input: '0'
+  expected: |
+    "rtrimstr({}) cannot be applied to: string (\"x\")"
+    "rtrimstr(\"x\") cannot be applied to: number (10)"
+
+- name: ltrim function
+  args:
+    - 'ltrim'
+  input: |
+    ""
+    "  \tfoo\n  "
+    "\t\u000b\u000c\u0085\u00a0f\ro\no\u2000\u2001\u200a\u3000"
+  expected: "\"\"\n\"foo\\n  \"\n\"f\\ro\\no\u2000\u2001\u200a\u3000\"\n"
+
+- name: ltrim function error
+  args:
+    - 'try ltrim catch .'
+  input: '0 [] {}'
+  expected: |
+    "ltrim cannot be applied to: number (0)"
+    "ltrim cannot be applied to: array ([])"
+    "ltrim cannot be applied to: object ({})"
+
+- name: rtrim function
+  args:
+    - 'rtrim'
+  input: |
+    ""
+    "  \tfoo\n  "
+    "\t\u000b\u000c\u0085\u00a0f\ro\no\u2000\u2001\u200a\u3000"
+  expected: "\"\"\n\"  \\tfoo\"\n\"\\t\\u000b\\f\u0085\u00a0f\\ro\\no\"\n"
+
+- name: rtrim function error
+  args:
+    - 'try rtrim catch .'
+  input: '0 [] {}'
+  expected: |
+    "rtrim cannot be applied to: number (0)"
+    "rtrim cannot be applied to: array ([])"
+    "rtrim cannot be applied to: object ({})"
+
+- name: trim function
+  args:
+    - 'trim'
+  input: |
+    ""
+    "  \tfoo\n  "
+    "\t\u000b\u000c\u0085\u00a0f\ro\no\u2000\u2001\u200a\u3000"
+  expected: |
+    ""
+    "foo"
+    "f\ro\no"
+
+- name: trim function error
+  args:
+    - 'try trim catch .'
+  input: '0 [] {}'
+  expected: |
+    "trim cannot be applied to: number (0)"
+    "trim cannot be applied to: array ([])"
+    "trim cannot be applied to: object ({})"
+
+- name: explode function
+  args:
+    - -c
+    - 'explode'
+  input: |
+    ""
+    "foo bar"
+    "１２３４５"
+    "\n\t"
+  expected: |
+    []
+    [102,111,111,32,98,97,114]
+    [65297,65298,65299,65300,65301]
+    [10,9]
+
+- name: implode function
+  args:
+    - 'implode'
+  input: |
+    []
+    [102,111,111,32,98,97,114]
+    [65297,65298,65299,65300,65301]
+    [10,9]
+  expected: |
+    ""
+    "foo bar"
+    "１２３４５"
+    "\n\t"
+
+- name: implode function replacement character
+  args:
+    - 'implode'
+  input: '[-1,0,1114111,1114112]'
+  expected: "\"\ufffd\\u0000\U0010ffff\ufffd\"\n"
+
+- name: implode function error
+  args:
+    - 'try implode catch .'
+  input: '[[]] [{}]'
+  expected: |
+    "implode cannot be applied to: array ([[]])"
+    "implode cannot be applied to: array ([{}])"
+
+- name: split/1 function
+  args:
+    - 'split(", ","") | join("/")'
+  input: |
+    "a,b, c, d, e,f"
+    ", a,b, c, d, e,f, "
+  expected: |
+    "a,b/c/d/e,f"
+    "a/,/b/,/ /c/,/ /d/,/ /e/,/f"
+    "/a,b/c/d/e,f/"
+    ",/ /a/,/b/,/ /c/,/ /d/,/ /e/,/f/,/ "
 
 - name: join function
   args:
@@ -1489,26 +2245,60 @@
     "adbdcddde"
     "aebecedee"
 
-- name: join function error
+- name: join object
+  args:
+    - 'join(",")'
+  input: '{"a": null, "b": false, "c": true, "d": 0, "e": 1, "f": "", "g": "a", "h": "b", "i": "abc"}'
+  expected: |
+    ",false,true,0,1,,a,b,abc"
+
+- name: join object order
+  args:
+    - 'join(",")'
+  input: '{"d":4, "c":3, "b":2, "a":1}'
+  expected: |
+    "1,2,3,4"
+
+- name: join function error item
   args:
     - 'try join(",") catch .'
   input: '["1","2",[3,4,5]]'
   expected: |
-    "cannot add: string (\"1,2,\") and array ([3,4,5])"
+    "join cannot be applied to an array including: array ([3,4,5])"
+
+- name: join function error input
+  args:
+    - '.[] | try join(",") catch .'
+  input: '[null, false, true, 1, "a"]'
+  expected: |
+    "join(\",\") cannot be applied to: null"
+    "join(\",\") cannot be applied to: boolean (false)"
+    "join(\",\") cannot be applied to: boolean (true)"
+    "join(\",\") cannot be applied to: number (1)"
+    "join(\",\") cannot be applied to: string (\"a\")"
+
+- name: join function non-string separator
+  args:
+    - '.[] | try join(1) catch .'
+  input: '[[],[1],[1,2]]'
+  expected: |
+    ""
+    "1"
+    "join(1) cannot be applied to: array ([1,2])"
 
 - name: ascii_downcase function
   args:
     - 'ascii_downcase'
-  input: '"@ABC XYZ[] `abc xyz{} ☆"'
+  input: '"@ABC XYZ[] `abc xyz{} Αα"'
   expected: |
-    "@abc xyz[] `abc xyz{} ☆"
+    "@abc xyz[] `abc xyz{} Αα"
 
 - name: ascii_upcase function
   args:
     - 'ascii_upcase'
-  input: '"@ABC XYZ[] `abc xyz{} ☆"'
+  input: '"@ABC XYZ[] `abc xyz{} Αα"'
   expected: |
-    "@ABC XYZ[] `ABC XYZ{} ☆"
+    "@ABC XYZ[] `ABC XYZ{} Αα"
 
 - name: walk function
   args:
@@ -1523,11 +2313,24 @@
     ["aa",{"b":[]},"aa",{"b":[]}]
     {"c":[null,true,false,null,true,false]}
 
+- name: walk function with multiple values
+  args:
+    - -c
+    - 'walk(.,0)'
+  input: '[1,2,3] {"x":1,"y":2,"z":3}'
+  expected: |
+    [1,0,2,0,3,0]
+    0
+    {"x":1,"y":2,"z":3}
+    0
+
 - name: transpose function
   args:
     - -c
     - 'transpose'
-  input: '[] [[1,2,3,[]],[4,"foo",{}],[5,6]]'
+  input: |
+    []
+    [[1,2,3,[]],[4,"foo",{}],[5,6]]
   expected: |
     []
     [[1,4,5],[2,"foo",6],[3,{},null],[[],null,null]]
@@ -1556,7 +2359,7 @@
     function not defined: map/2
   exit_code: 3
 
-- name: function declaration
+- name: function declaration with an argument
   args:
     - 'def f(g): g | g; f(..)'
   input: '[0, 1]'
@@ -1570,7 +2373,7 @@
     0
     1
 
-- name: function declaration
+- name: function nested declaration
   args:
     - -c
     - 'def f: def g: .; g; f'
@@ -1578,7 +2381,7 @@
   expected: |
     [0,1]
 
-- name: function declaration
+- name: function declaration with call of another declared function
   args:
     - -c
     - 'def f: .,.; def g: [f,f]; f,g'
@@ -1587,6 +2390,14 @@
     [0,1]
     [0,1]
     [[0,1],[0,1],[0,1],[0,1]]
+
+- name: function declaration with update operator
+  args:
+    - -c
+    - 'def f: def f($x): .; f(.x) | .x; f += f'
+  input: '{"x": 1}'
+  expected: |
+    {"x":2}
 
 - name: function declaration and recursive call
   args:
@@ -1613,12 +2424,69 @@
     128
     2147483648
 
+- name: function declaration and recursive call
+  args:
+    - 'def f: . as $x | $x, ($x + 1 | f); last(limit(100000; f))'
+  input: '0'
+  expected: |
+    99999
+
+- name: function declaration and recursive call
+  args:
+    - 'def f: . as $x | $x, (if $x < 3 then $x + 1 | f else empty end), $x; f'
+  input: '0'
+  expected: |
+    0
+    1
+    2
+    3
+    3
+    2
+    1
+    0
+
+- name: function declaration and recursive call
+  args:
+    - 'def f: ., if . < 2 then . + (1,2) | f else empty end; f'
+  input: '0'
+  expected: |
+    0
+    1
+    2
+    3
+    2
+
+- name: function declaration and recursive call
+  args:
+    - '100000 as $x | def f: if . == $x then . else . + 1 | f end; f'
+  input: '0'
+  expected: |
+    100000
+
+- name: function declaration and recursive call
+  args:
+    - 'def f: if .a then .a | f end; {}, {a:{}} | f | .,0'
+  input: '0'
+  expected: |
+    {}
+    0
+    {}
+    0
+
 - name: function declaration with duplicate function names
   args:
     - 'def f(g): def f: def g: 3; g * 2; g * f; def f: . * 5; f(f)'
   input: '1'
   expected: |
     30
+
+- name: function declaration with duplicate function names
+  args:
+    - '(def f(g): def g: 1; g; f(2)), (def g: 3; def f(g): g; f(4))'
+  input: '0'
+  expected: |
+    1
+    4
 
 - name: function declaration with duplicate argument names
   args:
@@ -1629,10 +2497,55 @@
 
 - name: function declaration with duplicate variable names
   args:
-    - 'def f($g;$g): $g; f(1;2)'
+    - 'def f($g;$g): $g; f(1;2,3)'
   input: 'null'
   expected: |
     2
+    3
+
+- name: function declaration with builtin function name conflict
+  args:
+    - 'def empty: . % 2; range(5) | select(empty > 0)'
+  input: 'null'
+  expected: |
+    1
+    3
+
+- name: function declaration with builtin function name conflict
+  args:
+    - 'def select(f): f; null, 0 | numbers, select(.)'
+  input: 'null'
+  expected: |
+    null
+    0
+    0
+
+- name: function declaration with argument name conflict
+  args:
+    - 'def update: .[1:]; [range(3)] | while(length>0; update)'
+  input: 'null'
+  expected: |
+    [
+      0,
+      1,
+      2
+    ]
+    [
+      1,
+      2
+    ]
+    [
+      2
+    ]
+
+- name: function declaration with argument name conflict
+  args:
+    - 'def f($keys): with_entries(.key *= $keys); {x: 1} | f(3)'
+  input: 'null'
+  expected: |
+    {
+      "xxx": 1
+    }
 
 - name: function declaration with mixed argument types
   args:
@@ -1648,6 +2561,17 @@
     [111,211,112,212,121,221,122,222]
     [111,121,112,122,211,221,212,222]
     [111,112,121,122,211,212,221,222]
+
+- name: function declaration with function reference to value argument
+  args:
+    - -c
+    - 'def f($x; $y): [$x, x, $y, y]; f(1,2; 3,4)'
+  input: 'null'
+  expected: |
+    [1,1,2,3,3,4]
+    [1,1,2,4,3,4]
+    [2,1,2,3,3,4]
+    [2,1,2,4,3,4]
 
 - name: function declaration inside query
   args:
@@ -1667,7 +2591,6 @@
 
 - name: function declaration name error
   args:
-    - -c
     - 'def $f: .; $f'
   input: 'null'
   error: |
@@ -1676,32 +2599,63 @@
             ^  unexpected token "$f"
   exit_code: 3
 
+- name: function declaration without query
+  args:
+    - 'def f: 0;'
+  error: |
+    compile error: missing query (try ".")
+  exit_code: 3
+
 - name: add, subtract, multiply, divide, modulo numbers
   args:
     - -c
-    - '[.[] + .[] % .[] * .[] - .[] / .[]] | while(length>0; .[8:]) | .[:8]'
-  input: '[5, 16]'
+    - '[.[] + .[]], [.[] - .[]], [.[] * .[]], [.[] / .[]], [.[] % .[]]'
+  input: '[-1, 5, 16]'
   expected: |
-    [4,15,9,20,29,40,4,15]
-    [4,15,20,31,84,95,4,15]
-    [1.7999999999999998,12.8,6.8,17.8,26.8,37.8,1.7999999999999998,12.8]
-    [1.7999999999999998,12.8,17.8,28.8,81.8,92.8,1.7999999999999998,12.8]
-    [4.6875,15.6875,9.6875,20.6875,29.6875,40.6875,4.6875,15.6875]
-    [4.6875,15.6875,20.6875,31.6875,84.6875,95.6875,4.6875,15.6875]
-    [4,15,9,20,29,40,4,15]
-    [4,15,20,31,84,95,4,15]
+    [-2,4,15,4,10,21,15,21,32]
+    [0,6,17,-6,0,11,-17,-11,0]
+    [1,-5,-16,-5,25,80,-16,80,256]
+    [1,-5,-16,-0.2,1,3.2,-0.0625,0.3125,1]
+    [0,0,0,-1,0,1,-1,5,0]
 
 - name: add, subtract, multiply, divide, modulo large numbers
   args:
     - -c
     - '[.[] + .[]], [.[] - .[]], [.[] * .[]], [.[] / .[]], [.[]  % .[]]'
-  input: '[47, 4722366482869645213696, 557702036893939360447070208]'
+  input: '[-1, 47, 9223372036854775807, 557702036893939360447070208]'
   expected: |
-    [94,4722366482869645213743,557702036893939360447070255,4722366482869645213743,9444732965739290427392,557706759260422230092283904,557702036893939360447070255,557706759260422230092283904,1115404073787878720894140416]
-    [0,4722366482869645213649,557702036893939360447070161,-4722366482869645213649,0,557697314527456490801856512,-557702036893939360447070161,-557697314527456490801856512,0]
-    [2209,221951224694873325043712,26211995734015149941012299776,221951224694873325043712,22300745198530623141535718272648361505980416,2633673406456069531769085256563226197133275168768,26211995734015149941012299776,2633673406456069531769085256563226197133275168768,311031561955648899562865430629603887429045530881163264]
-    [1,100475882614247770000,1.1866000784977433e+25,9.952637130238029e-21,1,118098,8.427439186301232e-26,0.000008467543904215143,1]
-    [0,8,37,47,0,0,47,4722366482869645213696,0]
+    [-2,46,9223372036854775806,557702036893939360447070207,46,94,9223372036854775854,557702036893939360447070255,9223372036854775806,9223372036854775854,18446744073709551614,557702046117311397301846015,557702036893939360447070207,557702036893939360447070255,557702046117311397301846015,1115404073787878720894140416]
+    [0,48,9223372036854775808,557702036893939360447070209,-48,0,9223372036854775760,557702036893939360447070161,-9223372036854775808,-9223372036854775760,0,557702027670567323592294401,-557702036893939360447070209,-557702036893939360447070161,-557702027670567323592294401,0]
+    [1,-47,-9223372036854775807,-557702036893939360447070208,-47,2209,433498485732174462929,26211995734015149941012299776,-9223372036854775807,433498485732174462929,85070591730234615847396907784232501249,5143893371984510803678792604831111805828857856,-557702036893939360447070208,26211995734015149941012299776,5143893371984510803678792604831111805828857856,311031561955648899562865430629603887429045530881163264]
+    [1,-47,-9223372036854775807,-557702036893939360447070208,-0.02127659574468085,1,196241958230952670,1.1866000784977433e+25,-1.0842021724855044e-19,5.095750210681871e-18,1,60466176,-1.7930721672981344e-27,8.427439186301232e-26,1.65381716879202e-8,1]
+    [0,0,0,0,-1,0,35,37,-1,47,0,60466176,-1,47,9223372036854775807,0]
+
+- name: add, subtract, multiply, divide, modulo operators precedence
+  args:
+    - -c
+    - '[.[] + .[] % .[] * .[] - .[] / .[] % .[] + .[]] | while(length>0; .[32:])[:32]'
+  input: '[3, 7]'
+  expected: |
+    [5,9,8,12,14,18,5,9,5,9,12,16,26,30,5,9,4,8,7,11,13,17,4,8,4,8,11,15,25,29,4,8]
+    [6,10,9,13,15,19,6,10,6,10,13,17,27,31,6,10,5,9,8,12,14,18,5,9,5,9,12,16,26,30,5,9]
+    [5,9,8,12,14,18,5,9,5,9,12,16,26,30,5,9,4,8,7,11,13,17,4,8,4,8,11,15,25,29,4,8]
+    [6,10,9,13,15,19,6,10,6,10,13,17,27,31,6,10,5,9,8,12,14,18,5,9,5,9,12,16,26,30,5,9]
+    [9,13,12,16,18,22,9,13,9,13,16,20,30,34,9,13,8,12,11,15,17,21,8,12,8,12,15,19,29,33,8,12]
+    [10,14,13,17,19,23,10,14,10,14,17,21,31,35,10,14,9,13,12,16,18,22,9,13,9,13,16,20,30,34,9,13]
+    [9,13,12,16,18,22,9,13,9,13,16,20,30,34,9,13,8,12,11,15,17,21,8,12,8,12,15,19,29,33,8,12]
+    [10,14,13,17,19,23,10,14,10,14,17,21,31,35,10,14,9,13,12,16,18,22,9,13,9,13,16,20,30,34,9,13]
+
+- name: integer division precision
+  args:
+    - '72 / (1, -2, 3, -4, 6, -8) * 100000000000000000000'
+  input: '0'
+  expected: |
+    7200000000000000000000
+    -3600000000000000000000
+    2400000000000000000000
+    -1800000000000000000000
+    1200000000000000000000
+    -900000000000000000000
 
 - name: optional and division operator
   args:
@@ -1717,7 +2671,7 @@
   error: |
     invalid query: .?/
         .?/
-           ^  unexpected token <EOF>
+           ^  unexpected EOF
   exit_code: 3
 
 - name: factorial calculation
@@ -1795,38 +2749,47 @@
 
 - name: zero division
   args:
-    - '.[] / .[]'
+    - -c
+    - '.[] as $x | .[] as $y | [$x, $y, try ($x / $y) catch .]'
   input: '[1, 0]'
   expected: |
-    1
-    0
-  error: |
-    cannot divide number (1) by: number (0)
+    [1,1,1]
+    [1,0,"cannot divide number (1) by: number (0)"]
+    [0,1,0]
+    [0,0,"cannot divide number (0) by: number (0)"]
 
 - name: zero modulo
   args:
-    - '.[] % .[]'
+    - -c
+    - '.[] as $x | .[] as $y | [$x, $y, try ($x % $y) catch .]'
   input: '[1, 0]'
   expected: |
-    0
-    0
-  error: |
-    cannot modulo number (1) by: number (0)
+    [1,1,0]
+    [1,0,"cannot modulo number (1) by: number (0)"]
+    [0,1,0]
+    [0,0,"cannot modulo number (0) by: number (0)"]
 
 - name: modulo with near 0.0
   args:
-    - '.[] % .[]'
-  input: '[1, 0.9]'
-  expected: |
-    0
-    0
+    - '1 % 0.9'
+  input: 'null'
   error: |
     cannot modulo number (1) by: number (0.9)
+
+- name: modulo with nan
+  args:
+    - '(1, nan) % (1, nan) | isnan'
+  input: 'null'
+  expected: |
+    false
+    true
+    true
+    true
 
 - name: zero division and modulo for large number
   args:
     - -c
-    - '[try .[] / .[] catch .], [try .[] % .[] catch .]'
+    - '[try (.[] / .[]) catch .], [try (.[] % .[]) catch .]'
   input: '[1267650600228229401496703205376, 0]'
   expected: |
     [1,0,"cannot divide number (12676506002282294014967032 ...) by: number (0)"]
@@ -1859,13 +2822,13 @@
 
 - name: multiply strings
   args:
-    - '[-1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 3.7, 10, 9444732965739290427392 / 4722366482869645213696, 1000000000, infinite][] * "abc"'
+    - '[-1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 3.7, 10, 9444732965739290427392 / 4722366482869645213696, 100000000, infinite, -infinite, nan, -1e300, 1e300][] * "abc"'
   input: 'null'
   expected: |
     null
     null
-    null
-    "abc"
+    ""
+    ""
     "abc"
     "abc"
     "abcabcabc"
@@ -1873,12 +2836,23 @@
     "abcabc"
     null
     null
+    null
+    null
+    null
+    null
 
 - name: multiply empty string
   args:
-    - '7 * ""'
+    - '(-9223372036854775808, -1, 0, 0.001, 0.999, 1, 7, 9223372036854775807) * ""'
   input: 'null'
   expected: |
+    null
+    null
+    ""
+    ""
+    ""
+    ""
+    ""
     ""
 
 - name: multiply objects
@@ -1923,23 +2897,25 @@
     [1,2]
     []
 
-- name: ensure arrays are immutable during addition
+- name: arrays are immutable on addition
   args:
-    - '. as $first | .[:0] + [6, 7, 8] | ., $first'
-  input: '[1, 2, 3, 4, 5]'
+    - -c
+    - '. as $v | .[:0] + [6, 7, 8] | ., $v'
+  input: |
+    [1,2,3,4,5]
   expected: |
-    [
-      6,
-      7,
-      8
-    ]
-    [
-      1,
-      2,
-      3,
-      4,
-      5
-    ]
+    [6,7,8]
+    [1,2,3,4,5]
+
+- name: arrays are immutable on subtraction
+  args:
+    - -c
+    - '. as $v | . - [2, 3] | ., $v'
+  input: |
+    [1,2,3,4,5]
+  expected: |
+    [1,4,5]
+    [1,2,3,4,5]
 
 - name: subtract arrays
   args:
@@ -1949,13 +2925,21 @@
   expected: |
     [2,4]
 
-- name: subtract arrays
+- name: subtract arrays with large numbers
   args:
     - -c
     - '. as $x | [$x-$x] - [0]'
   input: '10000000000000'
   expected: |
     []
+
+- name: subtract arrays with nan
+  args:
+    - -c
+    - '[nan,{x:nan}] - [nan,{x:nan}]'
+  input: '1'
+  expected: |
+    [null,{"x":null}]
 
 - name: add object
   args:
@@ -2058,7 +3042,7 @@
     "111111101111111110000000010000000010000000010000000010000000010000000010000000010111111110111111110111111110111111110111"
     "111110111111110111111110"
 
-- name: comparison operators does not associate
+- name: comparison operators associativity error
   args:
     - '. == . == .'
   input: '1'
@@ -2112,64 +3096,41 @@
   expected: |
     [5,5,false,3,3,[null,false],null,false]
 
-- name: explode function
-  args:
-    - -c
-    - 'map(explode)'
-  input: '["", "foo bar", "１２３４５", "\n\t"]'
-  expected: |
-    [[],[102,111,111,32,98,97,114],[65297,65298,65299,65300,65301],[10,9]]
-
-- name: implode function
-  args:
-    - -c
-    - 'map(implode)'
-  input: '[[],[102,111,111,32,98,97,114],[65297,65298,65299,65300,65301],[10,9]]'
-  expected: |
-    ["","foo bar","１２３４５","\n\t"]
-
-- name: implode function error
-  args:
-    - -c
-    - '.[] | try implode catch .'
-  input: '[[0],[-1],[1114112],[[]],[{}]]'
-  expected: |
-    "\u0000"
-    "implode cannot be applied to: array ([-1])"
-    "implode cannot be applied to: array ([1114112])"
-    "implode cannot be applied to: array ([[]])"
-    "implode cannot be applied to: array ([{}])"
-
-- name: split/1 function
-  args:
-    - 'map(split(", ","") | join("/"))'
-  input: '["a,b, c, d, e,f",", a,b, c, d, e,f, "]'
-  expected: |
-    [
-      "a,b/c/d/e,f",
-      "a/,/b/,/ /c/,/ /d/,/ /e/,/f",
-      "/a,b/c/d/e,f/",
-      ",/ /a/,/b/,/ /c/,/ /d/,/ /e/,/f/,/ "
-    ]
-
 - name: condition
   args:
-    - '.[] | if . then . else empty end'
-  input: '[false, true, 0, 1]'
+    - 'if . then . else [.] end'
+  input: 'null false true 0'
   expected: |
+    [
+      null
+    ]
+    [
+      false
+    ]
     true
     0
-    1
 
-- name: condition with elif
+- name: condition with elif clause
   args:
-    - '.[] | if . then . elif [] then . else empty end'
-  input: '[false, true, 0, 1]'
+    - 'if . == null then . elif not then [.] elif . == true then [[.]] else [[[.]]] end'
+  input: 'null false true 0'
   expected: |
-    false
-    true
-    0
-    1
+    null
+    [
+      false
+    ]
+    [
+      [
+        true
+      ]
+    ]
+    [
+      [
+        [
+          0
+        ]
+      ]
+    ]
 
 - name: condition without else clause
   args:
@@ -2191,6 +3152,15 @@
   expected: |
     7
 
+- name: condition with unary operator
+  args:
+    - '[-if true then -. end]'
+  input: '1'
+  expected: |
+    [
+      1
+    ]
+
 - name: condition with optional operator
   args:
     - 'if . then tonumber end ?'
@@ -2198,25 +3168,36 @@
   expected: |
     1
 
+- name: condition with identity in then clause
+  args:
+    - 'if 0 then . else 0|0 end'
+  input: 'null'
+  expected: |
+    null
+
+- name: condition with identity in else clause
+  args:
+    - 'if 0 then 0|0 else . end'
+  input: 'null'
+  expected: |
+    0
+
 - name: condition with suffix
   args:
-    - 'if . then 1 end []'
+    - 'if true then [.] end []'
   input: '1'
-  error: |
-    invalid query: if . then 1 end []
-        if . then 1 end []
-                        ^  unexpected token "["
-  exit_code: 3
+  expected: |
+    1
 
 - name: not function
   args:
-    - 'map(not)'
-  input: '[true, false]'
+    - 'not'
+  input: |
+    true
+    false
   expected: |
-    [
-      false,
-      true
-    ]
+    false
+    true
 
 - name: iterator in condition
   args:
@@ -2250,20 +3231,64 @@
       "utf8bytelength cannot be applied to: boolean (false)"
     ]
 
-- name: try catch
+- name: try catch with function declaration
   args:
-    - 'def f: fromjson; try {} | f catch ., 1'
-  input: '0'
+    - 'def f: fromjson; try ({} | f) catch ., 1'
+  input: 'null'
   expected: |
     "fromjson cannot be applied to: object ({})"
     1
 
-- name: try precedence
+- name: try and comma operator precedence
+  args:
+    - '1, try error(2), 3'
+  input: 'null'
+  expected: |
+    1
+    3
+
+- name: try and alternative operator precedence
+  args:
+    - 'try error(0) // 1'
+  input: 'null'
+  expected: |
+    1
+
+- name: try and update operator precedence
+  args:
+    - 'try error(0) = 1'
+  input: 'null'
+  expected: |
+    null
+
+- name: try and arithmetic operator precedence
+  args:
+    - 'try 0 * error(0)'
+  input: 'null'
+  error: |
+    error: 0
+  exit_code: 5
+
+- name: try and indexing precedence
+  args:
+    - 'try 0 .[error(0)]'
+  input: 'null'
+
+- name: try catch and arithmetic operator precedence
   args:
     - '1 + try 2 catch 3 + 4'
-  input: '1'
+  input: 'null'
   expected: |
     7
+
+- name: try and unary operator
+  args:
+    - '[-try .]'
+  input: '1'
+  expected: |
+    [
+      -1
+    ]
 
 - name: reduce iterator
   args:
@@ -2307,20 +3332,36 @@
       1
     ]
 
+- name: reduce with unary operator
+  args:
+    - '[-reduce -.[] as $i (0; . + $i)]'
+  input: '[1,2,3]'
+  expected: |
+    [
+      6
+    ]
+
+- name: reduce with binary operator
+  args:
+    - 'reduce .[] / .[] as $i (0; . + $i)'
+  input: '[1,2]'
+  expected: |
+    4.5
+
+- name: reduce with variable binding
+  args:
+    - 'reduce .[] as $x (0; . + $x) as $x | $x'
+  input: '[1,2,3]'
+  expected: |
+    6
+
 - name: reduce variable scope
   args:
+    - -c
     - '. as $x | reduce .[] as $x (.; . + .) | [., $x]'
   input: '[1]'
   expected: |
-    [
-      [
-        1,
-        1
-      ],
-      [
-        1
-      ]
-    ]
+    [[1,1],[1]]
 
 - name: foreach iterator
   args:
@@ -2366,20 +3407,47 @@
     0
     1
 
+- name: foreach with unary operator
+  args:
+    - '[-foreach -.[] as $i (0; . + $i)]'
+  input: '[1,2,3]'
+  expected: |
+    [
+      1,
+      3,
+      6
+    ]
+
+- name: foreach with binary operator
+  args:
+    - '[foreach .[] / .[] as $i (0; . + $i)]'
+  input: '[1,2]'
+  expected: |
+    [
+      1,
+      3,
+      3.5,
+      4.5
+    ]
+
+- name: foreach with variable binding
+  args:
+    - '[foreach .[] as $x (0; . + $x) as $x | $x]'
+  input: '[1,2,3]'
+  expected: |
+    [
+      1,
+      3,
+      6
+    ]
+
 - name: foreach variable scope
   args:
+    - -c
     - '. as $x | foreach .[] as $x (.; . + .) | [., $x]'
   input: '[1]'
   expected: |
-    [
-      [
-        1,
-        1
-      ],
-      [
-        1
-      ]
-    ]
+    [[1,1],[1]]
 
 - name: label and break syntax
   args:
@@ -2402,6 +3470,54 @@
     3
     6
 
+- name: label and break in try catch syntax
+  args:
+    - 'label $x | (label $y | try break $y catch .), .'
+  input: '10'
+  expected: |
+    10
+
+- name: label and break in function argument
+  args:
+    - 'range(.) | label $out | limit(3; 1, if . > 1 then break $out end, 2)'
+  input: '3'
+  expected: |
+    1
+    0
+    2
+    1
+    1
+    2
+    1
+
+- name: label and break in function argument with foreach
+  args:
+    - 'label $out | last(foreach range(0; 10) as $i ({x: 1}; if .x > 10 then break $out else .x += 1 end))'
+  input: '0'
+  expected: |
+    {
+      "x": 11
+    }
+
+- name: label in recursive call
+  args:
+    - 'def f: label $x | if . < 5 then ., (. + 1 | f, break $x, .) else . end; f'
+  input: '0'
+  expected: |
+    0
+    1
+    2
+    3
+    4
+    5
+
+- name: duplicate label names
+  args:
+    - 'label $x | (label $x | break $x), .'
+  input: '1'
+  expected: |
+    1
+
 - name: invalid label name
   args:
     - 'label foo | .'
@@ -2412,12 +3528,20 @@
               ^  unexpected token "foo"
   exit_code: 3
 
-- name: label not defined error for break syntax
+- name: label not defined error for break without label
   args:
     - 'break $test'
   input: '1'
   error: |
     label not defined: $test
+  exit_code: 3
+
+- name: label not defined error for break with label in parenthesis
+  args:
+    - '(label $x | 1) | break $x'
+  input: '1'
+  error: |
+    label not defined: $x
   exit_code: 3
 
 - name: invalid break name
@@ -2432,10 +3556,20 @@
 
 - name: invalid break syntax
   args:
-    - 'label $x | _break'
-  input: 'null'
+    - 'label $x | break'
+  input: '0'
   error: |
-    _break cannot be applied to: null
+    invalid query: label $x | break
+        label $x | break
+                        ^  unexpected EOF
+  exit_code: 3
+
+- name: variable and label name conflict
+  args:
+    - '. as $x | (label $x | break $x), $x'
+  input: '0'
+  expected: |
+    0
 
 - name: string interpolation
   args:
@@ -2491,7 +3625,6 @@
 
 - name: string interpolation parse error
   args:
-    - -c
     - '"\(1 +)"'
   input: '0'
   error: |
@@ -2502,64 +3635,70 @@
 
 - name: tojson function
   args:
-    - 'map(tojson)'
-  input: '[1, null, false, "foo", ["foo"], {"a": [1,2,3]}]'
+    - 'tojson'
+  input: |
+    null
+    false
+    true
+    4722366482869645213696
+    "foo"
+    ["foo"]
+    {"a": [1,2,3]}
   expected: |
-    [
-      "1",
-      "null",
-      "false",
-      "\"foo\"",
-      "[\"foo\"]",
-      "{\"a\":[1,2,3]}"
-    ]
+    "null"
+    "false"
+    "true"
+    "4722366482869645213696"
+    "\"foo\""
+    "[\"foo\"]"
+    "{\"a\":[1,2,3]}"
 
 - name: fromjson function
   args:
-    - 'map(fromjson)'
-  input: '["1", "null", "false", "\"foo\"", "[\"foo\"]", "{\"a\":[1,2,3]}"]'
+    - -c
+    - 'fromjson'
+  input: |
+    "null"
+    "false"
+    "true"
+    "4722366482869645213696"
+    "\"foo\""
+    "[\"foo\"]"
+    "{\"a\":[1,2,3]}"
   expected: |
-    [
-      1,
-      null,
-      false,
-      "foo",
-      [
-        "foo"
-      ],
-      {
-        "a": [
-          1,
-          2,
-          3
-        ]
-      }
-    ]
+    null
+    false
+    true
+    4722366482869645213696
+    "foo"
+    ["foo"]
+    {"a":[1,2,3]}
 
-- name: defining variable
+- name: fromjson function error
   args:
+    - 'fromjson'
+  input: '"[0"'
+  error: |
+    fromjson cannot be applied to "[0": unexpected EOF
+
+- name: variable definition
+  args:
+    - -c
     - '.foo.bar as $foo | .foo.bar as $bar | {$foo} + {bar: ($bar / 2)} * { baz: 20 }'
-  input: '{ "foo": { "bar": 10 } }'
+  input: |
+    {"foo":{"bar":10}}
   expected: |
-    {
-      "bar": 5,
-      "baz": 20,
-      "foo": 10
-    }
+    {"bar":5,"baz":20,"foo":10}
 
-- name: defining variable
+- name: variable definition
   args:
+    - -c
     - '.ys as $ys | .xs[] | {a, b: $ys[.b]}'
-  input: '{"xs": [{"a": "a0", "b": "b0"}, {"a": "a1", "b": "b1"}], "ys": {"b0": "bb0", "b1": "bb1"}}'
+  input: |
+    {"xs":[{"a":"a0","b":"b0"},{"a":"a1","b":"b1"}],"ys":{"b0":"bb0","b1":"bb1"}}
   expected: |
-    {
-      "a": "a0",
-      "b": "bb0"
-    }
-    {
-      "a": "a1",
-      "b": "bb1"
-    }
+    {"a":"a0","b":"bb0"}
+    {"a":"a1","b":"bb1"}
 
 - name: variable name error
   args:
@@ -2574,192 +3713,143 @@
 - name: variable name not found error
   args:
     - '.foo as $foo | {$bar}'
-  input: '{ "foo": 10 }'
+  input: |
+    {"foo":10}
   error: |
     variable not defined: $bar
   exit_code: 3
 
 - name: binding an array
   args:
+    - -c
     - '. as [$i, $j] | [$j, $i]'
-  input: '[] [10] [20, 30]'
+  input: |
+    []
+    [10]
+    [20,30]
   expected: |
-    [
-      null,
-      null
-    ]
-    [
-      null,
-      10
-    ]
-    [
-      30,
-      20
-    ]
+    [null,null]
+    [null,10]
+    [30,20]
 
 - name: binding an array deeply
   args:
+    - -c
     - '. as [$i, [$j], [[$k]]] | [$i, $j, $k]'
-  input: '[] [10] [20, [30], [[40]]]'
+  input: |
+    []
+    [10]
+    [20,[30],[[40]]]
   expected: |
-    [
-      null,
-      null,
-      null
-    ]
-    [
-      10,
-      null,
-      null
-    ]
-    [
-      20,
-      30,
-      40
-    ]
+    [null,null,null]
+    [10,null,null]
+    [20,30,40]
 
 - name: binding an array error
   args:
     - '. as [$i, $j] | [$j, $i]'
-  input: '{ "foo": 10 }'
+  input: |
+    {"foo":10}
   error: |
     expected an array but got: object ({"foo":10})
 
 - name: binding an object
   args:
+    - -c
     - '. as {$foo, bar: $bar} | {$bar, $foo}'
-  input: '{} {"foo": 10} {"foo": 20, "bar": 30}'
+  input: |
+    {}
+    {"foo":10}
+    {"foo":20,"bar":30}
   expected: |
-    {
-      "bar": null,
-      "foo": null
-    }
-    {
-      "bar": null,
-      "foo": 10
-    }
-    {
-      "bar": 30,
-      "foo": 20
-    }
+    {"bar":null,"foo":null}
+    {"bar":null,"foo":10}
+    {"bar":30,"foo":20}
 
 - name: binding an object deeply
   args:
+    - -c
     - '. as {$foo, bar: {"baz": {$qux}, "": $quy}} | {$foo, $qux, $quy}'
-  input: '{} {"foo": 10} {"foo": 20, "bar": { "baz": { "qux": 30 }, "": -1 } }'
+  input: |
+    {}
+    {"foo":10}
+    {"foo":20,"bar":{"baz":{"qux":30},"":-1}}
   expected: |
-    {
-      "foo": null,
-      "qux": null,
-      "quy": null
-    }
-    {
-      "foo": 10,
-      "qux": null,
-      "quy": null
-    }
-    {
-      "foo": 20,
-      "qux": 30,
-      "quy": -1
-    }
+    {"foo":null,"qux":null,"quy":null}
+    {"foo":10,"qux":null,"quy":null}
+    {"foo":20,"qux":30,"quy":-1}
 
 - name: binding an object with expression
   args:
+    - -c
     - '. as {as: $foo, ("e"+"x"+"p"): $bar, (.foo): $baz, "\(.qux)": $qux} | [$foo, $bar, $baz, $qux]'
-  input: '{"as": 1, "exp": 2, "foo": "bar", "bar": 3, "qux": "quux", "quux": 4}'
+  input: |
+    {"as":1,"exp":2,"foo":"bar","bar":3,"qux":"quux","quux":4}
   expected: |
-    [
-      1,
-      2,
-      3,
-      4
-    ]
+    [1,2,3,4]
 
 - name: binding an object error
   args:
     - '. as {$i} | [$i]'
-  input: '[10]'
+  input: |
+    [10]
   error: |
     expected an object but got: array ([10])
 
 - name: binding object and array deeply
   args:
+    - -c
     - '. as {$a, $b: [$c, $d]} | [$a, $b, $c, $d]'
-  input: '{"a":1, "b": [2, {"d": 3}]}'
+  input: |
+    {"a":1,"b":[2,{"d":3}]}
   expected: |
-    [
-      1,
-      [
-        2,
-        {
-          "d": 3
-        }
-      ],
-      2,
-      {
-        "d": 3
-      }
-    ]
+    [1,[2,{"d":3}],2,{"d":3}]
 
 - name: binding variable scope in parenthesis
   args:
+    - -c
     - '. as $x | (.foo as $x | [$x]) | .+[$x]'
-  input: '{"foo": 42}'
+  input: |
+    {"foo": 42}
   expected: |
-    [
-      42,
-      {
-        "foo": 42
-      }
-    ]
+    [42,{"foo":42}]
 
 - name: binding variable scope in array
   args:
+    - -c
     - '. as $x | [.foo as $x | $x] | $x'
-  input: '{"foo": 42}'
+  input: |
+    {"foo":42}
   expected: |
-    {
-      "foo": 42
-    }
+    {"foo":42}
 
 - name: binding variable scope in object
   args:
+    - -c
     - '. as $x | {bar: (.foo as $x | $x)} | $x'
-  input: '{"foo": "bar"}'
+  input: |
+    {"foo":"bar"}
   expected: |
-    {
-      "foo": "bar"
-    }
+    {"foo":"bar"}
 
 - name: binding variable scope in object key
   args:
+    - -c
     - '. as $x | {(.foo as $x | $x): $x}'
-  input: '{"foo": "bar"}'
+  input: |
+    {"foo":"bar"}
   expected: |
-    {
-      "bar": {
-        "foo": "bar"
-      }
-    }
+    {"bar":{"foo":"bar"}}
 
 - name: binding variable scope in condition
   args:
     - -c
     - '. as $x | if (.foo,.bar) as $x | $x then 1 as $x | $x else 2 as $x | $x end | [., $x]'
-  input: '{"foo": "bar"}'
+  input: |
+    {"foo":"bar"}
   expected: |
     [1,{"foo":"bar"}]
     [2,{"foo":"bar"}]
-
-- name: binding variable scope in try catch
-  args:
-    - '. as $x | try .foo as $x | $x | error catch $x'
-  input: '{"foo": 42}'
-  expected: |
-    {
-      "foo": 42
-    }
 
 - name: binding variable scope in reduce
   args:
@@ -2808,6 +3898,15 @@
     variable not defined: $i
   exit_code: 3
 
+- name: binding variable scope with function declaration
+  args:
+    - -n
+    - -c
+    - '"x" as $v | def f: $v; "y" as $v | [., f, $v]'
+  input: 'null'
+  expected: |
+    [null,"x","y"]
+
 - name: function scope in parenthesis
   args:
     - 'def f: 1; . | (def f: 2; f) | f, .'
@@ -2829,26 +3928,26 @@
   args:
     - -c
     - 'def f: 1; . | {bar: (def f: .foo; f)} | f, .'
-  input: '{"foo": "bar"}'
+  input: |
+    {"foo":"bar"}
   expected: |
     1
     {"bar":"bar"}
 
 - name: function scope in object key
   args:
+    - -c
     - 'def f: 1; . | {(def f: "foo"; f): f}'
   input: '0'
   expected: |
-    {
-      "foo": 1
-    }
+    {"foo":1}
 
 - name: function scope error in parenthesis
   args:
     - '(def f: 1; f) | f'
   input: '0'
   error: |
-    function not defined: f
+    function not defined: f/0
   exit_code: 3
 
 - name: function scope error in array
@@ -2856,7 +3955,7 @@
     - '[def f: 1; f] | f'
   input: '0'
   error: |
-    function not defined: f
+    function not defined: f/0
   exit_code: 3
 
 - name: function scope error in object
@@ -2864,7 +3963,7 @@
     - '{x: (def f: 1; f)} | f'
   input: '0'
   error: |
-    function not defined: f
+    function not defined: f/0
   exit_code: 3
 
 - name: function scope error in object key
@@ -2872,7 +3971,7 @@
     - '{(def f: 1; f): f}'
   input: '"x"'
   error: |
-    function not defined: f
+    function not defined: f/0
   exit_code: 3
 
 - name: first/0, last/0 functions
@@ -2886,10 +3985,10 @@
 - name: first/1, last/1, nth functions
   args:
     - -c
-    - '[first(.[]), last(.[]), nth(0), nth(3), nth(0;.[]), nth(3;.[])]'
+    - '[first(.[]), last(.[]), nth(0,3,5), nth(0,3,5;.[]), nth(9; range(infinite))]'
   input: '[1,2,3,4,5]'
   expected: |
-    [1,5,1,4,1,4]
+    [1,5,1,4,null,1,4,9]
 
 - name: first/1 function with optional operator
   args:
@@ -2903,10 +4002,24 @@
     null
     null
 
+- name: first/1 function nested
+  args:
+    - 'first((null, null) | first(null))'
+  input: 'null'
+  expected: |
+    null
+
+- name: all/2 function in first/1 argument
+  args:
+    - 'first(range(1; 200) | . as $x | select(all(range(1; 7); $x % . == 0)))'
+  input: 'null'
+  expected: |
+    60
+
 - name: limit/2 function
   args:
     - -c
-    - '[limit(0,3,13; range(10000000000000))]'
+    - '[limit(0,3,13; range(infinite))]'
   input: 'null'
   expected: |
     [0,1,2,0,1,2,3,4,5,6,7,8,9,10,11,12]
@@ -2915,7 +4028,11 @@
   args:
     - -c
     - '[all, any]'
-  input: '[] [false, false] [false, true] [true, true]'
+  input: |
+    []
+    [false, false]
+    [false, true]
+    [true, true]
   expected: |
     [true,false]
     [false,false]
@@ -2926,7 +4043,11 @@
   args:
     - -c
     - '[all(not), any(not)]'
-  input: '[] [false, false] [false, true] [true, true]'
+  input: |
+    []
+    [false, false]
+    [false, true]
+    [true, true]
   expected: |
     [true,false]
     [true,true]
@@ -2945,207 +4066,230 @@
 - name: isempty function
   args:
     - -c
-    - '[isempty(empty), isempty(range(10000000000000)), isempty(1,error("foo"))]'
+    - '[isempty(empty), isempty(range(infinite)), isempty(1,error("foo"))]'
   input: 'null'
   expected: |
     [true,false,false]
 
-- name: trigonometric functions
+- name: isempty function nested
+  args:
+    - 'isempty(isempty(empty))'
+  input: 'null'
+  expected: |
+    false
+
+- name: first/1 in isempty function
+  args:
+    - 'isempty(first(null))'
+  input: 'null'
+  expected: |
+    false
+
+- name: sin, cos, tan functions
   args:
     - -c
-    - 'map(sin),map(cos),map(tan) | map(. * 1000000000 | floor / 1000000000)'
+    - 'map(sin), map(cos), map(tan) | map(. * 1000000000 | floor / 1000000000)'
   input: '[0, 1, 2]'
   expected: |
     [0,0.841470984,0.909297426]
     [1,0.540302305,-0.416146837]
     [0,1.557407724,-2.185039864]
 
-- name: inverse trigonometric functions
+- name: asin, acos, atan functions
   args:
     - -c
-    - 'map(asin),map(acos),map(atan) | map(. * 1000000000 | floor / 1000000000)'
+    - 'map(asin), map(acos), map(atan) | map(. * 1000000000 | floor / 1000000000)'
   input: '[0, 1, 2]'
   expected: |
     [0,1.570796326,null]
     [1.570796326,0,null]
     [0,0.785398163,1.107148717]
 
-- name: hyperbolic functions
+- name: sinh, cosh, tanh functions
   args:
     - -c
-    - 'map(sinh),map(cosh),map(tanh) | map(. * 1000000000 | floor / 1000000000)'
+    - 'map(sinh), map(cosh), map(tanh) | map(. * 1000000000 | floor / 1000000000)'
   input: '[0, 1, 2]'
   expected: |
     [0,1.175201193,3.626860407]
     [1,1.543080634,3.762195691]
     [0,0.761594155,0.96402758]
 
-- name: inverse hyperbolic functions
+- name: asinh, acosh, atanh functions
   args:
     - -c
-    - 'map(asinh),map(acosh),map(atanh) | map(. * 1000000000 | floor / 1000000000)'
+    - 'map(asinh), map(acosh), map(atanh) | map(. * 1000000000 | floor / 1000000000)'
   input: '[0, 1, 2]'
   expected: |
     [0,0.881373587,1.443635475]
     [null,0,1.316957896]
     [0,1.7976931348623157e+308,null]
 
-- name: floor, round, nearbyint, rint, ceil, trunc, fabs, sqrt and cbrt functions
+- name: floor, ceil, trunc, fabs functions
   args:
     - -c
-    - 'range(.) | sin | (fabs,sqrt,cbrt,sin) * 100000 | [(floor,round,nearbyint,rint,ceil,trunc) / 100000]'
-  input: '5'
+    - 'map(floor), map(ceil), map(trunc), map(fabs)'
+  input: '[-3.7, -3.3, -2.5, -1.7, -1.0, -0.7, -0.3, 0.0, 0.3, 0.5, 0.7, 1.0, 1.7, 2.5, 3.3, 3.7]'
   expected: |
-    [0,0,0,0,0,0]
-    [0,0,0,0,0,0]
-    [0,0,0,0,0,0]
-    [0,0,0,0,0,0]
-    [0.84147,0.84147,0.84147,0.84147,0.84148,0.84147]
-    [0.91731,0.91732,0.91732,0.91732,0.91732,0.91731]
-    [0.94408,0.94409,0.94409,0.94409,0.94409,0.94408]
-    [0.74562,0.74562,0.74562,0.74562,0.74563,0.74562]
-    [0.90929,0.9093,0.9093,0.9093,0.9093,0.90929]
-    [0.95357,0.95357,0.95357,0.95357,0.95358,0.95357]
-    [0.9688,0.9688,0.9688,0.9688,0.96881,0.9688]
-    [0.78907,0.78907,0.78907,0.78907,0.78908,0.78907]
-    [0.14112,0.14112,0.14112,0.14112,0.14113,0.14112]
-    [0.37565,0.37566,0.37566,0.37566,0.37566,0.37565]
-    [0.52063,0.52063,0.52063,0.52063,0.52064,0.52063]
-    [0.14065,0.14065,0.14065,0.14065,0.14066,0.14065]
-    [0.7568,0.7568,0.7568,0.7568,0.75681,0.7568]
-    [null,null,null,null,null,null]
-    [-0.9113,-0.9113,-0.9113,-0.9113,-0.91129,-0.91129]
-    [-0.68661,-0.6866,-0.6866,-0.6866,-0.6866,-0.6866]
+    [-4,-4,-3,-2,-1,-1,-1,0,0,0,0,1,1,2,3,3]
+    [-3,-3,-2,-1,-1,-0,-0,0,1,1,1,1,2,3,4,4]
+    [-3,-3,-2,-1,-1,-0,-0,0,0,0,0,1,1,2,3,3]
+    [3.7,3.3,2.5,1.7,1,0.7,0.3,0,0.3,0.5,0.7,1,1.7,2.5,3.3,3.7]
+
+- name: round, nearbyint, rint functions
+  args:
+    - -c
+    - 'map(round), map(nearbyint), map(rint)'
+  input: '[-2.5, -1.7, -1.5, -1.2, -0.7, -0.5, -0.3, 0.0, 0.3, 0.5, 0.7, 1.2, 1.5, 1.7, 2.5]'
+  expected: |
+    [-3,-2,-2,-1,-1,-1,-0,0,0,1,1,1,2,2,3]
+    [-2,-2,-2,-1,-1,-0,-0,0,0,0,1,1,2,2,2]
+    [-2,-2,-2,-1,-1,-0,-0,0,0,0,1,1,2,2,2]
+
+- name: sqrt and cbrt functions
+  args:
+    - -c
+    - 'map(sqrt), map(cbrt) | map(. * 1000000000 | floor / 1000000000)'
+  input: '[-8, -3.375, 0, 0.125, 1, 4, 8, 9, 16.777216]'
+  expected: |
+    [null,null,0,0.35355339,1,2,2.828427124,3,4.096]
+    [-2,-1.5,0,0.5,1,1.587401051,2,2.080083823,2.56]
 
 - name: significand function
   args:
     - -c
-    - '(range(10)|tan),0/0 | significand | . * 100000 | floor / 100000'
-  input: '0'
+    - 'map(significand)'
+  input: '[0, -0.5, 1, -1.5, 2, 10, 64, 100]'
   expected: |
-    0
-    1.5574
-    -1.09252
-    -1.14038
-    1.15782
-    -1.69026
-    -1.16403
-    1.74289
-    -1.69993
-    -1.80927
-    null
+    [0,-1,1,-1.5,1,1.25,1,1.5625]
 
-- name: exp, exp10, exp2, expm1, pow10 functions
+- name: exp, exp10, exp2, expm1 functions
   args:
     - -c
-    - '[range(.)] | map(exp),map(exp10),map(exp2),map(expm1),map(pow10) | map(. * 100000 | floor / 100000)'
-  input: '10'
+    - 'map(exp), map(exp10), map(exp2), map(expm1) | map(. * 1000000000 | floor / 1000000000)'
+  input: '[0, -0.5, 1, -1.5, 2, 10, 20]'
   expected: |
-    [1,2.71828,7.38905,20.08553,54.59815,148.41315,403.42879,1096.63315,2980.95798,8103.08392]
-    [1,10,100,1000,10000,100000,1000000,10000000,100000000,1000000000]
-    [1,2,4,8,16,32,64,128,256,512]
-    [0,1.71828,6.38905,19.08553,53.59815,147.41315,402.42879,1095.63315,2979.95798,8102.08392]
-    [1,10,100,1000,10000,100000,1000000,10000000,100000000,1000000000]
+    [1,0.606530659,2.718281828,0.22313016,7.389056098,22026.465794806,485165195.4097903]
+    [1,0.316227766,10,0.031622776,100,10000000000,99999999999999980000]
+    [1,0.707106781,2,0.35355339,4,1024,1048576]
+    [0,-0.393469341,1.718281828,-0.77686984,6.389056098,22025.465794806,485165194.4097903]
 
 - name: frexp, modf function
   args:
     - -c
-    - '[range(.) | tan] | map(frexp),map(modf) | map(map(. * 100000 | floor / 100000))'
-  input: '10'
+    - 'map(frexp), map(modf)'
+  input: '[0, 0.25, -0.5, 1, -1.5, 2, 3.125]'
   expected: |
-    [[0,0],[0.7787,1],[-0.54626,2],[-0.57019,-2],[0.57891,1],[-0.84513,2],[-0.58202,-1],[0.87144,0],[-0.84997,3],[-0.90464,-1]]
-    [[0,0],[0.5574,1],[-0.18504,-2],[-0.14255,-0],[0.15782,1],[-0.38052,-3],[-0.29101,-0],[0.87144,0],[-0.79972,-6],[-0.45232,-0]]
+    [[0,0],[0.5,-1],[-0.5,0],[0.5,1],[-0.75,1],[0.5,2],[0.78125,2]]
+    [[0,0],[0.25,0],[-0.5,-0],[0,1],[-0.5,-1],[0,2],[0.125,3]]
 
 - name: log, log10, log1p, log2, logb functions
   args:
     - -c
-    - '[range(.) | tan] | map(log),map(log10),map(log1p),map(log2),map(logb) | map(. * 100000 | floor / 100000)'
-  input: '10'
+    - 'map(log), map(log10), map(log1p), map(log2), map(logb) | map(. * 1000000000 | floor / 1000000000)'
+  input: '[0, -0.5, 1, 1.5, 2, 10, 64, 100]'
   expected: |
-    [-1.7976931348623157e+308,0.44302,null,null,0.14654,null,null,-0.1376,null,null]
-    [-1.7976931348623157e+308,0.1924,null,null,0.06364,null,null,-0.05976,null,null]
-    [0,0.93899,null,-0.15379,0.76909,null,-0.34391,0.62671,null,-0.60206]
-    [-1.7976931348623157e+308,0.63914,null,null,0.21141,null,null,-0.19852,null,null]
-    [-1.7976931348623157e+308,0,1,-3,0,1,-2,-1,2,-2]
+    [-1.7976931348623157e+308,null,0,0.405465108,0.69314718,2.302585092,4.158883083,4.605170185]
+    [-1.7976931348623157e+308,null,0,0.176091259,0.301029995,1,1.806179973,2]
+    [0,-0.693147181,0.69314718,0.916290731,1.098612288,2.397895272,4.174387269,4.615120516]
+    [-1.7976931348623157e+308,null,0,0.5849625,1,3.321928094,6,6.643856189]
+    [-1.7976931348623157e+308,-1,0,0,1,3,6,6]
 
 - name: gamma, tgamma, lgamma functions
   args:
     - -c
-    - '[range(.) | tan] | map(gamma),map(tgamma),map(lgamma) | map(. * 100000 | floor / 100000)'
-  input: '10'
+    - 'map(gamma), map(tgamma), map(lgamma) | map(. * 1000000000 | floor / 1000000000)'
+  input: '[0, -0.5, 1, -1.5, 2, 10]'
   expected: |
-    [1.7976931348623157e+308,0.88943,-2.39565,-7.75522,0.93049,0.34209,-4.41241,1.09278,-0.00159,-3.58744]
-    [1.7976931348623157e+308,0.88943,-2.39565,-7.75522,0.93049,0.34209,-4.41241,1.09278,-0.00159,-3.58744]
-    [1.7976931348623157e+308,-0.11718,0.87365,2.04836,-0.07204,-1.07268,1.48441,0.08872,-6.44927,1.27743]
+    [1.7976931348623157e+308,-3.544907702,1,2.363271801,1,362880]
+    [1.7976931348623157e+308,-3.544907702,1,2.363271801,1,362880]
+    [1.7976931348623157e+308,1.265512123,0,0.860047015,0,12.80182748]
 
 - name: erf, erfc, j0, j1, y0, y1 functions
   args:
     - -c
-    - '[range(.) | tan] | map(erf),map(erfc),map(j0),map(j1),map(y0),map(y1) | map(. * 100000 | floor / 100000)'
-  input: '10'
+    - 'map(erf), map(erfc), map(j0), map(j1), map(y0), map(y1) | map(. * 1000000000 | floor / 1000000000)'
+  input: '[0, -0.5, 1, -1.5, 2, 10]'
   expected: |
-    [0,0.97237,-0.998,-0.15977,0.89845,-1,-0.31933,0.7822,-1,-0.47762]
-    [1,0.02762,1.99799,1.15976,0.10154,1.99999,1.31932,0.21779,2,1.47761]
-    [1,0.47958,0.11869,0.99492,0.69191,-0.36073,0.97894,0.81896,0.29307,0.9495]
-    [0,0.56529,-0.55806,-0.0711,0.48717,-0.18735,-0.14397,0.39565,0.0653,-0.22043]
-    [-1.7976931348623157e+308,0.40504,null,null,0.20121,null,null,-0.01971,null,null]
-    [-1.7976931348623157e+308,-0.37491,null,null,-0.653,null,null,-0.90154,null,null]
+    [0,-0.520499878,0.842700792,-0.966105147,0.995322265,1]
+    [1,1.520499877,0.157299207,1.966105146,0.004677734,0]
+    [1,0.938469807,0.765197686,0.511827671,0.223890779,-0.245935765]
+    [0,-0.242268458,0.440050585,-0.557936508,0.576724807,0.043472746]
+    [-1.7976931348623157e+308,null,0.088256964,null,0.510375672,0.055671167]
+    [-1.7976931348623157e+308,null,-0.781212822,null,-0.107032432,0.249015424]
 
-- name: atan2/2, copysign/2, drem/2, fdim/2, fmax/2, fmin/2, fmod/2, hypot/2, jn/2, ldexp/2, nextafter/2, nexttoward/2, remainder/2, scalb/2, scalbln/2, pow/2, yn/2 functions
+- name: fdim/2, fmax/2, fmin/2 functions
   args:
     - -c
-    - '[range(-.;.)] |
-         [atan2(.[]; .[])],
-         [copysign(.[]; .[])],
-         [drem(.[]; .[])],
-         [fdim(.[]; .[])],
-         [fmax(.[]; .[])],
-         [fmin(.[]; .[])],
-         [fmod(.[]; .[])],
-         [hypot(.[]; .[])],
-         [jn(.[]; .[])],
-         [ldexp(.[]; .[])],
-         [nextafter(.[]; .[])],
-         [nexttoward(.[]; .[])],
-         [remainder(.[]; .[])],
-         [scalb(.[]; .[])],
-         [scalbln(.[]; .[])],
-         [pow(.[]; .[])],
-         [yn(.[]; .[])]
-       | map(. * 10000 | round | . / 10000)'
-  input: '3'
+    - '[fdim(0.25,0.625; 0.125,0.375)], [fmax(0.1,0.3; 0.2,0.4)], [fmin(0.1,0.3; 0.2,0.4)]'
+  input: 'null'
   expected: |
-    [-2.3562,-2.5536,-2.8198,3.1416,2.8198,2.5536,-2.1588,-2.3562,-2.6779,3.1416,2.6779,2.3562,-1.8925,-2.0344,-2.3562,3.1416,2.3562,2.0344,-1.5708,-1.5708,-1.5708,0,1.5708,1.5708,-1.249,-1.1071,-0.7854,0,0.7854,1.1071,-0.9828,-0.7854,-0.4636,0,0.4636,0.7854]
-    [-3,-2,-1,-0,-1,-2,-3,-2,-1,-0,-1,-2,-3,-2,-1,-0,-1,-2,3,2,1,0,1,2,3,2,1,0,1,2,3,2,1,0,1,2]
-    [-0,1,-1,0,1,-1,1,-0,-1,0,1,0,-0,-0,-0,0,0,0,null,null,null,null,null,null,-0,-0,-0,0,0,0,1,-0,-1,0,1,0]
-    [0,1,2,3,4,5,0,0,1,2,3,4,0,0,0,1,2,3,0,0,0,0,1,2,0,0,0,0,0,1,0,0,0,0,0,0]
-    [-3,-2,-1,0,1,2,-2,-2,-1,0,1,2,-1,-1,-1,0,1,2,0,0,0,0,1,2,1,1,1,1,1,2,2,2,2,2,2,2]
-    [-3,-3,-3,-3,-3,-3,-3,-2,-2,-2,-2,-2,-3,-2,-1,-1,-1,-1,-3,-2,-1,0,0,0,-3,-2,-1,0,1,1,-3,-2,-1,0,1,2]
-    [-0,-2,-1,0,1,2,-1,-0,-1,0,1,0,-0,-0,-0,0,0,0,null,null,null,null,null,null,-0,-0,-0,0,0,0,-1,-0,-1,0,1,0]
-    [4.2426,3.6056,3.1623,3,3.1623,3.6056,3.6056,2.8284,2.2361,2,2.2361,2.8284,3.1623,2.2361,1.4142,1,1.4142,2.2361,3,2,1,0,1,2,3.1623,2.2361,1.4142,1,1.4142,2.2361,3.6056,2.8284,2.2361,2,2.2361,2.8284]
-    [0.3091,0.4861,0.3391,-0.2601,-0.3391,0.4861,0.1289,0.3528,0.5767,0.2239,-0.5767,0.3528,0.0196,0.1149,0.4401,0.7652,-0.4401,0.1149,0,0,0,1,0,0,-0.0196,0.1149,-0.4401,0.7652,0.4401,0.1149,-0.1289,0.3528,-0.5767,0.2239,0.5767,0.3528]
-    [-0.375,-0.25,-0.125,0,0.125,0.25,-0.75,-0.5,-0.25,0,0.25,0.5,-1.5,-1,-0.5,0,0.5,1,-3,-2,-1,0,1,2,-6,-4,-2,0,2,4,-12,-8,-4,0,4,8]
-    [-3,-2,-1,-0,1,2,-3,-2,-1,-0,1,2,-3,-2,-1,-0,1,2,-3,-2,-1,0,1,2,-3,-2,-1,0,1,2,-3,-2,-1,0,1,2]
-    [-3,-2,-1,-0,1,2,-3,-2,-1,-0,1,2,-3,-2,-1,-0,1,2,-3,-2,-1,0,1,2,-3,-2,-1,0,1,2,-3,-2,-1,0,1,2]
-    [-0,1,-1,0,1,-1,1,-0,-1,0,1,0,-0,-0,-0,0,0,0,null,null,null,null,null,null,-0,-0,-0,0,0,0,1,-0,-1,0,1,0]
-    [-0.375,-0.25,-0.125,0,0.125,0.25,-0.75,-0.5,-0.25,0,0.25,0.5,-1.5,-1,-0.5,0,0.5,1,-3,-2,-1,0,1,2,-6,-4,-2,0,2,4,-12,-8,-4,0,4,8]
-    [-0.375,-0.25,-0.125,0,0.125,0.25,-0.75,-0.5,-0.25,0,0.25,0.5,-1.5,-1,-0.5,0,0.5,1,-3,-2,-1,0,1,2,-6,-4,-2,0,2,4,-12,-8,-4,0,4,8]
-    [-0.037,-0.125,-1,1.7976931348623157e+308,1,0.125,0.1111,0.25,1,1.7976931348623157e+308,1,0.25,-0.3333,-0.5,-1,1.7976931348623157e+308,1,0.5,1,1,1,1,1,1,-3,-2,-1,0,1,2,9,4,1,0,1,4]
-    [null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,1.7976931348623157e+308,-1.7976931348623157e+308,1.7976931348623157e+308,-1.7976931348623157e+308,-1.7976931348623157e+308,-1.7976931348623157e+308,5.8215,-1.6507,0.7812,0.0883,-0.7812,-1.6507,1.1278,-0.6174,0.107,0.5104,-0.107,-0.6174]
+    [0.125,0.5,0,0.25]
+    [0.2,0.3,0.4,0.4]
+    [0.1,0.2,0.1,0.3]
 
+- name: copysign/2, drem/2, fmod/2, remainder/2 functions
+  args:
+    - -c
+    - '[copysign(0,0.5,-1.5; 0,1,-3.5)], [drem(0.5,-0.75,1.125; 0.5,-0.25)],
+       [fmod(0.5,-0.75,1.125; 0.5,-0.25)], [remainder(0.5,-0.75,1.125; 0.5,-0.25)]'
+  input: 'null'
+  expected: |
+    [0,0.5,1.5,0,0.5,1.5,-0,-0.5,-1.5]
+    [0,0.25,0.125,0,-0,0.125]
+    [0,-0.25,0.125,0,-0,0.125]
+    [0,0.25,0.125,0,-0,0.125]
+
+- name: nextafter/2, nexttoward/2 functions
+  args:
+    - -c
+    - '[nextafter(0,0.5,-0.75; 0.5,-0.25)], [nexttoward(0,0.5,-0.75; 0.5,-0.25)]'
+  input: 'null'
+  expected: |
+    [5e-324,0.5,-0.7499999999999999,-5e-324,0.49999999999999994,-0.7499999999999999]
+    [5e-324,0.5,-0.7499999999999999,-5e-324,0.49999999999999994,-0.7499999999999999]
+
+- name: atan2/2, hypot/2 functions
+  args:
+    - -c
+    - '[atan2(0,1; 0,1,-3)], [hypot(0,-3.75,12; 0,5,-16)] | map(. * 1000000000 | floor / 1000000000)'
+  input: 'null'
+  expected: |
+    [0,1.570796326,0,0.785398163,3.141592653,2.819842099]
+    [0,3.75,12,5,6.25,13,16,16.433578429,20]
+
+- name: ldexp/2, scalb/2, scalbln/2 functions
+  args:
+    - -c
+    - '[ldexp(0,0.5,2; 0,0.5,-2,3,10)], [scalb(0,0.5,2; 0,0.5,-2,3,10)], [scalbln(0,0.5,2; 0,0.5,-2,3,10)]'
+  input: 'null'
+  expected: |
+    [0,0.5,2,0,0.5,2,0,0.125,0.5,0,4,16,0,512,2048]
+    [0,0.5,2,0,0.5,2,0,0.125,0.5,0,4,16,0,512,2048]
+    [0,0.5,2,0,0.5,2,0,0.125,0.5,0,4,16,0,512,2048]
+
+- name: jn/2, pow/2, yn/2 functions
+  args:
+    - -c
+    - '[jn(0,0.5,2; 0,0.5,-2,3,10)], [pow(0,0.5,2; 0,0.5,-2,3,10)], [yn(0,0.5,2; 0.5,-2,3,10)] | map(. * 1000000000 | floor / 1000000000)'
+  input: 'null'
+  expected: |
+    [1,1,0,0.938469807,0.938469807,0.030604023,0.223890779,0.223890779,0.352834028,-0.260051955,-0.260051955,0.48609126,-0.245935765,-0.245935765,0.254630313]
+    [1,1,1,0,0.707106781,1.414213562,1.7976931348623157e+308,4,0.25,0,0.125,8,0,0.000976562,1024]
+    [-0.444518734,-0.444518734,-5.441370838,null,null,null,0.37685001,0.37685001,-0.160400394,0.055671167,0.055671167,-0.005868083]
 
 - name: fma/3 function
   args:
     - -c
-    - '[range(.) | . * 2 | sin] | [fma(.[]; .[]; .[])] | map(. * 100000 | floor / 100000)'
-  input: '3'
+    - '[fma(1.5,2.5; 3.5,4.5; 5.25,6.75)]'
+  input: 'null'
   expected: |
-    [0,0,0,0,0.82682,-0.68816,0,-0.68816,0.57275,0.90929,0.90929,0.90929,0.90929,1.73611,0.22113,0.90929,0.22113,1.48204,-0.75681,-0.75681,-0.75681,-0.75681,0.07001,-1.44497,-0.75681,-1.44497,-0.18406]
+    [10.5,14,12,16.5,12,15.5,13.5,18]
 
 - name: infinite function
   args:
     - -c
-    - '[infinite, -infinite] | (.[], .[]+.[], .[]-.[], .[]*.[], .[]/.[], 1/.[], -1/.[], .[]-1e300, .[]+1e300) | [., . == infinite, . == -infinite, contains(infinite)]'
+    - '[infinite, -infinite] | (.[], .[]+.[], .[]-.[], .[]*.[], .[]/.[], .[]%.[]%256, 1/.[], -1/.[], .[]-1e300, .[]+1e300) | [., . == infinite, . == -infinite, contains(infinite)]'
   input: 'null'
   expected: |
     [1.7976931348623157e+308,true,false,true]
@@ -3166,6 +4310,10 @@
     [null,false,false,false]
     [null,false,false,false]
     [null,false,false,false]
+    [0,false,false,false]
+    [-1,false,false,false]
+    [255,false,false,false]
+    [0,false,false,false]
     [0,false,false,false]
     [-0,false,false,false]
     [-0,false,false,false]
@@ -3178,35 +4326,41 @@
 - name: isfinite and isinfinite functions
   args:
     - -c
-    - '[infinite, pow(9; 999) | ., -., 1/., 1/(-.), nan, tostring | isfinite, isinfinite]'
+    - 'infinite | ., -., 1/., 1/(-.), nan, null, "", {}, [] | [., isfinite, isinfinite]'
   input: 'null'
   expected: |
-    [false,true,false,true,true,false,true,false,true,false,false,false,false,true,false,true,true,false,true,false,true,false,false,false]
+    [1.7976931348623157e+308,false,true]
+    [-1.7976931348623157e+308,false,true]
+    [0,true,false]
+    [-0,true,false]
+    [null,true,false]
+    [null,false,false]
+    ["",false,false]
+    [{},false,false]
+    [[],false,false]
 
 - name: finites function
   args:
-    - -c
-    - 'infinite, pow(9; 999), nan | ., -., 1/. | finites'
+    - 'nan, infinite, -infinite | ., -., 1/. | finites'
   input: 'null'
   expected: |
+    null
+    null
+    null
     0
-    0
-    null
-    null
-    null
+    -0
 
 - name: nan and isnan functions
   args:
     - -c
-    - 'nan, null, 0/0, 0/0.0, infinite-infinite, infinite/infinite | [., .+1, isnan]'
+    - 'nan, infinite-infinite, infinite/infinite, 0, null | [., .+1, isnan]'
   input: 'null'
   expected: |
     [null,null,true]
+    [null,null,true]
+    [null,null,true]
+    [0,1,false]
     [null,1,false]
-    [null,null,true]
-    [null,null,true]
-    [null,null,true]
-    [null,null,true]
 
 - name: nan and comparison
   args:
@@ -3221,41 +4375,50 @@
 
 - name: isnormal function
   args:
-    - -c
-    - 'infinite, pow(9; 999), nan, 9 | ., 1/. | isnormal'
+    - '0, 2.2250738585072011e-308, 2.2250738585072014e-308, 1, 1.7976931348623157e+308, nan, infinite, "", [], {} | isnormal'
   input: 'null'
   expected: |
     false
     false
-    false
-    false
-    false
-    false
     true
     true
+    true
+    false
+    false
+    false
+    false
+    false
 
 - name: normals function
   args:
-    - -c
-    - 'infinite, pow(9; 999), nan, "", [], {}, 0, 9 | normals'
+    - '0, 2.2250738585072011e-308, 2.2250738585072014e-308, 1, 1.7976931348623157e+308, nan, infinite | ., -. | normals'
   input: 'null'
   expected: |
-    9
-
-- name: stringify nan and inf
-  args:
-    - '(2|asin),(1|atanh),(-1|atanh) | tojson,([]|join(",")),.'
-  input: 'null'
-  expected: |
-    "null"
-    ""
-    null
-    "1.7976931348623157e+308"
-    ""
+    2.2250738585072014e-308
+    -2.2250738585072014e-308
+    1
+    -1
     1.7976931348623157e+308
-    "-1.7976931348623157e+308"
-    ""
     -1.7976931348623157e+308
+
+- name: normals with nextafter function
+  args:
+    - '0, 2.2250738585072014e-308, 1.7976931348623157e+308, nan, infinite | nextafter(.; 0, infinite) | normals'
+  input: 'null'
+  expected: |
+    2.225073858507202e-308
+    1.7976931348623155e+308
+    1.7976931348623157e+308
+
+- name: stringify nan and infinite
+  args:
+    - -c
+    - 'nan, infinite, -infinite | [., tostring]'
+  input: 'null'
+  expected: |
+    [null,"null"]
+    [1.7976931348623157e+308,"1.7976931348623157e+308"]
+    [-1.7976931348623157e+308,"-1.7976931348623157e+308"]
 
 - name: truncate_stream function
   args:
@@ -3314,7 +4477,7 @@
 - name: setpath function negative index
   args:
     - -c
-    - 'setpath([-2,0,2][] as $x | [$x]; 4,5)'
+    - 'setpath(-2,0,2 | [.]; 4,5)'
   input: '[1,2,3]'
   expected: |
     [1,4,3]
@@ -3334,27 +4497,52 @@
 
 - name: setpath function error
   args:
-    - -c
+    - 'setpath([-1]; 10)'
+  input: '[]'
+  error: |
+    setpath([-1]; 10) cannot be applied to []: array index should not be negative: -1
+
+- name: setpath function error
+  args:
     - 'setpath(["a","b","c"]; 10)'
   input: '{"a":{"b":[]}}'
   error: |
-    expected an object but got: array ([])
+    setpath(["a","b","c"]; 10) cannot be applied to {"a":{"b":[]}}: expected an object but got: array ([])
 
 - name: setpath function error
   args:
-    - -c
     - 'setpath(["a",1]; 10)'
   input: '{"a":{"b":[]}}'
   error: |
-    expected an array but got: object ({"b":[]})
+    setpath(["a",1]; 10) cannot be applied to {"a":{"b":[]}}: expected an array but got: object ({"b":[]})
 
 - name: setpath function error
   args:
-    - -c
-    - 'setpath(["a",{}]; 10)'
+    - 'setpath([{}]; 10)'
   input: 'null'
   error: |
-    expected a string for object key but got: object ({})
+    setpath([{}]; 10) cannot be applied to null: expected "start" and "end" for slicing but got: object ({})
+
+- name: setpath function error
+  args:
+    - 'setpath([{start:0}]; 10)'
+  input: 'null'
+  error: |
+    setpath([{"start":0}]; 10) cannot be applied to null: expected "start" and "end" for slicing but got: object ({"start":0})
+
+- name: setpath function error
+  args:
+    - 'setpath([[]]; 10)'
+  input: '[]'
+  error: |
+    setpath([[]]; 10) cannot be applied to []: expected a number for indexing an array but got: array ([])
+
+- name: setpath function error
+  args:
+    - 'setpath([{start:0,end:1}]; 10)'
+  input: '[]'
+  error: |
+    setpath([{"end":1,"start":0}]; 10) cannot be applied to []: expected an array but got: number (10)
 
 - name: delpaths function
   args:
@@ -3388,6 +4576,30 @@
   expected: |
     [1,2,4,5]
 
+- name: delpaths function with overlapping paths
+  args:
+    - -c
+    - 'delpaths([["x"],["x",0,"y"]], [["x",0],["x",0,"y"]], [["x"],["x",{"start":0}]])'
+  input: '{"x":[{"y":0}]}'
+  expected: |
+    {}
+    {"x":[]}
+    {}
+
+- name: delpaths function error
+  args:
+    - 'delpaths([{}])'
+  input: '[]'
+  error: |
+    delpaths([{}]) cannot be applied to []: expected an array but got: object ({})
+
+- name: delpaths function error
+  args:
+    - 'delpaths([["x"]])'
+  input: '[]'
+  error: |
+    delpaths([["x"]]) cannot be applied to []: expected an object but got: array ([])
+
 - name: getpath function
   args:
     - -c
@@ -3406,17 +4618,18 @@
 
 - name: getpath function error
   args:
-    - -c
     - 'getpath(["a",1,"b","c"])'
   input: '{"a":[{},{"b":[1,2,3,4,5,6,7]}]}'
   error: |
-    cannot getpath with ["a",1,"b","c"] against: object ({"a":[{},{"b":[1,2,3,4,5, ...})
+    getpath(["a",1,"b","c"]) cannot be applied to {"a":[{},{"b":[1,2,3,4,5, ...}: expected an object but got: array ([1,2,3,4,5,6,7])
 
 - name: setpath, delpaths, getpath functions
   args:
     - -c
     - '["foo",1] as $p | getpath($p), setpath($p; 2), delpaths([$p]), .'
-  input: '{"foo":[0,1]} {"bar":false}'
+  input: |
+    {"foo":[0,1]}
+    {"bar":false}
   expected: |
     1
     {"foo":[0,2]}
@@ -3435,12 +4648,20 @@
   expected: |
     {"a":[{"b":5}]}
     {"a":[{"b":5}],"b":0}
-    "cannot getpath with [\"a\",0,\"b\"] against: object ({\"a\":0})"
+    "getpath([\"a\",0,\"b\"]) cannot be applied to: object ({\"a\":0})"
     {"a":[{"b":5}]}
-    "cannot getpath with [\"a\",0,\"b\"] against: object ({\"a\":[0,1]})"
-    "cannot getpath with [\"a\",0,\"b\"] against: object ({\"a\":{\"b\":1}})"
+    "getpath([\"a\",0,\"b\"]) cannot be applied to: object ({\"a\":[0,1]})"
+    "getpath([\"a\",0,\"b\"]) cannot be applied to {\"a\":{\"b\":1}}: expected an array but got: object ({\"b\":1})"
     {"a":[{"b":5}]}
     {"a":[{"b":5,"c":3}]}
+
+- name: pick function
+  args:
+    - -c
+    - 'pick(.x, .y[2], .y[0], .z)'
+  input: '{"x":1, "y": [1,2,3]}'
+  expected: |
+    {"x":1,"y":[1,null,3],"z":null}
 
 - name: map_values function
   args:
@@ -3470,13 +4691,28 @@
     {"bar":[1]}
     {"bar":[0],"foo":[0,1,4]}
 
-- name: del function with slice
+- name: del function with array slicing
   args:
     - -c
     - 'del(.[1], .[-6], .[2], .[-3:9])'
   input: '[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]'
   expected: |
     [0,3,5,6,9]
+
+- name: del function against large array with select
+  args:
+    - '[range(.)] | (5,7) as $x | del(.[] | select(. % $x == 0)) | add'
+  input: '50000'
+  expected: |
+    1000000000
+    1071421429
+
+- name: del function against large array with slicing
+  args:
+    - '[range(.)] | del(.[range(length) | {start:.,end:(.+1)}])'
+  input: '50000'
+  expected: |
+    []
 
 - name: assignment operator against object
   args:
@@ -3494,7 +4730,29 @@
   expected: |
     [3,1,3]
 
-- name: assignment operator against array with slice
+- name: assignment operator against number
+  args:
+    - '. = 1'
+  input: '0'
+  expected: |
+    1
+
+- name: assignment operator against number error
+  args:
+    - '.foo = 1'
+  input: '0'
+  error: |
+    expected an object but got: number (0)
+
+- name: assignment operator against object with multiple paths
+  args:
+    - -c
+    - '(.foo,.bar,.baz) = 1'
+  input: 'null'
+  expected: |
+    {"bar":1,"baz":1,"foo":1}
+
+- name: assignment operator against array with slicing
   args:
     - -c
     - '.[2:4] = ([], [0], [4,3,2]), .[1:-1] = [3,2], .[2:0] = [.[]], .[10:] = [1],
@@ -3517,7 +4775,7 @@
     [1,9,5]
     [9]
 
-- name: assignment operator deeply
+- name: assignment operator with object and array indexing
   args:
     - -c
     - '.foo.[0].bar.[1] = 1'
@@ -3525,7 +4783,7 @@
   expected: |
     {"foo":[{"bar":[null,1]}]}
 
-- name: assignment operator deeply
+- name: assignment operator against array with suffix array indexing
   args:
     - -c
     - '.[2][2] = 1'
@@ -3533,7 +4791,15 @@
   expected: |
     [1,null,[null,null,1]]
 
-- name: assignment operator deeply
+- name: assignment operator against array with suffix object indexing
+  args:
+    - -c
+    - '.[2].foo = 1'
+  input: '[1]'
+  expected: |
+    [1,null,{"foo":1}]
+
+- name: assignment operator against object with multiple suffix indexing
   args:
     - -c
     - '.foo[2].bar = 2'
@@ -3541,7 +4807,31 @@
   expected: |
     {"bar":3,"foo":[1,null,{"bar":2}]}
 
-- name: assignment operator query
+- name: assignment operator with query and suffix object indexing
+  args:
+    - -c
+    - '(.foo).bar = 1'
+  input: 'null'
+  expected: |
+    {"foo":{"bar":1}}
+
+- name: assignment operator with object indexing and iterator suffix
+  args:
+    - -c
+    - '.foo[].bar = 1'
+  input: '{"foo":[null,null]}'
+  expected: |
+    {"foo":[{"bar":1},{"bar":1}]}
+
+- name: assignment operator with overlapping paths
+  args:
+    - -c
+    - '[(.x,.x.y,.x.y.z) = {}, (.x.y.z,.x.y,.x) = {}]'
+  input: 'null'
+  expected: |
+    [{"x":{"y":{"z":{}}}},{"x":{}}]
+
+- name: assignment operator with query value
   args:
     - -c
     - '.foo = .bar'
@@ -3549,14 +4839,112 @@
   expected: |
     {"bar":42,"foo":42}
 
-- name: assignment operator array index limit error
+- name: assignment operator with multiple paths and query values
   args:
-    - '.[100000000] = 1'
+    - -c
+    - '(.foo,.bar,.baz) = .bar[]'
+  input: '{"bar":[0,1,2]}'
+  expected: |
+    {"bar":0,"baz":0,"foo":0}
+    {"bar":1,"baz":1,"foo":1}
+    {"bar":2,"baz":2,"foo":2}
+
+- name: assignment operator with overlapping paths and multiple values
+  args:
+    - -c
+    - '.. = ..'
+  input: '{"x":{"y":{}}} [[[]]]'
+  expected: |
+    {"x":{"x":{"y":{}},"y":{"x":{"y":{}}}}}
+    {"x":{"y":{"y":{}}},"y":{}}
+    {"x":{"y":{}}}
+    [[[[[]]]]]
+    [[[[]]]]
+    [[[]]]
+
+- name: assignment operator with overlapping and slicing paths
+  args:
+    - -c
+    - '..[:0] = ..'
+  input: '[[[]]]'
+  expected: |
+    [[[[[]],[]],[]],[[]]]
+    [[[[]]],[[]]]
+    [[[]]]
+
+- name: assignment operator array index negative error
+  args:
+    - '.[-1,0] = 1'
   input: '[]'
   error: |
-    array index too large: 100000000
+    setpath([-1]; 1) cannot be applied to []: array index should not be negative: -1
 
-- name: modify operator
+- name: assignment operator array index limit error
+  args:
+    - '.[200000000] = 1'
+  input: '[]'
+  error: |
+    array index too large: 200000000
+
+- name: assignment operator with select
+  args:
+    - -c
+    - '(.[] | select(.k == "b") | .v) = 0'
+  input: '[{"k": "a", "v": 1}, {"k": "b", "v": 2}, {"k": "c", "v": 3}]'
+  expected: |
+    [{"k":"a","v":1},{"k":"b","v":0},{"k":"c","v":3}]
+
+- name: assignment operator with fork
+  args:
+    - -c
+    - '[range(3)] | .[] = 0 | [.[] = 1, .[] = 2]'
+  input: 'null'
+  expected: |
+    [[1,1,1],[2,2,2]]
+
+- name: assignment operator against large array
+  args:
+    - '[range(.)] | .[] = 1 | add'
+  input: '50000'
+  expected: |
+    50000
+
+- name: assignment operator against large array with select
+  args:
+    - '[range(.)] | (.[] | select(. % 2 > 0)) = 1 | add'
+  input: '50000'
+  expected: |
+    625000000
+
+- name: assignment operator against large array with range
+  args:
+    - '[range(.)] | .[range(length)] = 1 | add'
+  input: '50000'
+  expected: |
+    50000
+
+- name: assignment operator against large array with slicing
+  args:
+    - '[range(.)] | .[range(length) | {start:.,end:(.+1)}] = [1] | add'
+  input: '50000'
+  expected: |
+    50000
+
+- name: assignment operator against large object
+  args:
+    - '[{key:range(.)|tostring}] | from_entries | .[] = 1 | add'
+  input: '50000'
+  expected: |
+    50000
+
+- name: assignment operator constructing large array
+  args:
+    - '.[range(50000)] = 1 | add'
+  input: 'null'
+  expected: |
+    50000
+
+- name: update-assignment operator
   args:
     - -c
     - '.foo |= .+1'
@@ -3564,7 +4952,7 @@
   expected: |
     {"foo":2}
 
-- name: modify operator deeply
+- name: update-assignment operator deeply
   args:
     - -c
     - '.[0].a |= {"old":., "new":(.+1)}'
@@ -3572,7 +4960,7 @@
   expected: |
     [{"a":{"new":2,"old":1},"b":2}]
 
-- name: modify operator in function
+- name: update-assignment operator in function
   args:
     - -c
     - 'def inc(x): x |= .+1; inc(.[].a)'
@@ -3580,7 +4968,7 @@
   expected: |
     [{"a":2,"b":2},{"a":3,"b":4},{"a":8,"b":8}]
 
-- name: modify operator with empty
+- name: update-assignment operator with empty
   args:
     - -c
     - '.foo |= empty'
@@ -3588,7 +4976,23 @@
   expected: |
     {"bar":48}
 
-- name: modify operator with empty
+- name: update-assignment operator with repeat
+  args:
+    - -c
+    - '.foo |= repeat(.)'
+  input: '{"foo": 42, "bar": 48}'
+  expected: |
+    {"bar":48,"foo":42}
+
+- name: update-assignment operator with same paths
+  args:
+    - -c
+    - '(.foo,.foo,.foo) |= .+1'
+  input: '{"foo": 0}'
+  expected: |
+    {"foo":3}
+
+- name: update-assignment operator against array with empty function
   args:
     - -c
     - '(.[] | select(. % 2 > 0)) |= empty'
@@ -3596,7 +5000,7 @@
   expected: |
     [2,4]
 
-- name: modify operator with empty
+- name: update-assignment operator against array with conditional empty function
   args:
     - -c
     - '[range(.)] | .[] |= if . % 2 == 0 then empty else [., -.] end'
@@ -3604,7 +5008,44 @@
   expected: |
     [[1,-1],[3,-3],[5,-5],[7,-7],[9,-9]]
 
-- name: modify operator with optional operator
+- name: update-assignment operator with fork
+  args:
+    - -c
+    - '[range(3)] | .[] |= 0 | [.[] |= 1, .[] |= 2]'
+  input: 'null'
+  expected: |
+    [[1,1,1],[2,2,2]]
+
+- name: update-assignment operator against large array
+  args:
+    - '[range(.)] | .[] |= . * 2 | add'
+  input: '50000'
+  expected: |
+    2499950000
+
+- name: update-assignment operator against large array with select
+  args:
+    - '[range(.)] | (.[] | select(. % 2 > 0)) |= (. * 2) | add'
+  input: '50000'
+  expected: |
+    1874975000
+
+- name: update-assignment operator against large object
+  args:
+    - '[range(.) | {key:tostring,value:.}] | from_entries | .[] |= . * 2 | add'
+  input: '50000'
+  expected: |
+    2499950000
+
+- name: update-assignment operator against array with overlapping paths
+  args:
+    - -c
+    - '(.[1:3][],.[2:4][],.[2]) |= .+1'
+  input: '[1,2,3,4,5]'
+  expected: |
+    [1,3,6,5,5]
+
+- name: update-assignment operator with optional operator
   args:
     - -c
     - '.foo |= .?'
@@ -3612,7 +5053,15 @@
   expected: |
     {"foo":42}
 
-- name: modify operator with try catch
+- name: update-assignment operator with infinite range
+  args:
+    - -c
+    - '[range(.)] | .[] |= range(infinite)'
+  input: '5'
+  expected: |
+    [0,0,0,0,0]
+
+- name: update-assignment operator with try catch
   args:
     - -c
     - '. |= try . catch .'
@@ -3620,7 +5069,7 @@
   expected: |
     1
 
-- name: modify operator with try catch
+- name: update-assignment operator with alternative operator
   args:
     - -c
     - '.foo |= (fromjson? // "x")'
@@ -3628,19 +5077,23 @@
     {"foo": 42}
     {"foo": "42"}
     {"foo": "a"}
+    {"foo": "0 a"}
     {"foo": "true"}
     {"foo": "[{}]"}
+    {"foo": "[][]"}
   expected: |
     {"foo":"x"}
     {"foo":42}
     {"foo":"x"}
+    {"foo":"x"}
     {"foo":true}
     {"foo":[{}]}
+    {"foo":"x"}
 
 - name: update operators
   args:
     - -c
-    - '.[] += 2, .[] -= 2, .[] *= 2, .[] /= 2, .[] %=2'
+    - '.[] += 2, .[] -= 2, .[] *= 2, .[] /= 2, .[] %= 2'
   input: '[1,2,3]'
   expected: |
     [3,4,5]
@@ -3660,7 +5113,7 @@
     {"foo":1}
     {"foo":2}
 
-- name: update operators does not associate
+- name: update operators associativity error
   args:
     - '. += 1 -= 2'
   input: '1'
@@ -3682,19 +5135,22 @@
   args:
     - 'error'
   input: 'null'
+  error: |
+    error: null
 
-- name: error/0 function and try catch
+- name: error/0 function on string and try catch
   args:
     - 'try error catch .'
   input: '"foo"'
   expected: |
     "foo"
 
-- name: error/0 function and try catch
+- name: error/0 function on values and try catch
   args:
     - 'null,1,[],{x:42} | try error catch .'
   input: '0'
   expected: |
+    null
     1
     []
     {
@@ -3722,6 +5178,8 @@
   args:
     - 'error(null)'
   input: '1'
+  error: |
+    error: null
 
 - name: path function identity
   args:
@@ -3780,40 +5238,115 @@
 - name: path function with select
   args:
     - -c
-    - '(.[] | select(.k == "b") | .v) = 0'
-  input: '[{"k": "a", "v": 1}, {"k": "b", "v": 2}, {"k": "c", "v": 3}]'
-  expected: |
-    [{"k":"a","v":1},{"k":"b","v":0},{"k":"c","v":3}]
-
-- name: path function with select
-  args:
-    - -c
     - 'path(.[] | select(.id | startswith("x")) | .id)'
   input: '[{"id": "xy"}, {"id": "yx"}]'
   expected: |
     [0,"id"]
 
+- name: path function with getpath
+  args:
+    - -c
+    - '[path(getpath([[0]] | .[0],.[]))]'
+  input: 'null'
+  expected: |
+    [[0],[0]]
+
+- name: path function against nan
+  args:
+    - -c
+    - '[nan,{x:nan}] | path(.[1].x)'
+  input: 'null'
+  expected: |
+    [1,"x"]
+
 - name: path function nested
   args:
     - -c
-    - 'path(.a[path(.b)[0]])'
+    - 'path(.a[path(.b[.a:.b])[0]])'
   input: '{"a":{"b":0}}'
   expected: |
     ["a","b"]
 
-- name: path function error
+- name: path function error with arithmetic operator
   args:
     - 'path(. + 1)'
-  input: '0'
+  input: 'null'
   error: |
     invalid path against: number (1)
 
-- name: path function iterate error
+- name: path function error with object indexing
   args:
-    - 'try ((map(select(.a == 0))[].b) = 10) catch .'
-  input: '[{"a":0},{"a":1}]'
+    - 'path({}.x)'
+  input: '{}'
+  error: |
+    invalid path against: object ({})
+
+- name: path function error with array indexing
+  args:
+    - 'path([0][0 + 0])'
+  input: '[0]'
+  error: |
+    invalid path against: array ([0])
+
+- name: path function error with array slicing
+  args:
+    - 'path([0][0:1])'
+  input: '[0]'
+  error: |
+    invalid path against: array ([0])
+
+- name: path function error with getpath function
+  args:
+    - 'path({} | getpath([]))'
+  input: '{}'
+  error: |
+    invalid path against: object ({})
+
+- name: path function with binding array slicing
+  args:
+    - '.[:1] as $x | path($x.[0])'
+  input: '[0]'
   expected: |
-    "invalid path on iterating against: array ([{\"a\":0}])"
+    [
+      0
+    ]
+
+- name: path function error with binding array slicing
+  args:
+    - '.[:0] as $x | path($x.[0])'
+  input: '[0]'
+  error: |
+    invalid path against: array ([])
+
+- name: path function with function declaration
+  args:
+    - 'def f($x): .y; path(f(.x))'
+  input: 'null'
+  expected: |
+    [
+      "y"
+    ]
+
+- name: path function with assignment operator
+  args:
+    - 'path(. = .x)'
+  input: 'null'
+  expected: |
+    []
+
+- name: path function iterate error of array
+  args:
+    - '[.[]][].a = 1'
+  input: '[{"a":0}]'
+  error: |
+    invalid path on iterating against: array ([{"a":0}])
+
+- name: path function iterate error of object
+  args:
+    - '{}[] = 10'
+  input: '{}'
+  error: |
+    invalid path on iterating against: object ({})
 
 - name: paths/0 function
   args:
@@ -3858,6 +5391,13 @@
     2
     -4
 
+- name: bsearch function with objects
+  args:
+    - '[{x:range(.),y:range(.)}] | bsearch({x:1,y:1})'
+  input: '3'
+  expected: |
+    4
+
 - name: gmtime, localtime functions
   args:
     - -c
@@ -3886,13 +5426,13 @@
     "2017-07-14T02:40:00-0700"
     "2017-07-13T19:40:00-0700"
     "2017-07-14T02:40:00Z"
-    1567890123
+    1567890123.456
     "2019-09-07T21:02:03Z"
     "2019-09-07T21:02:03Z"
     "2019-09-07T21:02:03-0700"
     "2019-09-07T14:02:03-0700"
     "2019-09-07T21:02:03Z"
-    1600000000
+    1600000000.111
     "2020-09-13T12:26:40Z"
     "2020-09-13T12:26:40Z"
     "2020-09-13T12:26:40-0700"
@@ -3902,11 +5442,11 @@
 - name: strptime, fromdate functions
   args:
     - -c
-    - 'strptime("%Y-%m-%dT%H:%M:%SZ"), fromdate'
+    - 'strptime("%Y-%m-%dT%H:%M:%S%z"), fromdate'
   input: |
     "2017-07-14T02:40:00Z"
-    "2019-09-07T21:02:03Z"
-    "2020-09-13T12:26:40Z"
+    "2019-09-08T06:02:03+0900"
+    "2020-09-13T07:26:40-05:00"
   expected: |
     [2017,6,14,2,40,0,5,194]
     1500000000
@@ -3931,63 +5471,198 @@
   expected: |
     "number"
 
-- name: debug function
+- name: debug/0 function
   args:
+    - -c
     - 'recurse(debug|.[]?)'
-  input: '[{}] [1,{"a":2}]'
+  input: |
+    [{}]
+    [1,{"a":[2,"b"]}]
   expected: |
-    [
-      {}
-    ]
+    [{}]
     {}
-    [
-      1,
-      {
-        "a": 2
-      }
-    ]
+    [1,{"a":[2,"b"]}]
     1
-    {
-      "a": 2
-    }
+    {"a":[2,"b"]}
+    [2,"b"]
     2
+    "b"
   error: |
     ["DEBUG:",[{}]]
     ["DEBUG:",{}]
-    ["DEBUG:",[1,{"a":2}]]
+    ["DEBUG:",[1,{"a":[2,"b"]}]]
     ["DEBUG:",1]
-    ["DEBUG:",{"a":2}]
+    ["DEBUG:",{"a":[2,"b"]}]
+    ["DEBUG:",[2,"b"]]
     ["DEBUG:",2]
+    ["DEBUG:","b"]
+
+- name: debug/1 function
+  args:
+    - 'debug("value: \(.)", [.,.])'
+  input: 'null false "test" [] {}'
+  expected: |
+    null
+    false
+    "test"
+    []
+    {}
+  error: |
+    ["DEBUG:","value: null"]
+    ["DEBUG:",[null,null]]
+    ["DEBUG:","value: false"]
+    ["DEBUG:",[false,false]]
+    ["DEBUG:","value: test"]
+    ["DEBUG:",["test","test"]]
+    ["DEBUG:","value: []"]
+    ["DEBUG:",[[],[]]]
+    ["DEBUG:","value: {}"]
+    ["DEBUG:",[{},{}]]
 
 - name: stderr function
   args:
+    - -c
     - 'recurse(stderr|.[]?)'
-  input: '[{}] [1,{"a":2}] "DEBUG:"'
-  expected: |
-    [
-      {}
-    ]
-    {}
-    [
-      1,
-      {
-        "a": 2
-      }
-    ]
-    1
-    {
-      "a": 2
-    }
-    2
+  input: |
+    [{}]
+    [1,{"a":[2,"b"]}]
     "DEBUG:"
-  error: |
+  expected: |
     [{}]
     {}
-    [1,{"a":2}]
+    [1,{"a":[2,"b"]}]
     1
-    {"a":2}
+    {"a":[2,"b"]}
+    [2,"b"]
     2
+    "b"
     "DEBUG:"
+  error: '[{}]{}[1,{"a":[2,"b"]}]1{"a":[2,"b"]}[2,"b"]2bDEBUG:'
+
+- name: debug and stderr in builtins
+  args:
+    - 'builtins | sort[] | select(test("debug|stderr"))'
+  input: 'null'
+  expected: |
+    "debug/0"
+    "debug/1"
+    "stderr/0"
+
+- name: input_filename function with stdin input
+  args:
+    - 'input_filename'
+  input: '0 1 2'
+  expected: |
+    "<stdin>"
+    "<stdin>"
+    "<stdin>"
+
+- name: input_filename function with null input option
+  args:
+    - -n
+    - 'input_filename'
+  input: '0'
+  expected: |
+    null
+
+- name: input_filename function with raw string input option
+  args:
+    - --raw-input
+    - 'input_filename'
+  input: |
+    1
+    2
+    3
+  expected: |
+    "<stdin>"
+    "<stdin>"
+    "<stdin>"
+
+- name: input_filename function with slurp option
+  args:
+    - --slurp
+    - 'input_filename'
+  input: |
+    1
+    2
+    3
+  expected: |
+    "<stdin>"
+
+- name: input_filename function with input and slurp option
+  args:
+    - --raw-input
+    - --slurp
+    - 'input_filename'
+  input: |
+    1
+    2
+    3
+  expected: |
+    "<stdin>"
+
+- name: input_filename function with json file arguments
+  args:
+    - 'input_filename'
+    - 'testdata/1.json'
+    - 'testdata/2.json'
+  input: '0'
+  expected: |
+    "testdata/1.json"
+    "testdata/2.json"
+
+- name: input_filename function with null input option and json file arguments
+  args:
+    - -n
+    - '., inputs, (try input catch .) | input_filename'
+    - 'testdata/1.json'
+    - 'testdata/2.json'
+  input: '0'
+  expected: |
+    null
+    "testdata/1.json"
+    "testdata/2.json"
+    null
+
+- name: input_filename function with hyphen for stdin
+  args:
+    - 'input_filename'
+    - '-'
+    - 'testdata/1.json'
+    - '-'
+    - 'testdata/2.json'
+    - '-'
+  input: '0'
+  expected: |
+    "<stdin>"
+    "testdata/1.json"
+    "testdata/2.json"
+
+- name: input_filename function with yaml input option
+  args:
+    - --yaml-input
+    - 'input_filename'
+  input: '0'
+  expected: |
+    "<stdin>"
+
+- name: input_filename function with yaml file arguments
+  args:
+    - --yaml-input
+    - 'input_filename'
+    - 'testdata/1.yaml'
+  input: '0'
+  expected: |
+    "testdata/1.yaml"
+    "testdata/1.yaml"
+    "testdata/1.yaml"
+
+- name: input_filename in builtins
+  args:
+    - 'builtins[] | select(test("input_filename"))'
+  input: 'null'
+  expected: |
+    "input_filename/0"
 
 - name: halt function
   args:
@@ -3998,14 +5673,16 @@
     2
     1
 
-- name: halt function and raw strings input option
+- name: halt function and raw string input option
   args:
     - -R
-    - 'halt'
+    - '., halt, .'
   input: |
-    1
-    2
-    3
+    foo
+    bar
+    baz
+  expected: |
+    "foo"
 
 - name: halt function and json file arguments
   args:
@@ -4018,15 +5695,25 @@
     - 'halt_error'
   input: '1'
   error: |
-    error: 1
+    1
   exit_code: 5
 
-- name: halt_error/0 function
+- name: halt_error/0 function on nan
   args:
-    - '0/0 | halt_error'
+    - 'nan | halt_error'
   input: 'null'
   error: |
-    error: null
+    null
+  exit_code: 5
+
+- name: halt_error/0 function on string
+  args:
+    - 'halt_error'
+  input: '"foo\nbar\nbaz\n"'
+  error: |
+    foo
+    bar
+    baz
   exit_code: 5
 
 - name: halt_error/0 function and try catch
@@ -4034,7 +5721,7 @@
     - 'range(5) | try halt_error catch .'
   input: 'null'
   error: |
-    error: 0
+    0
   exit_code: 5
 
 - name: halt_error/0 function with null input and try catch
@@ -4043,18 +5730,26 @@
   input: 'null'
   exit_code: 5
 
-- name: halt_error/0 function and raw strings input option
+- name: halt_error/0 function with multiple input values
   args:
-    - -R
     - 'halt_error'
   input: |
     1
     2
     3
   error: |
-    error: 1
-    error: 2
-    error: 3
+    1
+  exit_code: 5
+
+- name: halt_error/0 function and raw string input option
+  args:
+    - -R
+    - 'halt_error'
+  input: |
+    foo
+    bar
+    baz
+  error: foo
   exit_code: 5
 
 - name: halt_error/1 function
@@ -4062,6 +5757,27 @@
     - 'halt_error(42)'
   input: 'null'
   exit_code: 42
+
+- name: halt_error/1 function on string
+  args:
+    - 'halt_error(42)'
+  input: '"foo\nbar\nbaz\n"'
+  error: |
+    foo
+    bar
+    baz
+  exit_code: 42
+
+- name: halt_error/1 function with multiple input values
+  args:
+    - 'halt_error(.)'
+  input: |
+    1
+    2
+    3
+  error: |
+    1
+  exit_code: 1
 
 - name: builtins function
   args:
@@ -4084,12 +5800,12 @@
   expected: |
     true
 
-- name: env in builtin
+- name: env in builtins
   args:
-    - 'builtins | contains(["env/0"])'
+    - 'builtins[] | select(test("env"))'
   input: 'null'
   expected: |
-    true
+    "env/0"
 
 - name: $ENV variable
   args:
@@ -4119,7 +5835,7 @@
   error: |
     break
 
-- name: input function
+- name: input function with binomial operator
   args:
     - -n
     - 'input + input[0]'
@@ -4211,28 +5927,36 @@
     null
     "x"
 
+- name: inputs function with stream option
+  args:
+    - -n
+    - -c
+    - --stream
+    - '[inputs][]'
+  input: '{"a":1} {"b":2} {"c":3}'
+  expected: |
+    [["a"],1]
+    [["a"]]
+    [["b"],2]
+    [["b"]]
+    [["c"],3]
+    [["c"]]
+
 - name: inputs function with stream and slurp option
   args:
     - -n
+    - -c
     - --stream
     - --slurp
-    - 'inputs'
-  input: '1 2 3'
+    - 'inputs[]'
+  input: '{"a":1} {"b":2} {"c":3}'
   expected: |
-    [
-      [
-        [],
-        1
-      ],
-      [
-        [],
-        2
-      ],
-      [
-        [],
-        3
-      ]
-    ]
+    [["a"],1]
+    [["a"]]
+    [["b"],2]
+    [["b"]]
+    [["c"],3]
+    [["c"]]
 
 - name: inputs function with raw input option
   args:
@@ -4326,6 +6050,27 @@
     [{"captures":[{"length":1,"name":"foo","offset":2,"string":"c"},{"length":1,"name":null,"offset":3,"string":"d"}],"length":3,"offset":1,"string":"bcd"},{"captures":[{"length":1,"name":"foo","offset":9,"string":"c"},{"length":1,"name":null,"offset":10,"string":"d"}],"length":3,"offset":8,"string":"bcd"},{"captures":[{"length":1,"name":"foo","offset":16,"string":"C"},{"length":1,"name":null,"offset":17,"string":"D"}],"length":3,"offset":15,"string":"BCD"}]
     [{"captures":[{"length":0,"name":null,"offset":-1,"string":null},{"length":0,"name":null,"offset":-1,"string":null}],"length":3,"offset":1,"string":"bcd"}]
 
+- name: match function type error
+  args:
+    - 'match("x"; "g")'
+  input: '{}'
+  error: |
+    match("x"; "g") cannot be applied to: object ({})
+
+- name: match function flag error
+  args:
+    - 'match("x"; "a")'
+  input: '""'
+  error: |
+    unsupported regular expression flag: "a"
+
+- name: match function regular expression error
+  args:
+    - 'match("["; "g")'
+  input: '""'
+  error: |
+    invalid regular expression "[": error parsing regexp: missing closing ]: `[`
+
 - name: test function
   args:
     - -c
@@ -4347,9 +6092,14 @@
 - name: scan function
   args:
     - -c
-    - 'scan("(b(c*)(d*))"), scan("(b(c*)(d*))"; "i")'
+    - 'scan("abc"), scan("abc"; "i"), scan("(b(c*)(d*))"), scan("(b(c*)(d*))"; "i")'
   input: '"abcdeABCCDDEabcce"'
   expected: |
+    "abc"
+    "abc"
+    "abc"
+    "ABC"
+    "abc"
     ["bcd","c","d"]
     ["bcc","cc",""]
     ["bcd","c","d"]
@@ -4380,21 +6130,28 @@
 
 - name: sub function
   args:
-    - 'sub("a"; "b"), sub("aaa"; "b"), sub("a(?<a>.)"; "\(.a)b\(.a)"; "ig"), sub("(?<foo>★)"; "\(.foo)☆\(.foo)")'
+    - 'sub("a"; "b"), sub("aaa"; "b"), sub("a"; "b","c"), sub("a(?<a>.)"; "\(.a)b\(.a)"; "ig"), sub("(?<foo>★)"; "\(.foo)☆\(.foo)"), sub("^"; "b")'
   input: '"abc☆★☆ABC"'
   expected: |
     "bbc☆★☆ABC"
     "abc☆★☆ABC"
+    "bbc☆★☆ABC"
+    "cbc☆★☆ABC"
     "bbbc☆★☆BbBC"
     "abc☆★☆★☆ABC"
+    "babc☆★☆ABC"
 
 - name: gsub function
   args:
-    - 'gsub("a"; "b"), gsub("a.c"; "b"), gsub("a(?<a>..)"; "\(.a+.a)"; "i"), gsub("(?<foo>★)"; "\(.foo)☆\(.foo)"), gsub("^"; "a")'
+    - 'gsub("a"; "b"), gsub("a.c"; "b"), gsub("a"; "b","c"), gsub("a(?<a>..)"; "\(.a+.a)"; "i"), gsub("(?<foo>★)"; "\(.foo)☆\(.foo)"), gsub("^"; "a")'
   input: '"abcABC☆★☆ABCabc"'
   expected: |
     "bbcABC☆★☆ABCbbc"
     "bABC☆★☆ABCb"
+    "bbcABC☆★☆ABCbbc"
+    "cbcABC☆★☆ABCbbc"
+    "bbcABC☆★☆ABCcbc"
+    "cbcABC☆★☆ABCcbc"
     "bcbcBCBC☆★☆BCBCbcbc"
     "abcABC☆★☆★☆ABCabc"
     "aabcABC☆★☆ABCabc"
@@ -4425,8 +6182,8 @@
 
 - name: format function
   args:
-    - -n
-    - '("html","uri","csv","tsv","sh","base64") as $x | [1,2,3] | format($x)'
+    - 'format("html","uri","csv","tsv","sh","base64")'
+  input: '[1,2,3]'
   expected: |
     "[1,2,3]"
     "%5B1%2C2%2C3%5D"
@@ -4495,61 +6252,95 @@
   expected: |
     "q=%5B%22%3C%3E%22%2C%22%7B%26%7D%22%5D&q=%5B%22%3C%3E%22%2C%22%7B%26%7D%22%2C%22%3C%3E%22%2C%22%7B%26%7D%22%5D"
 
+- name: format strings @urid
+  args:
+    - '@urid'
+  input: |
+    "%5B1%2C%7B%22foo%22%3A%22%3Cdiv%3E%26%27%5C%22%28%29%3C%2Fdiv%3E%22%7D%5D"
+  expected: |
+    "[1,{\"foo\":\"<div>&'\\\"()</div>\"}]"
+
+- name: format strings @urid error
+  args:
+    - '@urid'
+  input: |
+    "%5B1%2C%"
+  error: |
+    @urid cannot be applied to "%5B1%2C%": invalid URL escape "%"
+
 - name: format strings @csv
   args:
     - '@csv'
   input: |
-    [1, "foo", null, "foo,\n\"bar\"\tbaz"]
+    [1, "foo", null, "foo,\n\"bar\"\tbaz\u0000\\0"]
   expected: |
-    "1,\"foo\",,\"foo,\n\"\"bar\"\"\tbaz\""
+    "1,\"foo\",,\"foo,\n\"\"bar\"\"\tbaz\\0\\0\""
 
 - name: format strings @csv with string interpolation
   args:
-    - '@csv "\(.),\(. + .)"'
+    - '@csv "\(.),\(. + .),\([nan])"'
   input: |
     [1, "foo", null, 2]
   expected: |
-    "1,\"foo\",,2,1,\"foo\",,2,1,\"foo\",,2"
+    "1,\"foo\",,2,1,\"foo\",,2,1,\"foo\",,2,"
 
 - name: format strings @csv error
+  args:
+    - '@csv'
+  input: 'null'
+  error: |
+    @csv cannot be applied to: null
+
+- name: format strings @csv row error
   args:
     - '@csv'
   input: |
     [1, "foo", null, {"foo":1}]
   error: |
-    invalid csv row: object ({"foo":1})
+    @csv cannot format an array including: object ({"foo":1})
 
 - name: format strings @tsv
   args:
     - '@tsv'
   input: |
-    [1, "foo", null, "foo,\n\"bar\"\tba\\z"]
+    [1, "foo", null, "foo,\n\"bar\"\tbaz\u0000\\0"]
   expected: |
-    "1\tfoo\t\tfoo,\\n\"bar\"\\tba\\\\z"
+    "1\tfoo\t\tfoo,\\n\"bar\"\\tbaz\\0\\\\0"
 
-- name: format strings @csv with string interpolation
+- name: format strings @tsv with string interpolation
   args:
-    - '@tsv "\(.),\(. + .)"'
+    - '@tsv "\(.),\(. + .),\([nan])"'
   input: |
     [1, "foo", null, 2]
   expected: |
-    "1\tfoo\t\t2,1\tfoo\t\t2\t1\tfoo\t\t2"
+    "1\tfoo\t\t2,1\tfoo\t\t2\t1\tfoo\t\t2,"
 
 - name: format strings @tsv error
+  args:
+    - '@tsv'
+  input: '0'
+  error: |
+    @tsv cannot be applied to: number (0)
+
+- name: format strings @tsv row error
   args:
     - '@tsv'
   input: |
     [1, "foo", null, ["foo"]]
   error: |
-    invalid tsv row: array (["foo"])
+    @tsv cannot format an array including: array (["foo"])
 
 - name: format strings @sh
   args:
     - '@sh'
   input: |
-    [1, "f'o'o", null, false]
+    null
+    true
+    [1, "f'o'o\u0000\\0", null, false]
   expected: |
-    "1 'f'\\''o'\\''o' null false"
+    "null"
+    "true"
+    "1 'f'\\''o'\\''o\\0\\0' null false"
 
 - name: format strings @sh error
   args:
@@ -4557,7 +6348,7 @@
   input: |
     [{"foo": "<>"}]
   error: |
-    cannot escape for shell: object ({"foo":"<>"})
+    @sh cannot format an array including: object ({"foo":"<>"})
 
 - name: format strings @base64
   args:
@@ -4581,6 +6372,30 @@
   expected: |
     "{\"foo\":\"bar\"}"
 
+- name: format strings @base64d without padding
+  args:
+    - -R
+    - '@base64d'
+  input: 'eyJmb28iOiJiYXIifQ'
+  expected: |
+    "{\"foo\":\"bar\"}"
+
+- name: format strings @base64d with trailing characters after padding
+  args:
+    - -R
+    - '@base64d'
+  input: 'eyJmb28iOiJiYXIifQ=x=y'
+  expected: |
+    "{\"foo\":\"bar\"}"
+
+- name: format strings @base64d error
+  args:
+    - '@base64d'
+  input: |
+    ":"
+  error: |
+    @base64d cannot be applied to ":": illegal base64 data at input byte 0
+
 - name: format strings not defined error
   args:
     - -n
@@ -4589,7 +6404,7 @@
     format not defined: @foo
   exit_code: 5
 
-- name: format strings not defined error
+- name: format strings not defined error with numeric characters
   args:
     - -n
     - '@0'
@@ -4608,8 +6423,8 @@
 
 - name: destructuring alternative operator
   args:
-    - '.[] | . as {a:$a} ?// [$a] ?// $a | $a'
-  input: '[[1],[2],{"a":3},4]'
+    - '. as {$a} ?// [$a] ?// $a | $a'
+  input: '[1] [2] {"a":3} 4'
   expected: |
     1
     2
@@ -4619,8 +6434,8 @@
 - name: destructuring alternative operator with error backtrack
   args:
     - -c
-    - '.[] | . as {a:$a} ?// [$a] ?// $a | if 1 < $a and $a < 4 then $a|error else $a end'
-  input: '[[1],[2],{"a":3},4]'
+    - '. as {$a} ?// [$a] ?// $a | if 1 < $a and $a < 4 then $a|error else $a end'
+  input: '[1] [2] {"a":3} 4'
   expected: |
     1
     [2]
@@ -4630,12 +6445,23 @@
 - name: destructuring alternative operator with multiple variables
   args:
     - -c
-    - '.[] | . as {$a, b: [$c, {$d}]} ?// [$a, {$b}, $e] ?// $f | [$a, $b, $c, $d, $e, $f]'
-  input: '[{"a":1,"b":[2,{"d":3}]},[4,{"b":5,"c":6},7,8,9],"foo"]'
+    - '. as {$a, b: [$c, {$d}]} ?// [$a, {$b}, $e] ?// $f | [$a, $b, $c, $d, $e, $f]'
+  input: '{"a":1,"b":[2,{"d":3}]} [4,{"b":5,"c":6},7,8,9] "foo"'
   expected: |
     [1,null,2,3,null,null]
     [4,5,null,null,7,null]
     [null,null,null,null,null,"foo"]
+
+- name: destructuring alternative operator with array pattern against string
+  args:
+    - '. as [$a] ?// $a | $a'
+  input: 'null "" "abc" [] ["abc"]'
+  expected: |
+    null
+    ""
+    "abc"
+    null
+    "abc"
 
 - name: compact output option
   args:
@@ -4653,7 +6479,16 @@
   expected: |
     {"foo":["hello","world"]}
 
-- name: raw string output option
+- name: compact output long option with value
+  args:
+    - --compact-output=1
+    - '.'
+  input: '0'
+  error: |
+    boolean flag `--compact-output' cannot have an argument
+  exit_code: 2
+
+- name: raw string output short option
   args:
     - -r
     - '.foo[]'
@@ -4685,6 +6520,38 @@
       "foo": "multiple\nline"
     }
 
+- name: raw string output with nul delimiter option
+  args:
+    - --raw-output0
+    - '.[]'
+  input: '["foo",[{},{}],1,[2,3]]'
+  expected: "foo\x00[\n  {},\n  {}\n]\x001\x00[\n  2,\n  3\n]\x00"
+
+- name: raw string output with nul delimiter option error with string containing nul character
+  args:
+    - --raw-output0
+    - '"foo","bar","b\u0000a\u0000z","qux"'
+  input: 'null'
+  expected: "foo\x00bar\x00"
+  error: |
+    cannot output a string containing NUL character: "b\x00a\x00z"
+
+- name: raw string output without and with nul delimiter options
+  args:
+    - --raw-output
+    - --raw-output0
+    - '.[]'
+  input: '["foo",1,2,3]'
+  expected: "foo\x001\x002\x003\x00"
+
+- name: raw string output with nul delimiter option with compact output option
+  args:
+    - --raw-output0
+    - --compact-output
+    - '.[]'
+  input: '["foo",[{},{}],1,[2,3]]'
+  expected: "foo\x00[{},{}]\x001\x00[2,3]\x00"
+
 - name: join output option
   args:
     - -j
@@ -4699,19 +6566,13 @@
   input: '["foo",[{},{}],1,[2,3]]'
   expected: "foo[\n  {},\n  {}\n]1[\n  2,\n  3\n]"
 
-- name: nul output option
+- name: join output option with raw string output with nul delimiter option
   args:
-    - '-0'
+    - --raw-output0
+    - --join-output
     - '.[]'
   input: '["foo",1,2,3]'
   expected: "foo\x001\x002\x003\x00"
-
-- name: nul output long option
-  args:
-    - --nul-output
-    - '.[]'
-  input: '["foo",[{},{}],1,[2,3]]'
-  expected: "foo\x00[\n  {},\n  {}\n]\x001\x00[\n  2,\n  3\n]\x00"
 
 - name: color output option
   args:
@@ -4800,7 +6661,7 @@
     \  \e[34;1m\"foo\"\e[0m: \e[36m42\e[0m\n\
     }\n"
 
-- name: color output with compact option
+- name: color output with compact output option
   args:
     - -C
     - -c
@@ -4861,7 +6722,7 @@
      ]
     }
 
-- name: indent option
+- name: indent option with value 0
   args:
     - --indent
     - '0'
@@ -4870,7 +6731,7 @@
   expected: |
     {"foo":["hello","world"]}
 
-- name: indent option
+- name: indent option with deeply nested array
   args:
     - --indent
     - '7'
@@ -4903,16 +6764,15 @@
            ]
     }
 
-- name: indent option error
+- name: indent option too many indentation count error
   args:
-    - --indent
-    - '10'
+    - --indent=10
     - '.'
   input: '{ "foo": { "baz": ["hello", "world"] } }'
   error: |
     too many indentation count: 10
 
-- name: indent option error
+- name: indent option negative indentation count error
   args:
     - --indent
     - -1
@@ -4920,6 +6780,22 @@
   input: '{ "foo": { "baz": ["hello", "world"] } }'
   error: |
     negative indentation count: -1
+
+- name: indent option without argument
+  args:
+    - --indent
+  input: '0'
+  error: |
+    expected argument for flag `--indent'
+  exit_code: 2
+
+- name: indent option parse error
+  args:
+    - --indent=foo
+  input: '0'
+  error: |
+    invalid argument for flag `--indent': strconv.Atoi: parsing "foo": invalid syntax
+  exit_code: 2
 
 - name: tab option
   args:
@@ -4969,33 +6845,29 @@
     	}
     }
 
-- name: raw strings input option
+- name: raw string input option
   args:
     - -R
     - '.'
-  input: |
-    {
-      "foo": "bar"
-    }
+  input: "null\nfalse\r\nfoo\nbar"
   expected: |
-    "{"
-    "  \"foo\": \"bar\""
-    "}"
+    "null"
+    "false\r"
+    "foo"
+    "bar"
 
-- name: raw strings input long option
+- name: raw string input long option
   args:
     - --raw-input
     - '.'
-  input: |
-    {
-      "foo": "bar"
-    }
+  input: "null\nfalse\r\nfoo\nbar\n"
   expected: |
-    "{"
-    "  \"foo\": \"bar\""
-    "}"
+    "null"
+    "false\r"
+    "foo"
+    "bar"
 
-- name: raw strings input option error
+- name: raw string input option error
   args:
     - -R
     - '. / 2'
@@ -5026,7 +6898,7 @@
       null
     ]
 
-- name: null input value option with compact option
+- name: null input value option with compact output option
   args:
     - -n
     - -c
@@ -5034,7 +6906,7 @@
   expected: |
     [null,null]
 
-- name: null input value option with raw strings input option
+- name: null input value option with raw string input option
   args:
     - -n
     - -R
@@ -5073,18 +6945,14 @@
   expected: |
     [null,false]
 
-- name: slurp option with raw strings input option
+- name: slurp option with raw string input option
   args:
     - -s
     - -R
     - '.'
-  input: |
-    null
-    false
-    foo
-    bar
+  input: "null\nfalse\r\nfoo\nbar"
   expected: |
-    "null\nfalse\nfoo\nbar\n"
+    "null\nfalse\r\nfoo\nbar"
 
 - name: slurp option with null input option
   args:
@@ -5176,6 +7044,13 @@
     [["z",0]]
     [["z"]]
 
+- name: stream option with empty input
+  args:
+    - --stream
+    - '.'
+  input: ''
+  expected: ''
+
 - name: stream option with null input option
   args:
     - -n
@@ -5201,28 +7076,31 @@
 
 - name: stream option with slurp option
   args:
+    - -c
     - --stream
     - --slurp
-    - '.'
-  input: |
-    1
-    2
-    3
+    - '.[]'
+  input: '{"a":1} {"b":2} {"c":3}'
   expected: |
-    [
-      [
-        [],
-        1
-      ],
-      [
-        [],
-        2
-      ],
-      [
-        [],
-        3
-      ]
-    ]
+    [["a"],1]
+    [["a"]]
+    [["b"],2]
+    [["b"]]
+    [["c"],3]
+    [["c"]]
+
+- name: stream option with unterminated input
+  args:
+    - -c
+    - --stream
+    - '.'
+  input: '{"a":1,'
+  expected: |
+    [["a"],1]
+  error: |
+    invalid json: <stdin>
+        {"a":1,
+               ^  unexpected EOF
 
 - name: yaml input option
   args:
@@ -5331,6 +7209,18 @@
       },
       "bar"
     ]
+
+- name: yaml input option with hyphen for stdin
+  args:
+    - --yaml-input
+    - '.'
+    - '-'
+  input: |
+    foo: 1
+  expected: |
+    {
+      "foo": 1
+    }
 
 - name: yaml input option error
   args:
@@ -5491,19 +7381,40 @@
 
 - name: source query from file
   args:
-    - -n
     - -f
-    - 'testdata/1.jq'
+    - testdata/1.jq
+  input: '{"foo":{"bar":42}}'
   expected: |
-    null
+    42
+
+- name: source query from file short option in clumped options
+  args:
+    - -cfr
+    - testdata/1.jq
+  input: '{"foo":{"bar":42}}'
+  expected: |
+    42
 
 - name: source query from file long option
   args:
+    - --from-file
+    - testdata/1.jq
+  input: '{"foo":{"bar":42}}'
+  expected: |
+    42
+
+- name: source query from file with --args
+  args:
+    - --args
+    - --compact-output
     - --null-input
     - --from-file
-    - 'testdata/1.jq'
+    - testdata/14.jq
+    - 1
+    - 2
+    - 3
   expected: |
-    null
+    {"named":{},"positional":["1","2","3"]}
 
 - name: invalid query
   args:
@@ -5522,7 +7433,7 @@
   error: |
     invalid query: .abc[
         .abc[
-             ^  unexpected token <EOF>
+             ^  unexpected EOF
   exit_code: 3
 
 - name: invalid query
@@ -5567,6 +7478,16 @@
 
 - name: invalid query
   args:
+    - "\\/"
+  input: '{}'
+  error: |
+    invalid query: \/
+        \/
+        ^  unexpected token "\\"
+  exit_code: 3
+
+- name: invalid query
+  args:
     - "{\n[]}"
   input: '{}'
   error: |
@@ -5592,7 +7513,7 @@
 - name: invalid multiple line query in file
   args:
     - -f
-    - 'testdata/10.jq'
+    - testdata/10.jq
   error: |
     invalid query: testdata/10.jq:5
         5 | bar ]
@@ -5602,7 +7523,7 @@
 - name: invalid multiple line query in dos format
   args:
     - -f
-    - 'testdata/11.jq'
+    - testdata/11.jq
   error: |
     invalid query: testdata/11.jq:5
         5 | bar ]
@@ -5612,7 +7533,7 @@
 - name: invalid multiple line query in mac format
   args:
     - -f
-    - 'testdata/12.jq'
+    - testdata/12.jq
   error: |
     invalid query: testdata/12.jq:5
         5 | bar ]
@@ -5622,7 +7543,7 @@
 - name: invalid query in file
   args:
     - -f
-    - 'testdata/2.jq'
+    - testdata/2.jq
   error: |
     invalid query: testdata/2.jq:3
         3 |   bar, []
@@ -5632,22 +7553,37 @@
 - name: query file not found
   args:
     - -f
-    - 'testdata/3.jq'
+    - testdata/3.jq
   error: 'open testdata/3.jq:'
 
-- name: invalid json eof
+- name: query file not specified
+  args:
+    - -f
+  error: |
+    expected a query file for flag `-f'
+
+- name: invalid json unexpected eof error
   input: '{'
   error: |
     invalid json: <stdin>
         {
          ^  unexpected EOF
 
-- name: invalid json eof with multibyte characters
+- name: invalid json unexpected eof error with multibyte characters
   input: '{ "１２３４５":'
   error: |
     invalid json: <stdin>
         { "１２３４５":
                        ^  unexpected EOF
+
+- name: invalid json unexpected eof error with multiple lines
+  input: |
+    [0
+    ,[
+  error: |
+    invalid json: <stdin>:2
+        2 | ,[
+              ^  unexpected EOF
 
 - name: invalid json invalid character with multibyte characters
   input: |
@@ -5680,6 +7616,14 @@
     {
       "bar": []
     }
+
+- name: hyphen for stdin
+  args:
+    - '.'
+    - '-'
+  input: '{}'
+  expected: |
+    {}
 
 - name: json file arguments
   args:
@@ -5720,7 +7664,7 @@
     - 'testdata/8.json'
   error: |
     invalid json: testdata/8.json
-        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ,, 1, 1, 1, 1, 1, 1, 1
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, , 1, 1, 1, 1, 1, 1, 1
                                                    ^  invalid character ',' looking for beginning of value
 
 - name: json file error json
@@ -5729,8 +7673,8 @@
     - 'testdata/9.json'
   error: |
     invalid json: testdata/9.json:3
-        3 | ", "０", "０", "０", "０", , "０", "０"]
-                                       ^  invalid character ',' looking for beginning of value
+        3 | ０", "０", "０", "０", "０", "０", "０", , "０", "０"]
+                                                     ^  invalid character ',' looking for beginning of value
 
 - name: json file error json with multibyte character in the error line
   args:
@@ -5753,7 +7697,7 @@
         3 |   "abcde": :★★★★★★★★★★★★
                        ^  invalid character ':' looking for beginning of value
 
-- name: json file not found
+- name: json file not found error
   args:
     - '.'
     - 'testdata/1.json'
@@ -5849,7 +7793,8 @@
     - 'testdata'
     - 'include "5"; i'
   input: '0'
-  error: 'function not defined: i/0'
+  error: |
+    function not defined: i/0
   exit_code: 3
 
 - name: module directory option variable error
@@ -5875,8 +7820,7 @@
 
 - name: module directory option json parse error
   args:
-    - -L
-    - 'testdata'
+    - -Ltestdata
     - 'import "4" as $x; $x'
   input: '0'
   error: |
@@ -5888,12 +7832,29 @@
 - name: module directory option with same alias name
   args:
     - -c
-    - -L
-    - 'testdata'
+    - -L=testdata
     - 'include "4"; import "6" as bar; bar::g'
   input: '1'
   expected: |
     [1,2,{"foo":42}]
+
+- name: module directory option without argument
+  args:
+    - -c
+    - -L
+  input: '0'
+  error: |
+    expected argument for flag `-L'
+  exit_code: 2
+
+- name: search directory in query
+  args:
+    - 'include "m2" { search: "testdata/m2" }; g'
+  input: '0'
+  expected: |
+    0
+    43
+    44
 
 - name: empty module
   args:
@@ -5911,9 +7872,9 @@
     - 'include "7"; .'
   input: '0'
   error: |
-    invalid query in module: testdata/7.jq:1
+    invalid query: testdata/7.jq:1
         1 | def f: 1 +
-                      ^  unexpected token <EOF>
+                      ^  unexpected EOF
   exit_code: 3
 
 - name: module directive
@@ -5938,14 +7899,14 @@
     - -c
     - -L
     - 'testdata'
-    - 'tostring | modulemeta'
+    - 'tostring | modulemeta | .defs |= sort'
   input: '4 5 6 8 9'
   expected: |
-    {"deps":[{"is_data":false,"relpath":"5"},{"as":"bar","is_data":false,"relpath":"6"}]}
-    {"deps":[{"as":"foo","is_data":false,"relpath":"6","test":"foo"}]}
-    {"deps":[{"as":"x","is_data":true,"relpath":"7"}]}
-    {"deps":[]}
-    {"deps":[],"description":"This is a description","name":"sample-module","x":[[],{},{"y":10,"z":20}],"y":{"z":[128,"",false,true,null,[[]]]}}
+    {"defs":["f/0","g/0"],"deps":[{"is_data":false,"relpath":"5"},{"as":"bar","is_data":false,"relpath":"6"}]}
+    {"defs":["h/0"],"deps":[{"as":"foo","is_data":false,"relpath":"6","test":"foo"}]}
+    {"defs":["g/0","i/0"],"deps":[{"as":"x","is_data":true,"relpath":"7"}]}
+    {"defs":[],"deps":[]}
+    {"defs":["f/1"],"deps":[],"description":"This is a description","name":"sample-module","x":[[],{},{"y":10,"z":20}],"y":{"z":[128,"",false,true,null,[[]]]}}
 
 - name: modulemeta function error
   args:
@@ -5973,17 +7934,34 @@
       "foo": "value 1"
     }
 
-- name: arg option error
+- name: arg option with function declaration
+  args:
+    - -n
+    - --arg
+    - 'foo'
+    - 'bar'
+    - 'def f: $foo; "baz" as $foo | ., f, $foo'
+  expected: |
+    null
+    "bar"
+    "baz"
+
+- name: arg option arguments count error
+  args:
+    - --arg
+  error: |
+    expected 2 arguments for flag `--arg'
+  exit_code: 2
+
+- name: arg option arguments count error
   args:
     - --arg
     - 'foo'
-    - --null-input
-    - '.'
   error: |
-    expected 2 arguments for flag `--arg', but got option `--null-input'
+    expected 2 arguments for flag `--arg'
   exit_code: 2
 
-- name: arg option error
+- name: arg option variable name error
   args:
     - --arg
     - 'f.oo'
@@ -6024,19 +8002,23 @@
 - name: arg and argjson options
   args:
     - --arg
-    - 'foo'
-    - '"false"'
+    - 'x'
+    - '1'
     - --argjson
-    - 'bar'
-    - '{ "bar": 24 }'
-    - '{ $foo, $bar }'
-  input: '123'
+    - 'x'
+    - '1'
+    - --argjson
+    - 'y'
+    - '2'
+    - --arg
+    - 'y'
+    - '2'
+    - '{ $x, $y }'
+  input: '0'
   expected: |
     {
-      "bar": {
-        "bar": 24
-      },
-      "foo": "\"false\""
+      "x": "1",
+      "y": 2
     }
 
 - name: argjson option error
@@ -6078,7 +8060,7 @@
       ]
     }
 
-- name: slurpfile option error
+- name: slurpfile option invalid json error
   args:
     - --slurpfile
     - 'foo'
@@ -6089,6 +8071,15 @@
     invalid json: testdata/1.jq
         .foo.bar
         ^  invalid character '.' looking for beginning of value
+
+- name: slurpfile option invalid file error
+  args:
+    - --slurpfile
+    - 'foo'
+    - '-'
+    - '{ $foo }'
+  input: 'null'
+  error: 'open -:'
 
 - name: rawfile option
   args:
@@ -6111,7 +8102,194 @@
   input: 'null'
   error: 'open testdata/6.json:'
 
-- name: exit status option
+- name: $ARGS variable
+  args:
+    - --arg
+    - 'a'
+    - '1'
+    - --argjson
+    - 'b'
+    - '1'
+    - --slurpfile
+    - 'c'
+    - 'testdata/1.json'
+    - --rawfile
+    - 'd'
+    - 'testdata/1.json'
+    - '$ARGS | ., .named.a'
+  input: 'null'
+  expected: |
+    {
+      "named": {
+        "a": "1",
+        "b": 1,
+        "c": [
+          {
+            "foo": 10
+          }
+        ],
+        "d": "{\"foo\":10}\n"
+      },
+      "positional": []
+    }
+    "1"
+
+- name: $ARGS variable with args option
+  args:
+    - --arg
+    - 'foo'
+    - 'value'
+    - '$ARGS | ., .positional[]'
+    - --args
+    - '1'
+    - '"bar"'
+    - '{"x":1}'
+  input: '0'
+  expected: |
+    {
+      "named": {
+        "foo": "value"
+      },
+      "positional": [
+        "1",
+        "\"bar\"",
+        "{\"x\":1}"
+      ]
+    }
+    "1"
+    "\"bar\""
+    "{\"x\":1}"
+
+- name: args option without argument
+  args:
+    - '$ARGS'
+    - --args
+  input: '0'
+  expected: |
+    {
+      "named": {},
+      "positional": []
+    }
+
+- name: query and options after args option
+  args:
+    - --args
+    - '$ARGS'
+    - 1
+    - -n
+    - 2
+    - -c
+    - --
+    - 3
+    - --
+    - -c
+  input: '0'
+  expected: |
+    {"named":{},"positional":["1","2","3","--","-c"]}
+
+- name: double dash with args option
+  args:
+    - --args
+    - --
+    - 1
+    - 2
+    - 3
+  input: '0'
+  expected: |
+    0
+
+- name: $ARGS variable with jsonargs option
+  args:
+    - '$ARGS | ., .positional[]'
+    - --arg
+    - 'foo'
+    - 'value'
+    - --jsonargs
+    - '1'
+    - '"bar"'
+    - '{"x":1}'
+  input: '0'
+  expected: |
+    {
+      "named": {
+        "foo": "value"
+      },
+      "positional": [
+        1,
+        "bar",
+        {
+          "x": 1
+        }
+      ]
+    }
+    1
+    "bar"
+    {
+      "x": 1
+    }
+
+- name: jsonargs option without argument
+  args:
+    - '$ARGS'
+    - --jsonargs
+  input: '0'
+  expected: |
+    {
+      "named": {},
+      "positional": []
+    }
+
+- name: jsonargs option parse error
+  args:
+    - '$ARGS'
+    - --jsonargs
+    - '1'
+    - '"bar"'
+    - '{"x":}'
+  input: '0'
+  error: |
+    invalid json: --jsonargs
+        {"x":}
+             ^  invalid character '}' looking for beginning of value
+
+- name: args with jsonargs option
+  args:
+    - -c
+    - '$ARGS'
+    - --args
+    - 1
+    - 2
+    - --jsonargs
+    - 1
+    - 2
+    - --args
+    - 1
+    - 2
+  input: '0'
+  expected: |
+    {"named":{},"positional":["1","2",1,2,"1","2"]}
+
+- name: args with jsonargs option
+  args:
+    - -c
+    - '$ARGS'
+    - --args
+    - 1
+    - 2
+    - --jsonargs
+    - 1
+    - 2
+    - --args
+    - 1
+    - 2
+    - --jsonargs
+    - 1
+    - 2
+  input: '0'
+  expected: |
+    {"named":{},"positional":["1","2",1,2,"1","2",1,2]}
+
+- name: exit status option with null result
   args:
     - -e
     - '.'
@@ -6120,14 +8298,14 @@
     null
   exit_code: 1
 
-- name: exit status option
+- name: exit status option with empty function
   args:
     - -e
     - 'empty'
   input: 'null'
   exit_code: 4
 
-- name: exit status long option
+- name: exit status long option with false result
   args:
     - --exit-status
     - '.'
@@ -6136,7 +8314,7 @@
     false
   exit_code: 1
 
-- name: exit status long option
+- name: exit status long option with true result
   args:
     - --exit-status
     - 'not'
@@ -6144,7 +8322,7 @@
   expected: |
     true
 
-- name: exit status long option
+- name: exit status long option with multiple results
   args:
     - --exit-status
     - '1,not,2'
@@ -6168,12 +8346,111 @@
     - --exit-status
     - 'error'
   input: 'null'
-  exit_code: 4
+  error: |
+    error: null
 
-- name: invalid option error
+- name: exit status long option with halt function
+  args:
+    - --exit-status
+    - 'halt'
+  input: 'false'
+  exit_code: 0
+
+- name: exit status long option with halt_error function
+  args:
+    - --exit-status
+    - 'halt_error(0)'
+  input: 'null'
+  exit_code: 0
+
+- name: exit status long option with halt_error function
+  args:
+    - --exit-status
+    - 'halt_error(42)'
+  input: 'null'
+  exit_code: 42
+
+- name: query with leading hyphen
+  args:
+    - '-.'
+  input: '1'
+  expected: |
+    -1
+
+- name: query with leading hyphen
+  args:
+    - '-j0'
+  input: '0 1 2'
+  expected: |
+    -1
+    -0.7651976865579666
+    -0.22389077914123567
+
+- name: query with leading hyphen after a flag
+  args:
+    - -r
+    - '-.'
+  input: '1'
+  expected: |
+    -1
+
+- name: double dash
+  args:
+    - '--'
+    - '.'
+  input: '1'
+  expected: |
+    1
+
+- name: double dash with query with leading hyphen
+  args:
+    - '--'
+    - '-j'
+  input: 'null'
+  error: |
+    compile error: function not defined: j/0
+  exit_code: 3
+
+- name: double double dash
+  args:
+    - '--'
+    - '--'
+    - '.'
+  input: '1'
+  error: |
+    invalid query: --
+        --
+          ^  unexpected EOF
+  exit_code: 3
+
+- name: short clumped options
+  args:
+    - -cRr
+    - '.'
+  input: 'foo'
+  expected: |
+    foo
+
+- name: invalid short option error
   args:
     - -q
     - '.'
   error: |
     unknown flag `q'
+  exit_code: 2
+
+- name: invalid short option error in clumped options
+  args:
+    - -nqe
+    - '.'
+  error: |
+    unknown flag `q'
+  exit_code: 2
+
+- name: invalid long option error
+  args:
+    - --qqq
+    - '.'
+  error: |
+    unknown flag `--qqq'
   exit_code: 2

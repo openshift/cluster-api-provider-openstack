@@ -64,6 +64,7 @@ func (ir *inputReader) getContents(offset *int64, line *int) string {
 type inputIter interface {
 	gojq.Iter
 	io.Closer
+	Name() string
 }
 
 type jsonInputIter struct {
@@ -82,11 +83,11 @@ func newJSONInputIter(r io.Reader, fname string) inputIter {
 	return &jsonInputIter{dec: dec, ir: ir, fname: fname}
 }
 
-func (i *jsonInputIter) Next() (interface{}, bool) {
+func (i *jsonInputIter) Next() (any, bool) {
 	if i.err != nil {
 		return nil, false
 	}
-	var v interface{}
+	var v any
 	if err := i.dec.Decode(&v); err != nil {
 		if err == io.EOF {
 			i.err = err
@@ -114,6 +115,10 @@ func (i *jsonInputIter) Close() error {
 	return nil
 }
 
+func (i *jsonInputIter) Name() string {
+	return i.fname
+}
+
 type nullInputIter struct {
 	err error
 }
@@ -122,7 +127,7 @@ func newNullInputIter() inputIter {
 	return &nullInputIter{}
 }
 
-func (i *nullInputIter) Next() (interface{}, bool) {
+func (i *nullInputIter) Next() (any, bool) {
 	if i.err != nil {
 		return nil, false
 	}
@@ -135,19 +140,26 @@ func (i *nullInputIter) Close() error {
 	return nil
 }
 
+func (*nullInputIter) Name() string {
+	return ""
+}
+
 type filesInputIter struct {
 	newIter func(io.Reader, string) inputIter
 	fnames  []string
+	stdin   io.Reader
 	iter    inputIter
-	file    *os.File
+	file    io.Reader
 	err     error
 }
 
-func newFilesInputIter(newIter func(io.Reader, string) inputIter, fnames []string) inputIter {
-	return &filesInputIter{newIter: newIter, fnames: fnames}
+func newFilesInputIter(
+	newIter func(io.Reader, string) inputIter, fnames []string, stdin io.Reader,
+) inputIter {
+	return &filesInputIter{newIter: newIter, fnames: fnames, stdin: stdin}
 }
 
-func (i *filesInputIter) Next() (interface{}, bool) {
+func (i *filesInputIter) Next() (any, bool) {
 	if i.err != nil {
 		return nil, false
 	}
@@ -155,15 +167,23 @@ func (i *filesInputIter) Next() (interface{}, bool) {
 		if i.file == nil {
 			if len(i.fnames) == 0 {
 				i.err = io.EOF
+				if i.iter != nil {
+					i.iter.Close()
+					i.iter = nil
+				}
 				return nil, false
 			}
 			fname := i.fnames[0]
 			i.fnames = i.fnames[1:]
-			file, err := os.Open(fname)
-			if err != nil {
-				return err, true
+			if fname == "-" && i.stdin != nil {
+				i.file, fname = i.stdin, "<stdin>"
+			} else {
+				file, err := os.Open(fname)
+				if err != nil {
+					return err, true
+				}
+				i.file = file
 			}
-			i.file = file
 			if i.iter != nil {
 				i.iter.Close()
 			}
@@ -172,46 +192,65 @@ func (i *filesInputIter) Next() (interface{}, bool) {
 		if v, ok := i.iter.Next(); ok {
 			return v, ok
 		}
-		i.file.Close()
+		if r, ok := i.file.(io.Closer); ok && i.file != i.stdin {
+			r.Close()
+		}
 		i.file = nil
 	}
 }
 
 func (i *filesInputIter) Close() error {
 	if i.file != nil {
-		i.file.Close()
+		if r, ok := i.file.(io.Closer); ok && i.file != i.stdin {
+			r.Close()
+		}
 		i.file = nil
 		i.err = io.EOF
 	}
 	return nil
 }
 
+func (i *filesInputIter) Name() string {
+	if i.iter != nil {
+		return i.iter.Name()
+	}
+	return ""
+}
+
 type rawInputIter struct {
-	scanner *bufio.Scanner
-	err     error
+	r     *bufio.Reader
+	fname string
+	err   error
 }
 
-func newRawInputIter(r io.Reader, _ string) inputIter {
-	return &rawInputIter{scanner: bufio.NewScanner(r)}
+func newRawInputIter(r io.Reader, fname string) inputIter {
+	return &rawInputIter{r: bufio.NewReader(r), fname: fname}
 }
 
-func (i *rawInputIter) Next() (interface{}, bool) {
+func (i *rawInputIter) Next() (any, bool) {
 	if i.err != nil {
 		return nil, false
 	}
-	if i.scanner.Scan() {
-		return i.scanner.Text(), true
+	line, err := i.r.ReadString('\n')
+	if err != nil {
+		i.err = err
+		if err != io.EOF {
+			return err, true
+		}
+		if line == "" {
+			return nil, false
+		}
 	}
-	if i.err = i.scanner.Err(); i.err != nil {
-		return i.err, true
-	}
-	i.err = io.EOF
-	return nil, false
+	return strings.TrimSuffix(line, "\n"), true
 }
 
 func (i *rawInputIter) Close() error {
 	i.err = io.EOF
 	return nil
+}
+
+func (i *rawInputIter) Name() string {
+	return i.fname
 }
 
 type streamInputIter struct {
@@ -230,7 +269,7 @@ func newStreamInputIter(r io.Reader, fname string) inputIter {
 	return &streamInputIter{stream: newJSONStream(dec), ir: ir, fname: fname}
 }
 
-func (i *streamInputIter) Next() (interface{}, bool) {
+func (i *streamInputIter) Next() (any, bool) {
 	if i.err != nil {
 		return nil, false
 	}
@@ -262,6 +301,10 @@ func (i *streamInputIter) Close() error {
 	return nil
 }
 
+func (i *streamInputIter) Name() string {
+	return i.fname
+}
+
 type yamlInputIter struct {
 	dec   *yaml.Decoder
 	ir    *inputReader
@@ -275,11 +318,11 @@ func newYAMLInputIter(r io.Reader, fname string) inputIter {
 	return &yamlInputIter{dec: dec, ir: ir, fname: fname}
 }
 
-func (i *yamlInputIter) Next() (interface{}, bool) {
+func (i *yamlInputIter) Next() (any, bool) {
 	if i.err != nil {
 		return nil, false
 	}
-	var v interface{}
+	var v any
 	if err := i.dec.Decode(&v); err != nil {
 		if err == io.EOF {
 			i.err = err
@@ -296,6 +339,10 @@ func (i *yamlInputIter) Close() error {
 	return nil
 }
 
+func (i *yamlInputIter) Name() string {
+	return i.fname
+}
+
 type slurpInputIter struct {
 	iter inputIter
 	err  error
@@ -305,12 +352,12 @@ func newSlurpInputIter(iter inputIter) inputIter {
 	return &slurpInputIter{iter: iter}
 }
 
-func (i *slurpInputIter) Next() (interface{}, bool) {
+func (i *slurpInputIter) Next() (any, bool) {
 	if i.err != nil {
 		return nil, false
 	}
-	var vs []interface{}
-	var v interface{}
+	var vs []any
+	var v any
 	var ok bool
 	for {
 		v, ok = i.iter.Next()
@@ -334,6 +381,41 @@ func (i *slurpInputIter) Close() error {
 	return nil
 }
 
+func (i *slurpInputIter) Name() string {
+	return i.iter.Name()
+}
+
+type readAllIter struct {
+	r     io.Reader
+	fname string
+	err   error
+}
+
+func newReadAllIter(r io.Reader, fname string) inputIter {
+	return &readAllIter{r: r, fname: fname}
+}
+
+func (i *readAllIter) Next() (any, bool) {
+	if i.err != nil {
+		return nil, false
+	}
+	i.err = io.EOF
+	cnt, err := io.ReadAll(i.r)
+	if err != nil {
+		return err, true
+	}
+	return string(cnt), true
+}
+
+func (i *readAllIter) Close() error {
+	i.err = io.EOF
+	return nil
+}
+
+func (i *readAllIter) Name() string {
+	return i.fname
+}
+
 type slurpRawInputIter struct {
 	iter inputIter
 	err  error
@@ -343,12 +425,12 @@ func newSlurpRawInputIter(iter inputIter) inputIter {
 	return &slurpRawInputIter{iter: iter}
 }
 
-func (i *slurpRawInputIter) Next() (interface{}, bool) {
+func (i *slurpRawInputIter) Next() (any, bool) {
 	if i.err != nil {
 		return nil, false
 	}
 	var vs []string
-	var v interface{}
+	var v any
 	var ok bool
 	for {
 		v, ok = i.iter.Next()
@@ -360,7 +442,6 @@ func (i *slurpRawInputIter) Next() (interface{}, bool) {
 			return i.err, true
 		}
 		vs = append(vs, v.(string))
-		vs = append(vs, "\n")
 	}
 }
 
@@ -371,4 +452,8 @@ func (i *slurpRawInputIter) Close() error {
 		i.err = io.EOF
 	}
 	return nil
+}
+
+func (i *slurpRawInputIter) Name() string {
+	return i.iter.Name()
 }

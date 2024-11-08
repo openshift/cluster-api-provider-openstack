@@ -20,15 +20,13 @@ import (
 	"context"
 	"testing"
 
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega" //nolint:revive
 	"k8s.io/utils/ptr"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 )
 
 func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
-	g := NewWithT(t)
-
 	tests := []struct {
 		name        string
 		oldTemplate *infrav1.OpenStackCluster
@@ -90,7 +88,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 									Name: ptr.To("foobar"),
 								},
 							},
-							Flavor: "minimal",
+							Flavor: ptr.To("minimal"),
 						},
 						Enabled: ptr.To(true),
 					},
@@ -114,7 +112,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 									Name: ptr.To("foobarbaz"),
 								},
 							},
-							Flavor: "medium",
+							Flavor: ptr.To("medium"),
 						},
 						Enabled: ptr.To(true),
 					},
@@ -360,7 +358,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					DisableAPIServerFloatingIP: ptr.To(true),
-					APIServerPort:              ptr.To(8443),
+					APIServerPort:              ptr.To(uint16(8443)),
 				},
 			},
 			wantErr: false,
@@ -383,7 +381,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 						CloudName: "foobar",
 					},
 					DisableAPIServerFloatingIP: ptr.To(false),
-					APIServerPort:              ptr.To(8443),
+					APIServerPort:              ptr.To(uint16(8443)),
 				},
 			},
 			wantErr: true,
@@ -461,7 +459,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					Bastion: &infrav1.Bastion{
 						Enabled: ptr.To(true),
 						Spec: &infrav1.OpenStackMachineSpec{
-							Flavor: "m1.small",
+							Flavor: ptr.To("m1.small"),
 							Image: infrav1.ImageParam{
 								Filter: &infrav1.ImageFilter{
 									Name: ptr.To("ubuntu"),
@@ -492,7 +490,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					Bastion: &infrav1.Bastion{
 						Enabled: ptr.To(false),
 						Spec: &infrav1.OpenStackMachineSpec{
-							Flavor: "m1.small",
+							Flavor: ptr.To("m1.small"),
 							Image: infrav1.ImageParam{
 								Filter: &infrav1.ImageFilter{
 									Name: ptr.To("ubuntu"),
@@ -515,7 +513,9 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
 			ctx := context.TODO()
+
 			webhook := &openStackClusterWebhook{}
 			warn, err := webhook.ValidateUpdate(ctx, tt.oldTemplate, tt.newTemplate)
 			if tt.wantErr {
@@ -530,8 +530,6 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 }
 
 func TestOpenStackCluster_ValidateCreate(t *testing.T) {
-	g := NewWithT(t)
-
 	tests := []struct {
 		name     string
 		template *infrav1.OpenStackCluster
@@ -600,7 +598,9 @@ func TestOpenStackCluster_ValidateCreate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
 			ctx := context.TODO()
+
 			webhook := &openStackClusterWebhook{}
 			warn, err := webhook.ValidateCreate(ctx, tt.template)
 			if tt.wantErr {

@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha6
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -31,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	"sigs.k8s.io/cluster-api-provider-openstack/internal/futures"
 	testhelpers "sigs.k8s.io/cluster-api-provider-openstack/test/helpers"
 )
 
@@ -91,6 +91,13 @@ func TestFuzzyConversion(t *testing.T) {
 				}
 			},
 
+			func(identityRef *infrav1.OpenStackIdentityReference, c fuzz.Continue) {
+				c.FuzzNoCustom(identityRef)
+
+				// None of the following identityRef fields have ever been set in v1alpha6
+				identityRef.Region = ""
+			},
+
 			func(spec *OpenStackMachineSpec, c fuzz.Continue) {
 				c.FuzzNoCustom(spec)
 
@@ -123,7 +130,7 @@ func TestFuzzyConversion(t *testing.T) {
 			},
 		}
 
-		return futures.SlicesConcat(v1alpha6FuzzerFuncs, testhelpers.InfraV1FuzzerFuncs())
+		return slices.Concat(v1alpha6FuzzerFuncs, testhelpers.InfraV1FuzzerFuncs())
 	}
 
 	t.Run("for OpenStackCluster", runParallel(utilconversion.FuzzTestFunc(utilconversion.FuzzTestFuncInput{
@@ -196,8 +203,6 @@ func TestFuzzyConversion(t *testing.T) {
 }
 
 func TestNetworksToPorts(t *testing.T) {
-	g := gomega.NewWithT(t)
-
 	const (
 		networkuuid = "55e18f0a-d89a-4d69-b18f-160fb142cb5d"
 		subnetuuid  = "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
@@ -432,6 +437,8 @@ func TestNetworksToPorts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			g := gomega.NewWithT(t)
+
 			before := &OpenStackMachine{
 				Spec: tt.beforeMachineSpec,
 			}
@@ -448,11 +455,6 @@ func TestNetworksToPorts(t *testing.T) {
 // converted to SecurityGroupFilters, and merged with any existing
 // SecurityGroupFilters.
 func TestPortOptsConvertTo(t *testing.T) {
-	g := gomega.NewWithT(t)
-	scheme := runtime.NewScheme()
-	g.Expect(AddToScheme(scheme)).To(gomega.Succeed())
-	g.Expect(infrav1.AddToScheme(scheme)).To(gomega.Succeed())
-
 	// Variables used in the tests
 	uuids := []string{"abc123", "123abc"}
 	securityGroupsUuids := []infrav1.SecurityGroupParam{
@@ -522,6 +524,11 @@ func TestPortOptsConvertTo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			g := gomega.NewWithT(t)
+			scheme := runtime.NewScheme()
+			g.Expect(AddToScheme(scheme)).To(gomega.Succeed())
+			g.Expect(infrav1.AddToScheme(scheme)).To(gomega.Succeed())
+
 			// The spoke machine template with added PortOpts
 			spokeMachineTemplate := OpenStackMachineTemplate{
 				Spec: OpenStackMachineTemplateSpec{
@@ -555,11 +562,6 @@ func TestPortOptsConvertTo(t *testing.T) {
 func TestMachineConversionControllerSpecFields(t *testing.T) {
 	// This tests that we still do field restoration when the controller modifies ProviderID and InstanceID in the spec
 
-	g := gomega.NewWithT(t)
-	scheme := runtime.NewScheme()
-	g.Expect(AddToScheme(scheme)).To(gomega.Succeed())
-	g.Expect(infrav1.AddToScheme(scheme)).To(gomega.Succeed())
-
 	// This test machine contains a network definition. If we restore it on
 	// down-conversion it will still have a network definition. If we don't,
 	// the network definition will have become a port definition.
@@ -578,7 +580,7 @@ func TestMachineConversionControllerSpecFields(t *testing.T) {
 	tests := []struct {
 		name              string
 		modifyUp          func(*infrav1.OpenStackMachine)
-		testAfter         func(*OpenStackMachine)
+		testAfter         func(gomega.Gomega, *OpenStackMachine)
 		expectNetworkDiff bool
 	}{
 		{
@@ -587,10 +589,10 @@ func TestMachineConversionControllerSpecFields(t *testing.T) {
 		{
 			name: "Non-ignored change",
 			modifyUp: func(up *infrav1.OpenStackMachine) {
-				up.Spec.Flavor = "new-flavor"
+				up.Spec.Flavor = ptr.To("new-flavor")
 			},
-			testAfter: func(after *OpenStackMachine) {
-				g.Expect(after.Spec.Flavor).To(gomega.Equal("new-flavor"))
+			testAfter: func(g gomega.Gomega, after *OpenStackMachine) {
+				g.Expect(after.Spec.Flavor).To(gomega.Equal(ptr.To("new-flavor")))
 			},
 			expectNetworkDiff: true,
 		},
@@ -599,7 +601,7 @@ func TestMachineConversionControllerSpecFields(t *testing.T) {
 			modifyUp: func(up *infrav1.OpenStackMachine) {
 				up.Spec.ProviderID = ptr.To("new-provider-id")
 			},
-			testAfter: func(after *OpenStackMachine) {
+			testAfter: func(g gomega.Gomega, after *OpenStackMachine) {
 				g.Expect(after.Spec.ProviderID).To(gomega.Equal(ptr.To("new-provider-id")))
 			},
 			expectNetworkDiff: false,
@@ -609,7 +611,7 @@ func TestMachineConversionControllerSpecFields(t *testing.T) {
 			modifyUp: func(up *infrav1.OpenStackMachine) {
 				up.Status.InstanceID = ptr.To("new-instance-id")
 			},
-			testAfter: func(after *OpenStackMachine) {
+			testAfter: func(g gomega.Gomega, after *OpenStackMachine) {
 				g.Expect(after.Spec.InstanceID).To(gomega.Equal(ptr.To("new-instance-id")))
 			},
 			expectNetworkDiff: false,
@@ -618,11 +620,11 @@ func TestMachineConversionControllerSpecFields(t *testing.T) {
 			name: "Set ProviderID and non-ignored change",
 			modifyUp: func(up *infrav1.OpenStackMachine) {
 				up.Spec.ProviderID = ptr.To("new-provider-id")
-				up.Spec.Flavor = "new-flavor"
+				up.Spec.Flavor = ptr.To("new-flavor")
 			},
-			testAfter: func(after *OpenStackMachine) {
+			testAfter: func(g gomega.Gomega, after *OpenStackMachine) {
 				g.Expect(after.Spec.ProviderID).To(gomega.Equal(ptr.To("new-provider-id")))
-				g.Expect(after.Spec.Flavor).To(gomega.Equal("new-flavor"))
+				g.Expect(after.Spec.Flavor).To(gomega.Equal(ptr.To("new-flavor")))
 			},
 			expectNetworkDiff: true,
 		},
@@ -630,6 +632,10 @@ func TestMachineConversionControllerSpecFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			g := gomega.NewWithT(t)
+			scheme := runtime.NewScheme()
+			g.Expect(AddToScheme(scheme)).To(gomega.Succeed())
+			g.Expect(infrav1.AddToScheme(scheme)).To(gomega.Succeed())
 			before := testMachine()
 
 			up := infrav1.OpenStackMachine{}
@@ -643,7 +649,7 @@ func TestMachineConversionControllerSpecFields(t *testing.T) {
 			g.Expect(after.ConvertFrom(&up)).To(gomega.Succeed())
 
 			if tt.testAfter != nil {
-				tt.testAfter(&after)
+				tt.testAfter(g, &after)
 			}
 
 			if !tt.expectNetworkDiff {

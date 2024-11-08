@@ -29,6 +29,18 @@ func CreateCoreCluster(cl client.Client, clusterName, infraClusterKind string) *
 			},
 		},
 	}
+	// TODO(damdo): is there a way to avoid doing this in the generic framework?
+	if infraClusterKind == "VSphereCluster" {
+		host, port, err := GetControlPlaneHostAndPort(cl)
+		if err != nil {
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+		cluster.Spec.ControlPlaneEndpoint = clusterv1.APIEndpoint{
+			Host: host,
+			Port: port,
+		}
+	}
 
 	if err := cl.Create(ctx, cluster); err != nil && !apierrors.IsAlreadyExists(err) {
 		Expect(err).ToNot(HaveOccurred())
@@ -42,7 +54,7 @@ func CreateCoreCluster(cl client.Client, clusterName, infraClusterKind string) *
 		}
 
 		return conditions.IsTrue(patchedCluster, clusterv1.ControlPlaneInitializedCondition), nil
-	}, WaitShort).Should(BeTrue())
+	}, WaitMedium).Should(BeTrue())
 
 	return cluster
 }

@@ -1,15 +1,18 @@
 package cli
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"io"
+)
 
 type jsonStream struct {
 	dec    *json.Decoder
-	path   []interface{}
+	path   []any
 	states []int
 }
 
 func newJSONStream(dec *json.Decoder) *jsonStream {
-	return &jsonStream{dec: dec, states: []int{jsonStateTopValue}, path: []interface{}{}}
+	return &jsonStream{dec: dec, states: []int{jsonStateTopValue}, path: []any{}}
 }
 
 const (
@@ -25,7 +28,7 @@ const (
 	jsonStateObjectEmptyEnd
 )
 
-func (s *jsonStream) next() (interface{}, error) {
+func (s *jsonStream) next() (any, error) {
 	switch s.states[len(s.states)-1] {
 	case jsonStateArrayEnd, jsonStateObjectEnd:
 		s.path = s.path[:len(s.path)-1]
@@ -44,6 +47,9 @@ func (s *jsonStream) next() (interface{}, error) {
 	for {
 		token, err := s.dec.Token()
 		if err != nil {
+			if err == io.EOF && s.states[len(s.states)-1] != jsonStateTopValue {
+				err = io.ErrUnexpectedEOF
+			}
 			return nil, err
 		}
 		if d, ok := token.(json.Delim); ok {
@@ -65,17 +71,17 @@ func (s *jsonStream) next() (interface{}, error) {
 				if s.states[len(s.states)-1] == jsonStateArrayStart {
 					s.states[len(s.states)-1] = jsonStateArrayEmptyEnd
 					s.path = s.path[:len(s.path)-1]
-					return []interface{}{s.path, []interface{}{}}, nil
+					return []any{s.copyPath(), []any{}}, nil
 				}
 				s.states[len(s.states)-1] = jsonStateArrayEnd
-				return []interface{}{s.path}, nil
+				return []any{s.copyPath()}, nil
 			case '}':
 				if s.states[len(s.states)-1] == jsonStateObjectStart {
 					s.states[len(s.states)-1] = jsonStateObjectEmptyEnd
-					return []interface{}{s.path, map[string]interface{}{}}, nil
+					return []any{s.copyPath(), map[string]any{}}, nil
 				}
 				s.states[len(s.states)-1] = jsonStateObjectEnd
-				return []interface{}{s.path}, nil
+				return []any{s.copyPath()}, nil
 			default:
 				panic(d)
 			}
@@ -85,17 +91,23 @@ func (s *jsonStream) next() (interface{}, error) {
 				s.states[len(s.states)-1] = jsonStateArrayValue
 				fallthrough
 			case jsonStateArrayValue:
-				return []interface{}{s.path, token}, nil
+				return []any{s.copyPath(), token}, nil
 			case jsonStateObjectStart, jsonStateObjectValue:
 				s.states[len(s.states)-1] = jsonStateObjectKey
 				s.path = append(s.path, token)
 			case jsonStateObjectKey:
 				s.states[len(s.states)-1] = jsonStateObjectValue
-				return []interface{}{s.path, token}, nil
+				return []any{s.copyPath(), token}, nil
 			default:
 				s.states[len(s.states)-1] = jsonStateTopValue
-				return []interface{}{s.path, token}, nil
+				return []any{s.copyPath(), token}, nil
 			}
 		}
 	}
+}
+
+func (s *jsonStream) copyPath() []any {
+	path := make([]any, len(s.path))
+	copy(path, s.path)
+	return path
 }

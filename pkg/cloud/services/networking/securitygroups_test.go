@@ -21,12 +21,12 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/testr"
-	"github.com/golang/mock/gomock"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/security/groups"
-	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/security/rules"
-	. "github.com/onsi/gomega"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/security/groups"
+	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/security/rules"
+	. "github.com/onsi/gomega" //nolint:revive
+	"go.uber.org/mock/gomock"
 	"k8s.io/utils/ptr"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
@@ -323,7 +323,7 @@ func TestGenerateDesiredSecGroups(t *testing.T) {
 					ManagedSecurityGroups: &infrav1.ManagedSecurityGroups{},
 				},
 			},
-			expectedNumberSecurityGroupRules: 12,
+			expectedNumberSecurityGroupRules: 14,
 			wantErr:                          false,
 		},
 		{
@@ -342,7 +342,7 @@ func TestGenerateDesiredSecGroups(t *testing.T) {
 					},
 				},
 			},
-			expectedNumberSecurityGroupRules: 16,
+			expectedNumberSecurityGroupRules: 18,
 			wantErr:                          false,
 		},
 		{
@@ -417,7 +417,7 @@ func TestReconcileGroupRules(t *testing.T) {
 				Name:  sgName,
 				Rules: []rules.SecGroupRule{},
 			},
-			mockExpect:   func(m *mock.MockNetworkClientMockRecorder) {},
+			mockExpect:   func(*mock.MockNetworkClientMockRecorder) {},
 			wantSGStatus: infrav1.SecurityGroupStatus{},
 		},
 		{
@@ -454,7 +454,7 @@ func TestReconcileGroupRules(t *testing.T) {
 					},
 				},
 			},
-			mockExpect: func(m *mock.MockNetworkClientMockRecorder) {},
+			mockExpect: func(*mock.MockNetworkClientMockRecorder) {},
 		},
 		{
 			name: "Different desiredSGSpec and observedSG produces changes",
@@ -568,14 +568,15 @@ func TestService_ReconcileSecurityGroups(t *testing.T) {
 					Return([]groups.SecGroup{{ID: "0", Name: controlPlaneSGName}}, nil)
 				m.ListSecGroup(groups.ListOpts{Name: workerSGName}).
 					Return([]groups.SecGroup{{ID: "1", Name: workerSGName}}, nil)
+				m.ListSecGroup(groups.ListOpts{Name: bastionSGName}).Return(nil, nil)
 
-				// We expect a total of 12 rules to be created.
+				// We expect a total of 14 rules to be created.
 				// Nothing actually looks at the generated
 				// rules, but we give them unique IDs anyway
 				m.CreateSecGroupRule(gomock.Any()).DoAndReturn(func(opts rules.CreateOpts) (*rules.SecGroupRule, error) {
 					log.Info("Created rule", "securityGroup", opts.SecGroupID, "description", opts.Description)
 					return &rules.SecGroupRule{ID: uuid.NewString()}, nil
-				}).Times(12)
+				}).Times(14)
 			},
 			expectedClusterStatus: infrav1.OpenStackClusterStatus{
 				ControlPlaneSecurityGroup: &infrav1.SecurityGroupStatus{
@@ -604,13 +605,13 @@ func TestService_ReconcileSecurityGroups(t *testing.T) {
 				m.ListSecGroup(groups.ListOpts{Name: bastionSGName}).
 					Return([]groups.SecGroup{{ID: "2", Name: bastionSGName}}, nil)
 
-				// We expect a total of 12 rules to be created.
+				// We expect a total of 19 rules to be created.
 				// Nothing actually looks at the generated
 				// rules, but we give them unique IDs anyway
 				m.CreateSecGroupRule(gomock.Any()).DoAndReturn(func(opts rules.CreateOpts) (*rules.SecGroupRule, error) {
 					log.Info("Created rule", "securityGroup", opts.SecGroupID, "description", opts.Description)
 					return &rules.SecGroupRule{ID: uuid.NewString()}, nil
-				}).Times(17)
+				}).Times(19)
 			},
 			expectedClusterStatus: infrav1.OpenStackClusterStatus{
 				ControlPlaneSecurityGroup: &infrav1.SecurityGroupStatus{
