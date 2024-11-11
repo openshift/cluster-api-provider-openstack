@@ -251,6 +251,15 @@ modules: ## Runs go mod to ensure proper vendoring.
 	go mod tidy
 	cd $(TOOLS_DIR); go mod tidy
 
+.PHONY: merge-bot
+merge-bot: full-vendoring generate ## Runs targets that help merge-bot to rebase downstream CAPO.
+
+.PHONY: full-vendoring
+full-vendoring: ## Runs commands that complete vendoring tasks for downstream CAPO.
+	go mod tidy && go mod vendor
+	cd $(TOOLS_DIR); go mod tidy; go mod vendor
+	cd $(REPO_ROOT)/openshift; go mod tidy; go mod vendor
+
 .PHONY: generate
 generate: templates generate-controller-gen generate-conversion-gen generate-go generate-manifests generate-api-docs ## Generate all generated code
 
