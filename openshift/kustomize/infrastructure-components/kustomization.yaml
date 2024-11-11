@@ -22,27 +22,6 @@ images:
 patches:
 - path: manager_webhook_patch.yaml
 
-# service-ca will write the ca bundle, so we must not set it here to avoid
-# a conflict between cluster-capi-operator and service-ca
-# Note that openstackfloatingippools does not currently have a conversion
-# webhook, so attempting to patch it produces an error.
-- target:
-    kind: CustomResourceDefinition
-    name: openstackclusters.infrastructure.cluster.x-k8s.io
-  path: crd_remove_cabundle.yaml
-- target:
-    kind: CustomResourceDefinition
-    name: openstackclustertemplates.infrastructure.cluster.x-k8s.io
-  path: crd_remove_cabundle.yaml
-- target:
-    kind: CustomResourceDefinition
-    name: openstackmachines.infrastructure.cluster.x-k8s.io
-  path: crd_remove_cabundle.yaml
-- target:
-    kind: CustomResourceDefinition
-    name: openstackmachinetemplates.infrastructure.cluster.x-k8s.io
-  path: crd_remove_cabundle.yaml
-
 replacements:
 # Set the webhook cert secret name in the service and the controller-manager
 # deployment where it's used
