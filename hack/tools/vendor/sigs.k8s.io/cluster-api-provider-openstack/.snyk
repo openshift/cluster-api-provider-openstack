@@ -8,3 +8,7 @@ exclude:
     - "hack/**"
     - "test/**"
     - "**/*_test.go"
+    # Here we skip warnings about the fact md5 and sha1 is being used to check images checksums.
+    # Ignoring these errors doesn't seem to work with the "ignore:" interface so let's just skip
+    # this file for now.
+    - 'internal/controllers/image/upload_helpers.go'
