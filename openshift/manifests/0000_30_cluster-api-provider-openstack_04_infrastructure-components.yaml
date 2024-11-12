@@ -598,7 +598,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.16.4
+        controller-gen.kubebuilder.io/version: v0.16.5
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
@@ -6018,7 +6018,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.16.4
+        controller-gen.kubebuilder.io/version: v0.16.5
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
@@ -9476,7 +9476,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.16.4
+        controller-gen.kubebuilder.io/version: v0.16.5
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
@@ -9743,7 +9743,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.16.4
+        controller-gen.kubebuilder.io/version: v0.16.5
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
@@ -12120,7 +12120,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.16.4
+        controller-gen.kubebuilder.io/version: v0.16.5
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
@@ -13985,7 +13985,7 @@ data:
     kind: CustomResourceDefinition
     metadata:
       annotations:
-        controller-gen.kubebuilder.io/version: v0.16.4
+        controller-gen.kubebuilder.io/version: v0.16.5
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
         release.openshift.io/feature-set: TechPreviewNoUpgrade
