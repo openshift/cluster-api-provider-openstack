@@ -279,7 +279,7 @@ modules: ## Runs go mod to ensure proper vendoring.
 	cd $(REPO_ROOT)/hack/codegen; go work sync; go mod tidy
 
 .PHONY: merge-bot
-merge-bot: full-vendoring generate ## Runs targets that help merge-bot to rebase downstream CAPO.
+merge-bot: full-vendoring generate generate-openshift ## Runs targets that help merge-bot to rebase downstream CAPO.
 
 .PHONY: full-vendoring
 full-vendoring: ## Runs commands that complete vendoring tasks for downstream CAPO.
@@ -289,6 +289,10 @@ full-vendoring: ## Runs commands that complete vendoring tasks for downstream CA
 	cd $(REPO_ROOT)/openshift; go mod tidy; go mod vendor
 	cd $(REPO_ROOT)/orc; go mod tidy; go mod vendor
 	cd $(REPO_ROOT)/orc/hack/codegen; go work sync; go mod tidy; go work vendor
+
+.PHONY: generate-openshift
+generate-openshift:
+	$(MAKE) -C $(REPO_ROOT)/openshift generate
 
 .PHONY: generate
 generate: templates generate-orc generate-controller-gen generate-codegen generate-conversion-gen generate-go generate-manifests generate-api-docs ## Generate all generated code
