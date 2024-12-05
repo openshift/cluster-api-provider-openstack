@@ -7,10 +7,10 @@ toolchain go1.23.2
 require (
 	github.com/a8m/envsubst v1.4.2
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.1-0.20220420215017-3f29e6853552
-	github.com/itchyny/gojq v0.12.16
-	github.com/onsi/ginkgo/v2 v2.21.0
+	github.com/itchyny/gojq v0.12.17
+	github.com/onsi/ginkgo/v2 v2.22.0
 	go.uber.org/mock v0.5.0
-	k8s.io/code-generator v0.31.2
+	k8s.io/code-generator v0.31.3
 	sigs.k8s.io/cluster-api-provider-openstack v0.0.0
 	sigs.k8s.io/cluster-api/hack/tools v0.0.0-20221129083400-679ae3e9e6b6
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20230926180527-c93e2abcb28e
@@ -75,7 +75,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/onsi/gomega v1.35.1 // indirect
+	github.com/onsi/gomega v1.36.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.20.5 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
@@ -121,13 +121,13 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.31.2 // indirect
-	k8s.io/apiextensions-apiserver v0.31.2 // indirect
-	k8s.io/apimachinery v0.31.2 // indirect
-	k8s.io/apiserver v0.31.2 // indirect
-	k8s.io/client-go v0.31.2 // indirect
+	k8s.io/api v0.31.3 // indirect
+	k8s.io/apiextensions-apiserver v0.31.3 // indirect
+	k8s.io/apimachinery v0.31.3 // indirect
+	k8s.io/apiserver v0.31.3 // indirect
+	k8s.io/client-go v0.31.3 // indirect
 	k8s.io/cluster-bootstrap v0.30.3 // indirect
-	k8s.io/component-base v0.31.2 // indirect
+	k8s.io/component-base v0.31.3 // indirect
 	k8s.io/gengo v0.0.0-20201203183100-97869a43a9d9 // indirect
 	k8s.io/gengo/v2 v2.0.0-20240228010128-51d4e06bde70 // indirect
 	k8s.io/klog v0.2.0 // indirect
@@ -136,7 +136,7 @@ require (
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.3 // indirect
 	sigs.k8s.io/cluster-api v1.8.5 // indirect
-	sigs.k8s.io/controller-runtime v0.18.5 // indirect
+	sigs.k8s.io/controller-runtime v0.18.6 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kubebuilder/docs/book/utils v0.0.0-20211028165026-57688c578b5d // indirect
 	sigs.k8s.io/kustomize/api v0.18.0 // indirect
