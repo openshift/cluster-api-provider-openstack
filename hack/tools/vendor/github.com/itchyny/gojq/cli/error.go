@@ -125,13 +125,11 @@ func (err *yamlParseError) Error() string {
 	msg := strings.TrimPrefix(
 		strings.TrimPrefix(err.err.Error(), "yaml: "),
 		"unmarshal errors:\n  ")
-	if fmt.Sscanf(msg, "line %d: ", &line); line == 0 {
+	if _, e := fmt.Sscanf(msg, "line %d: ", &line); e != nil {
 		return "invalid yaml: " + err.fname
 	}
-	msg = msg[strings.Index(msg, ": ")+2:]
-	if i := strings.IndexByte(msg, '\n'); i >= 0 {
-		msg = msg[:i]
-	}
+	_, msg, _ = strings.Cut(msg, ": ")
+	msg, _, _ = strings.Cut(msg, "\n")
 	linestr := getLineByLine(err.contents, line)
 	return fmt.Sprintf("invalid yaml: %s:%d\n%s  %s",
 		err.fname, line, formatLineInfo(linestr, line, 0), msg)
@@ -152,26 +150,17 @@ func getLineByOffset(str string, offset int) (linestr string, line, column int) 
 			break
 		}
 	}
-	if offset > len(linestr) {
-		offset = len(linestr)
-	} else if offset > 0 {
-		offset--
-	} else {
-		offset = 0
-	}
+	offset = min(max(offset-1, 0), len(linestr))
 	if offset > 48 {
 		skip := len(trimLastInvalidRune(linestr[:offset-48]))
 		linestr = linestr[skip:]
 		offset -= skip
 	}
-	if len(linestr) > 64 {
-		linestr = linestr[:64]
-	}
-	linestr = trimLastInvalidRune(linestr)
-	if offset >= len(linestr) {
-		offset = len(linestr)
-	} else {
+	linestr = trimLastInvalidRune(linestr[:min(64, len(linestr))])
+	if offset < len(linestr) {
 		offset = len(trimLastInvalidRune(linestr[:offset]))
+	} else {
+		offset = len(linestr)
 	}
 	column = runewidth.StringWidth(linestr[:offset])
 	return
