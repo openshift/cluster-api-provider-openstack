@@ -81,11 +81,7 @@ func (e *encoder) encodeFloat64(f float64) {
 		e.write([]byte("null"), nullColor)
 		return
 	}
-	if f >= math.MaxFloat64 {
-		f = math.MaxFloat64
-	} else if f <= -math.MaxFloat64 {
-		f = -math.MaxFloat64
-	}
+	f = min(max(f, -math.MaxFloat64), math.MaxFloat64)
 	format := byte('f')
 	if x := math.Abs(f); x != 0 && x < 1e-6 || x >= 1e21 {
 		format = 'e'
@@ -260,7 +256,7 @@ func (e *encoder) writeByte(b byte, color []byte) {
 	}
 }
 
-func (e *encoder) write(bs []byte, color []byte) {
+func (e *encoder) write(bs, color []byte) {
 	if color == nil {
 		e.w.Write(bs)
 	} else {
