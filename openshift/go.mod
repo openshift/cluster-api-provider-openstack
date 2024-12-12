@@ -6,7 +6,7 @@ toolchain go1.23.2
 
 require (
 	github.com/go-logr/logr v1.4.2
-	github.com/gophercloud/gophercloud/v2 v2.2.0
+	github.com/gophercloud/gophercloud/v2 v2.3.0
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.36.0
 	github.com/openshift/api v0.0.0-20231003083825-c3f7566f6ef6
@@ -15,7 +15,7 @@ require (
 	k8s.io/apimachinery v0.30.7
 	k8s.io/client-go v0.30.7
 	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0
-	sigs.k8s.io/cluster-api v1.8.5
+	sigs.k8s.io/cluster-api v1.8.6
 	sigs.k8s.io/cluster-api-provider-openstack v0.8.0
 	sigs.k8s.io/controller-runtime v0.18.6
 	sigs.k8s.io/yaml v1.4.0
@@ -65,9 +65,9 @@ require (
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/oauth2 v0.21.0 // indirect
-	golang.org/x/sys v0.27.0 // indirect
-	golang.org/x/term v0.26.0 // indirect
-	golang.org/x/text v0.20.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.26.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
