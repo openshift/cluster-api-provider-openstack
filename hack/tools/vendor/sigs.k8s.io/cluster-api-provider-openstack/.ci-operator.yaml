@@ -1,0 +1,10 @@
+build_root_image:
+  name: release
+  namespace: openshift
+<<<<<<< HEAD
+  tag: rhel-9-release-golang-1.23-openshift-4.19
+||||||| parent of 41d260832 (CARRY: Updating openstack-cluster-api-controllers-container)
+  tag: rhel-9-release-golang-1.21-openshift-4.16
+=======
+  tag: rhel-9-release-golang-1.22-openshift-4.17
+>>>>>>> 41d260832 (CARRY: Updating openstack-cluster-api-controllers-container)
