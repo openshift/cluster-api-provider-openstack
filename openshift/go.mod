@@ -1,6 +1,6 @@
 module github.com/openshift/cluster-api-provider-openstack/openshift
 
-go 1.21
+go 1.23.2
 
 require (
 	github.com/go-logr/logr v1.3.0
