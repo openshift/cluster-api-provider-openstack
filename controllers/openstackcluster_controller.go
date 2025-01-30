@@ -152,9 +152,11 @@ func (r *OpenStackClusterReconciler) reconcileDelete(ctx context.Context, scope 
 	// A bastion may have been created if cluster initialisation previously reached populating the network status
 	// We attempt to delete it even if no status was written, just in case
 	if openStackCluster.Status.Network != nil {
-		// Attempt to resolve bastion resources before delete. We don't need to worry about starting if the resources have changed on update.
+		// Attempt to resolve bastion resources before delete.
+		// Even if we fail, we need to continue with the deletion or risk getting stuck.
+		// For example, if the image doesn't exist, we do not have a bastion.
 		if _, err := resolveBastionResources(scope, clusterResourceName, openStackCluster); err != nil {
-			return reconcile.Result{}, err
+			scope.Logger().Info("Failed to resolve bastion, continuing.", "error", err)
 		}
 
 		if err := deleteBastion(scope, cluster, openStackCluster); err != nil {
@@ -614,11 +616,7 @@ func getOrCreateBastionPorts(openStackCluster *infrav1.OpenStackCluster, network
 		return errors.New("bastion resources are nil")
 	}
 
-	if len(desiredPorts) == len(resources.Ports) {
-		return nil
-	}
-
-	err := networkingService.CreatePorts(openStackCluster, desiredPorts, resources)
+	err := networkingService.EnsurePorts(openStackCluster, desiredPorts, resources)
 	if err != nil {
 		return fmt.Errorf("failed to create ports for bastion %s: %w", bastionName(openStackCluster.Name), err)
 	}
@@ -664,14 +662,19 @@ func resolveLoadBalancerNetwork(openStackCluster *infrav1.OpenStackCluster, netw
 
 			// Filter out only relevant subnets specified by the spec
 			lbNetStatus.Subnets = []infrav1.Subnet{}
-			for _, s := range lbSpec.Subnets {
+			for i := range lbSpec.Subnets {
+				s := lbSpec.Subnets[i]
 				matchFound := false
 				for _, subnetID := range lbNet.Subnets {
-					if s.ID != nil && subnetID == *s.ID {
+					subnet, err := networkingService.GetSubnetByParam(&s)
+					if s.ID != nil && subnetID == *s.ID && err == nil {
 						matchFound = true
 						lbNetStatus.Subnets = append(
 							lbNetStatus.Subnets, infrav1.Subnet{
-								ID: *s.ID,
+								ID:   subnet.ID,
+								Name: subnet.Name,
+								CIDR: subnet.CIDR,
+								Tags: subnet.Tags,
 							})
 					}
 				}
@@ -680,6 +683,8 @@ func resolveLoadBalancerNetwork(openStackCluster *infrav1.OpenStackCluster, netw
 					return fmt.Errorf("no subnet match was found in the specified network (specified subnet: %v, available subnets: %v)", s, lbNet.Subnets)
 				}
 			}
+
+			openStackCluster.Status.APIServerLoadBalancer.LoadBalancerNetwork = lbNetStatus
 		}
 	}
 
