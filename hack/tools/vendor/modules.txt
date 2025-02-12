@@ -1264,7 +1264,7 @@ sigs.k8s.io/cluster-api/util/predicates
 sigs.k8s.io/cluster-api/util/topology
 sigs.k8s.io/cluster-api/util/version
 # sigs.k8s.io/cluster-api-provider-openstack v0.0.0 => ../..
-## explicit; go 1.23.2
+## explicit; go 1.23.4
 sigs.k8s.io/cluster-api-provider-openstack
 sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha1
 sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7
