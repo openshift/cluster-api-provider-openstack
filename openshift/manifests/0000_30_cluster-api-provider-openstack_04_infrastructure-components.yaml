@@ -8,7 +8,7 @@ data:
         controller-gen.kubebuilder.io/version: v0.16.5
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -3666,7 +3666,7 @@ data:
         controller-gen.kubebuilder.io/version: v0.16.5
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -6511,7 +6511,7 @@ data:
         controller-gen.kubebuilder.io/version: v0.16.5
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -6778,7 +6778,7 @@ data:
         controller-gen.kubebuilder.io/version: v0.16.5
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -8570,7 +8570,7 @@ data:
         controller-gen.kubebuilder.io/version: v0.16.5
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -9952,7 +9952,7 @@ data:
         controller-gen.kubebuilder.io/version: v0.16.5
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -11193,7 +11193,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-infracluster-controller
@@ -11205,7 +11205,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-manager
@@ -11217,7 +11217,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-infracluster-controller
@@ -11258,7 +11258,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-leader-election-role
@@ -11309,7 +11309,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-infracluster-controller
@@ -11330,7 +11330,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-infracluster-controller
@@ -11373,7 +11373,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-manager-role
@@ -11486,7 +11486,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-infracluster-controller-leader-election-rolebinding
@@ -11506,7 +11506,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-infracluster-controller-rolebinding
@@ -11526,7 +11526,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-leader-election-rolebinding
@@ -11546,7 +11546,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-infracluster-controller-rolebinding
@@ -11566,7 +11566,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-infracluster-controller-rolebinding
@@ -11585,7 +11585,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
       name: capo-manager-rolebinding
@@ -11604,7 +11604,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
         service.beta.openshift.io/serving-cert-secret-name: capo-webhook-service-cert
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -11623,7 +11623,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
         control-plane: capo-controller-manager
@@ -11640,7 +11640,7 @@ data:
           annotations:
             exclude.release.openshift.io/internal-openshift-hosted: "true"
             include.release.openshift.io/self-managed-high-availability: "true"
-            release.openshift.io/feature-set: TechPreviewNoUpgrade
+            release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
             target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
           labels:
             cluster.x-k8s.io/provider: infrastructure-openstack
@@ -11713,7 +11713,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
         control-plane: capo-infracluster-controller
@@ -11730,7 +11730,7 @@ data:
           annotations:
             exclude.release.openshift.io/internal-openshift-hosted: "true"
             include.release.openshift.io/self-managed-high-availability: "true"
-            release.openshift.io/feature-set: TechPreviewNoUpgrade
+            release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
             target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
           labels:
             cluster.x-k8s.io/provider: infrastructure-openstack
@@ -11790,7 +11790,7 @@ data:
       annotations:
         exclude.release.openshift.io/internal-openshift-hosted: "true"
         include.release.openshift.io/self-managed-high-availability: "true"
-        release.openshift.io/feature-set: TechPreviewNoUpgrade
+        release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
         service.beta.openshift.io/inject-cabundle: "true"
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
@@ -11906,7 +11906,7 @@ metadata:
   annotations:
     exclude.release.openshift.io/internal-openshift-hosted: "true"
     include.release.openshift.io/self-managed-high-availability: "true"
-    release.openshift.io/feature-set: TechPreviewNoUpgrade
+    release.openshift.io/feature-set: CustomNoUpgrade,TechPreviewNoUpgrade
   labels:
     provider.cluster.x-k8s.io/name: openstack
     provider.cluster.x-k8s.io/type: infrastructure
