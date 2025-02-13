@@ -37,13 +37,15 @@ const (
 
 // Infra providers.
 const (
-	AWSProviderName            = "aws"
-	AzureProviderName          = "azure"
-	BYOHProviderName           = "byoh"
-	CloudStackProviderName     = "cloudstack"
-	DockerProviderName         = "docker"
-	DOProviderName             = "digitalocean"
-	GCPProviderName            = "gcp"
+	AWSProviderName        = "aws"
+	AzureProviderName      = "azure"
+	BYOHProviderName       = "byoh"
+	CloudStackProviderName = "cloudstack"
+	DockerProviderName     = "docker"
+	DOProviderName         = "digitalocean"
+	GCPProviderName        = "gcp"
+	// Note: harvester is currently on rancher-sandbox, but the plan is to move it on the harvester GitHub org (also owned by Rancher).
+	HarvesterProviderName      = "harvester-harvester"
 	HetznerProviderName        = "hetzner"
 	HivelocityProviderName     = "hivelocity-hivelocity"
 	OutscaleProviderName       = "outscale"
@@ -74,26 +76,28 @@ const (
 
 // Bootstrap providers.
 const (
-	KubeadmBootstrapProviderName           = "kubeadm"
-	TalosBootstrapProviderName             = "talos"
-	MicroK8sBootstrapProviderName          = "microk8s"
-	OracleCloudNativeBootstrapProviderName = "ocne"
-	KubeKeyK3sBootstrapProviderName        = "kubekey-k3s"
-	RKE2BootstrapProviderName              = "rke2"
-	K0smotronBootstrapProviderName         = "k0sproject-k0smotron"
+	KubeadmBootstrapProviderName             = "kubeadm"
+	TalosBootstrapProviderName               = "talos"
+	MicroK8sBootstrapProviderName            = "microk8s"
+	OracleCloudNativeBootstrapProviderName   = "ocne"
+	KubeKeyK3sBootstrapProviderName          = "kubekey-k3s"
+	RKE2BootstrapProviderName                = "rke2"
+	K0smotronBootstrapProviderName           = "k0sproject-k0smotron"
+	CanonicalKubernetesBootstrapProviderName = "canonical-kubernetes"
 )
 
 // ControlPlane providers.
 const (
-	KubeadmControlPlaneProviderName           = "kubeadm"
-	TalosControlPlaneProviderName             = "talos"
-	MicroK8sControlPlaneProviderName          = "microk8s"
-	NestedControlPlaneProviderName            = "nested"
-	OracleCloudNativeControlPlaneProviderName = "ocne"
-	KubeKeyK3sControlPlaneProviderName        = "kubekey-k3s"
-	KamajiControlPlaneProviderName            = "kamaji"
-	RKE2ControlPlaneProviderName              = "rke2"
-	K0smotronControlPlaneProviderName         = "k0sproject-k0smotron"
+	KubeadmControlPlaneProviderName             = "kubeadm"
+	TalosControlPlaneProviderName               = "talos"
+	MicroK8sControlPlaneProviderName            = "microk8s"
+	NestedControlPlaneProviderName              = "nested"
+	OracleCloudNativeControlPlaneProviderName   = "ocne"
+	KubeKeyK3sControlPlaneProviderName          = "kubekey-k3s"
+	KamajiControlPlaneProviderName              = "kamaji"
+	RKE2ControlPlaneProviderName                = "rke2"
+	K0smotronControlPlaneProviderName           = "k0sproject-k0smotron"
+	CanonicalKubernetesControlPlaneProviderName = "canonical-kubernetes"
 )
 
 // IPAM providers.
@@ -256,6 +260,11 @@ func (p *providersClient) defaults() []Provider {
 			providerType: clusterctlv1.InfrastructureProviderType,
 		},
 		&provider{
+			name:         HarvesterProviderName,
+			url:          "https://github.com/rancher-sandbox/cluster-api-provider-harvester/releases/latest/infrastructure-components.yaml",
+			providerType: clusterctlv1.InfrastructureProviderType,
+		},
+		&provider{
 			name:         HetznerProviderName,
 			url:          "https://github.com/syself/cluster-api-provider-hetzner/releases/latest/infrastructure-components.yaml",
 			providerType: clusterctlv1.InfrastructureProviderType,
@@ -362,6 +371,11 @@ func (p *providersClient) defaults() []Provider {
 			url:          "https://github.com/k0sproject/k0smotron/releases/latest/bootstrap-components.yaml",
 			providerType: clusterctlv1.BootstrapProviderType,
 		},
+		&provider{
+			name:         CanonicalKubernetesBootstrapProviderName,
+			url:          "https://github.com/canonical/cluster-api-k8s/releases/latest/bootstrap-components.yaml",
+			providerType: clusterctlv1.BootstrapProviderType,
+		},
 
 		// ControlPlane providers
 		&provider{
@@ -407,6 +421,11 @@ func (p *providersClient) defaults() []Provider {
 		&provider{
 			name:         K0smotronControlPlaneProviderName,
 			url:          "https://github.com/k0sproject/k0smotron/releases/latest/control-plane-components.yaml",
+			providerType: clusterctlv1.ControlPlaneProviderType,
+		},
+		&provider{
+			name:         CanonicalKubernetesControlPlaneProviderName,
+			url:          "https://github.com/canonical/cluster-api-k8s/releases/latest/control-plane-components.yaml",
 			providerType: clusterctlv1.ControlPlaneProviderType,
 		},
 

@@ -24,7 +24,7 @@ export GO111MODULE=on
 unexport GOPATH
 
 # Go
-GO_VERSION ?= 1.22.7
+GO_VERSION ?= 1.23.4
 
 # Directories.
 ARTIFACTS ?= $(REPO_ROOT)/_artifacts
@@ -150,16 +150,12 @@ kubebuilder_assets: $(SETUP_ENVTEST)
 
 .PHONY: test
 TEST_PATHS ?= ./...
-test: test-capo test-orc
+test: test-capo
 
 .PHONY: test-capo
 test-capo: $(ARTIFACTS) $(GOTESTSUM) kubebuilder_assets
 	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" $(GOTESTSUM) --junitfile $(ARTIFACTS)/junit.test.xml --junitfile-hide-empty-pkg --jsonfile $(ARTIFACTS)/test-output.log -- \
 			   -v $(TEST_PATHS) $(TEST_ARGS)
-
-.PHONY: test-orc
-test-orc:
-	$(MAKE) -C $(REPO_ROOT)/orc test
 
 E2E_TEMPLATES_DIR=test/e2e/data/infrastructure-openstack
 E2E_KUSTOMIZE_DIR=test/e2e/data/kustomize
@@ -209,9 +205,9 @@ e2e-image: docker-build
 
 # Pull all the images references in test/e2e/data/e2e_conf.yaml
 test-e2e-image-prerequisites:
-	docker pull registry.k8s.io/cluster-api/cluster-api-controller:v1.8.8
-	docker pull registry.k8s.io/cluster-api/kubeadm-bootstrap-controller:v1.8.8
-	docker pull registry.k8s.io/cluster-api/kubeadm-control-plane-controller:v1.8.8
+	docker pull registry.k8s.io/cluster-api/cluster-api-controller:v1.9.3
+	docker pull registry.k8s.io/cluster-api/kubeadm-bootstrap-controller:v1.9.3
+	docker pull registry.k8s.io/cluster-api/kubeadm-control-plane-controller:v1.9.3
 
 CONFORMANCE_E2E_ARGS ?= -kubetest.config-file=$(KUBETEST_CONF_PATH)
 CONFORMANCE_E2E_ARGS += $(E2E_ARGS)
@@ -259,12 +255,10 @@ $(GO_APIDIFF): # Build go-apidiff.
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Lint codebase
 	$(GOLANGCI_LINT) run -v --fast=false
-	$(MAKE) -C $(REPO_ROOT)/orc lint
 
 .PHONY: lint-update
 lint-update: $(GOLANGCI_LINT) ## Lint codebase
 	$(GOLANGCI_LINT) run -v --fast=false --fix
-	$(MAKE) -C $(REPO_ROOT)/orc lint-fix
 
 lint-fast: $(GOLANGCI_LINT) ## Run only faster linters to detect possible issues
 	$(GOLANGCI_LINT) run -v --fast=true
@@ -275,10 +269,8 @@ lint-fast: $(GOLANGCI_LINT) ## Run only faster linters to detect possible issues
 
 .PHONY: modules
 modules: ## Runs go mod to ensure proper vendoring.
-	$(MAKE) -C $(REPO_ROOT)/orc modules
 	go mod tidy
 	cd $(TOOLS_DIR); go mod tidy
-	cd $(REPO_ROOT)/hack/codegen; go work sync; go mod tidy
 
 .PHONY: merge-bot
 merge-bot: full-vendoring generate generate-openshift ## Runs targets that help merge-bot to rebase downstream CAPO.
@@ -287,17 +279,14 @@ merge-bot: full-vendoring generate generate-openshift ## Runs targets that help 
 full-vendoring: ## Runs commands that complete vendoring tasks for downstream CAPO.
 	go mod tidy && go mod vendor
 	cd $(TOOLS_DIR); go mod tidy; go mod vendor
-	cd $(REPO_ROOT)/hack/codegen; go work sync; go mod tidy; go work vendor
 	cd $(REPO_ROOT)/openshift; go mod tidy; go mod vendor
-	cd $(REPO_ROOT)/orc; go mod tidy; go mod vendor
-	cd $(REPO_ROOT)/orc/hack/codegen; go work sync; go mod tidy; go work vendor
 
 .PHONY: generate-openshift
 generate-openshift:
 	$(MAKE) -C $(REPO_ROOT)/openshift generate
 
 .PHONY: generate
-generate: templates generate-orc generate-controller-gen generate-codegen generate-conversion-gen generate-go generate-manifests generate-api-docs ## Generate all generated code
+generate: templates generate-controller-gen generate-codegen generate-conversion-gen generate-go generate-manifests generate-api-docs ## Generate all generated code
 
 .PHONY: generate-go
 generate-go: $(MOCKGEN)
@@ -313,10 +302,6 @@ generate-controller-gen: $(CONTROLLER_GEN)
 generate-codegen: generate-controller-gen
 	./hack/update-codegen.sh
 
-.PHONY: generate-orc
-generate-orc:
-	$(MAKE) -C $(REPO_ROOT)/orc generate
-
 .PHONY: generate-conversion-gen
 generate-conversion-gen: $(CONVERSION_GEN)
 	$(CONVERSION_GEN) \
@@ -324,7 +309,7 @@ generate-conversion-gen: $(CONVERSION_GEN)
 		--extra-peer-dirs=./pkg/utils/conversioncommon \
 		--output-file=zz_generated.conversion.go \
 		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt \
-		./api/v1alpha6 ./api/v1alpha7
+		./api/v1alpha7
 
 .PHONY: generate-manifests
 generate-manifests: $(CONTROLLER_GEN) ## Generate manifests e.g. CRD, RBAC etc.
@@ -336,15 +321,15 @@ generate-manifests: $(CONTROLLER_GEN) ## Generate manifests e.g. CRD, RBAC etc.
 		paths=./pkg/webhooks/... \
 		output:webhook:dir=$(WEBHOOK_ROOT) \
 		webhook
+	 # We also need to extract rbac from ORC while we're running its controllers
 	$(CONTROLLER_GEN) \
 		paths=./ \
 		paths=./controllers/... \
-		paths=./internal/controllers/... \
 		output:rbac:dir=$(RBAC_ROOT) \
 		rbac:roleName=manager-role
 
 .PHONY: generate-api-docs
-generate-api-docs: generate-api-docs-v1beta1 generate-api-docs-v1alpha7 generate-api-docs-v1alpha6 generate-api-docs-v1alpha1
+generate-api-docs: generate-api-docs-v1beta1 generate-api-docs-v1alpha7 generate-api-docs-v1alpha1
 generate-api-docs-%: $(GEN_CRD_API_REFERENCE_DOCS) FORCE
 	$(GEN_CRD_API_REFERENCE_DOCS) \
 		-api-dir=./api/$* \
@@ -358,7 +343,7 @@ generate-api-docs-%: $(GEN_CRD_API_REFERENCE_DOCS) FORCE
 
 .PHONY: docker-build
 docker-build: ## Build the docker image for controller-manager
-	docker build -f Dockerfile --build-arg goproxy=$(GOPROXY) --build-arg ARCH=$(ARCH) --build-arg ldflags="$(LDFLAGS)" . -t $(CONTROLLER_IMG_TAG)
+	docker build -f Dockerfile --build-arg GO_VERSION=$(GO_VERSION) --build-arg goproxy=$(GOPROXY) --build-arg ARCH=$(ARCH) --build-arg ldflags="$(LDFLAGS)" . -t $(CONTROLLER_IMG_TAG)
 
 .PHONY: docker-push
 docker-push: ## Push the docker image
@@ -580,7 +565,7 @@ clean-release: ## Remove the release folder
 	rm -rf $(RELEASE_DIR)
 
 .PHONY: verify
-verify: verify-boilerplate verify-modules verify-gen verify-orc
+verify: verify-boilerplate verify-modules verify-gen
 
 .PHONY: verify-boilerplate
 verify-boilerplate:
@@ -588,7 +573,7 @@ verify-boilerplate:
 
 .PHONY: verify-modules
 verify-modules: modules
-	@if !(git diff --quiet HEAD -- go.* hack/tools/go.* hack/codegen/go.*); then \
+	@if !(git diff --quiet HEAD -- go.* hack/tools/go.*); then \
 		git diff; \
 		echo "go module files are out of date"; exit 1; \
 	fi
@@ -599,10 +584,6 @@ verify-gen: generate
 		git diff; \
 		echo "generated files are out of date, run make generate"; exit 1; \
 	fi
-
-.PHONY: verify-orc
-verify-orc:
-	$(MAKE) -C $(REPO_ROOT)/orc verify-generated
 
 .PHONY: vendor verify-vendoring
 vendor:

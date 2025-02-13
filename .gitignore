@@ -191,6 +191,3 @@ docs/book/book/
 !/vendor/**
 !/orc/vendor/**
 !/hack/tools/vendor/**
-# TODO Drop the codegen vendoring after 0.11
-!/orc/hack/codegen/vendor/**
-!/hack/codegen/vendor/**

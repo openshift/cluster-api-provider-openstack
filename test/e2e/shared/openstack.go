@@ -260,7 +260,12 @@ func DumpOpenStackServers(e2eCtx *E2EContext, filter servers.ListOpts) ([]server
 		return nil, fmt.Errorf("error creating compute client: %v", err)
 	}
 
-	computeClient.Microversion = clients.NovaMinimumMicroversion
+	computeClient.Microversion = clients.MinimumNovaMicroversion
+	// TODO: We have a ServieClient here (not ComputeClient), which means we do not have access to `RequireMicroversion`.
+	// Maybe we can fix it by implementing `RequireMicroversion` in gophercloud?
+	if filter.Tags != "" || filter.TagsAny != "" || filter.NotTags != "" || filter.NotTagsAny != "" {
+		computeClient.Microversion = clients.NovaTagging
+	}
 	allPages, err := servers.List(computeClient, filter).AllPages(context.TODO())
 	if err != nil {
 		return nil, fmt.Errorf("error listing servers: %v", err)
@@ -923,4 +928,18 @@ func DumpOpenStackLoadBalancers(e2eCtx *E2EContext, filter loadbalancers.ListOpt
 		return nil, fmt.Errorf("error getting load balancers: %s", err)
 	}
 	return loadBalancersList, nil
+}
+
+func GetOpenStackServerConsoleLog(e2eCtx *E2EContext, id string) (string, error) {
+	providerClient, clientOpts, _, err := GetTenantProviderClient(e2eCtx)
+	if err != nil {
+		_, _ = fmt.Fprintf(GinkgoWriter, "error creating provider client: %s\n", err)
+		return "", nil
+	}
+
+	computeClient, err := clients.NewComputeClient(providerClient, clientOpts)
+	if err != nil {
+		return "", fmt.Errorf("unable to create compute client: %w", err)
+	}
+	return computeClient.GetConsoleOutput(id)
 }

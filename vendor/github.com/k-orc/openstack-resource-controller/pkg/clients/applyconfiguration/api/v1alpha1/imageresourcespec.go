@@ -22,10 +22,10 @@ import (
 	v1alpha1 "github.com/k-orc/openstack-resource-controller/api/v1alpha1"
 )
 
-// ImageResourceSpecApplyConfiguration represents an declarative configuration of the ImageResourceSpec type for use
+// ImageResourceSpecApplyConfiguration represents a declarative configuration of the ImageResourceSpec type for use
 // with apply.
 type ImageResourceSpecApplyConfiguration struct {
-	Name       *string                            `json:"name,omitempty"`
+	Name       *v1alpha1.OpenStackName            `json:"name,omitempty"`
 	Protected  *bool                              `json:"protected,omitempty"`
 	Tags       []v1alpha1.ImageTag                `json:"tags,omitempty"`
 	Visibility *v1alpha1.ImageVisibility          `json:"visibility,omitempty"`
@@ -33,7 +33,7 @@ type ImageResourceSpecApplyConfiguration struct {
 	Content    *ImageContentApplyConfiguration    `json:"content,omitempty"`
 }
 
-// ImageResourceSpecApplyConfiguration constructs an declarative configuration of the ImageResourceSpec type for use with
+// ImageResourceSpecApplyConfiguration constructs a declarative configuration of the ImageResourceSpec type for use with
 // apply.
 func ImageResourceSpec() *ImageResourceSpecApplyConfiguration {
 	return &ImageResourceSpecApplyConfiguration{}
@@ -42,7 +42,7 @@ func ImageResourceSpec() *ImageResourceSpecApplyConfiguration {
 // WithName sets the Name field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Name field is set to the value of the last call.
-func (b *ImageResourceSpecApplyConfiguration) WithName(value string) *ImageResourceSpecApplyConfiguration {
+func (b *ImageResourceSpecApplyConfiguration) WithName(value v1alpha1.OpenStackName) *ImageResourceSpecApplyConfiguration {
 	b.Name = &value
 	return b
 }

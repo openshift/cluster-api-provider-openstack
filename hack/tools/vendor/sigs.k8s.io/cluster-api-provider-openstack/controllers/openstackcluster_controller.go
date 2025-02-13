@@ -33,7 +33,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	capierrors "sigs.k8s.io/cluster-api/errors"
 	"sigs.k8s.io/cluster-api/util"
 	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/collections"
@@ -696,10 +695,10 @@ func reconcileNetworkComponents(scope *scope.WithLogger, cluster *clusterv1.Clus
 }
 
 // reconcilePreExistingNetworkComponents reconciles the cluster network status when the cluster is
-// using pre-existing networks and subnets which are not provisioned by the
+// using pre-existing networks, subnets and router which are not provisioned by the
 // cluster controller.
 func reconcilePreExistingNetworkComponents(scope *scope.WithLogger, networkingService *networking.Service, openStackCluster *infrav1.OpenStackCluster) error {
-	scope.Logger().V(4).Info("No need to reconcile network, searching network and subnet instead")
+	scope.Logger().V(4).Info("No need to reconcile network, searching network, subnet and router instead")
 
 	if openStackCluster.Status.Network == nil {
 		openStackCluster.Status.Network = &infrav1.NetworkStatusWithSubnets{}
@@ -746,9 +745,33 @@ func reconcilePreExistingNetworkComponents(scope *scope.WithLogger, networkingSe
 		setClusterNetwork(openStackCluster, network)
 	}
 
+	if openStackCluster.Spec.Router != nil {
+		router, err := networkingService.GetRouterByParam(openStackCluster.Spec.Router)
+		if err != nil {
+			handleUpdateOSCError(openStackCluster, fmt.Errorf("failed to find router: %w", err), false)
+			return fmt.Errorf("error fetching cluster router: %w", err)
+		}
+
+		scope.Logger().V(4).Info("Found pre-existing router", "id", router.ID, "name", router.Name)
+
+		routerIPs := []string{}
+		for _, ip := range router.GatewayInfo.ExternalFixedIPs {
+			routerIPs = append(routerIPs, ip.IPAddress)
+		}
+
+		openStackCluster.Status.Router = &infrav1.Router{
+			Name: router.Name,
+			ID:   router.ID,
+			Tags: router.Tags,
+			IPs:  routerIPs,
+		}
+	}
+
 	return nil
 }
 
+// reconcileProvisionedNetworkComponents reconciles the cluster network status when the cluster is
+// using networks, subnets and router provisioned by the cluster controller.
 func reconcileProvisionedNetworkComponents(networkingService *networking.Service, openStackCluster *infrav1.OpenStackCluster, clusterResourceName string) error {
 	err := networkingService.ReconcileNetwork(openStackCluster, clusterResourceName)
 	if err != nil {
@@ -878,21 +901,21 @@ func (r *OpenStackClusterReconciler) SetupWithManager(ctx context.Context, mgr c
 				}
 				return requests
 			}),
-			builder.WithPredicates(predicates.ClusterUnpaused(ctrl.LoggerFrom(ctx))),
+			builder.WithPredicates(predicates.ClusterUnpaused(mgr.GetScheme(), ctrl.LoggerFrom(ctx))),
 		).
 		Watches(
 			&infrav1alpha1.OpenStackServer{},
 			handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &infrav1.OpenStackCluster{}),
 			builder.WithPredicates(OpenStackServerReconcileComplete(log)),
 		).
-		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(ctrl.LoggerFrom(ctx), r.WatchFilterValue)).
-		WithEventFilter(predicates.ResourceIsNotExternallyManaged(ctrl.LoggerFrom(ctx))).
+		WithEventFilter(predicates.ResourceNotPausedAndHasFilterLabel(mgr.GetScheme(), ctrl.LoggerFrom(ctx), r.WatchFilterValue)).
+		WithEventFilter(predicates.ResourceIsNotExternallyManaged(mgr.GetScheme(), ctrl.LoggerFrom(ctx))).
 		Complete(r)
 }
 
 func handleUpdateOSCError(openstackCluster *infrav1.OpenStackCluster, message error, isFatal bool) {
 	if isFatal {
-		err := capierrors.UpdateClusterError
+		err := capoerrors.DeprecatedCAPOUpdateClusterError
 		openstackCluster.Status.FailureReason = &err
 		openstackCluster.Status.FailureMessage = ptr.To(message.Error())
 	}

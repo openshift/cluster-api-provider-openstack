@@ -7,4 +7,3 @@ resources:
 - ../../../../config/rbac
 - ../../../../config/manager
 - ../../../../config/webhook
-- ../../../../orc/config/crd

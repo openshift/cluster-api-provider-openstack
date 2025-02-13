@@ -35,8 +35,8 @@ import (
 
 	orcv1alpha1 "github.com/k-orc/openstack-resource-controller/api/v1alpha1"
 	orcapplyconfigv1alpha1 "github.com/k-orc/openstack-resource-controller/pkg/clients/applyconfiguration/api/v1alpha1"
-	"github.com/k-orc/openstack-resource-controller/pkg/utils/ssa"
 
+	"sigs.k8s.io/cluster-api-provider-openstack/internal/util/ssa"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/scope"
 )
 
@@ -79,7 +79,7 @@ func CoreImages(e2eCtx *E2EContext) []DownloadImage {
 		},
 		{
 			Name:         "capo-default",
-			ArtifactPath: "ubuntu/2024-05-28/" + e2eCtx.E2EConfig.GetVariable("OPENSTACK_IMAGE_NAME") + ".img",
+			ArtifactPath: "ubuntu/2024-11-21/" + e2eCtx.E2EConfig.GetVariable("OPENSTACK_IMAGE_NAME") + ".img",
 		},
 	}
 }
@@ -182,7 +182,7 @@ func WaitForGlanceImagesAvailable(ctx context.Context, e2eCtx *E2EContext, image
 
 			Expect(image).ToNot(BeNil(), "Did not find "+imageName+" in image list")
 
-			availableCondition := meta.FindStatusCondition(image.Status.Conditions, orcv1alpha1.OpenStackConditionAvailable)
+			availableCondition := meta.FindStatusCondition(image.Status.Conditions, orcv1alpha1.ConditionAvailable)
 			if availableCondition == nil || availableCondition.Status != metav1.ConditionTrue {
 				var msg string
 				if availableCondition == nil {
@@ -255,7 +255,7 @@ func generateORCImage(e2eCtx *E2EContext, name, glanceName, url string, download
 	applyConfig := orcapplyconfigv1alpha1.Image(name, imageNamespace).
 		WithSpec(orcapplyconfigv1alpha1.ImageSpec().
 			WithResource(orcapplyconfigv1alpha1.ImageResourceSpec().
-				WithName(glanceName).
+				WithName(orcv1alpha1.OpenStackName(glanceName)).
 				WithTags(E2EImageTag).
 				WithContent(orcapplyconfigv1alpha1.ImageContent().
 					WithContainerFormat(orcv1alpha1.ImageContainerFormatBare).
