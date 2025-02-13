@@ -3,8 +3,8 @@ module github.com/k-orc/openstack-resource-controller/hack/codegen
 go 1.22.2
 
 require (
-	k8s.io/apimachinery v0.30.8
-	k8s.io/code-generator v0.30.8
+	k8s.io/apimachinery v0.30.9
+	k8s.io/code-generator v0.30.9
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340
 )
 
@@ -27,12 +27,12 @@ require (
 	github.com/onsi/gomega v1.36.2 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/sync v0.11.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect
 	google.golang.org/protobuf v1.36.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
