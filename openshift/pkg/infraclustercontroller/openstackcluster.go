@@ -462,6 +462,7 @@ func (r *OpenShiftClusterReconciler) ensureCAPICluster(ctx context.Context, log 
 	cluster.Spec.InfrastructureRef = &corev1.ObjectReference{
 		Kind:       gvk.Kind,
 		Name:       openStackCluster.Name,
+		Namespace:  openStackCluster.Namespace,
 		APIVersion: gvk.GroupVersion().String(),
 	}
 
