@@ -28,7 +28,6 @@ import (
 
 	infrav1alpha1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha1"
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	"sigs.k8s.io/cluster-api-provider-openstack/internal/futures"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/networking"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/scope"
 )
@@ -161,7 +160,7 @@ func ResolveServerSpec(ctx context.Context, scope *scope.WithLogger, k8sClient c
 // The tags are a deduplicated combination of the tags specified in the
 // OpenStackMachineSpec and the ones specified on the OpenStackCluster.
 func InstanceTags(spec *infrav1.OpenStackMachineSpec, openStackCluster *infrav1.OpenStackCluster) []string {
-	machineTags := futures.SlicesConcat(spec.Tags, openStackCluster.Spec.Tags)
+	machineTags := slices.Concat(spec.Tags, openStackCluster.Spec.Tags)
 
 	seen := make(map[string]struct{}, len(machineTags))
 	unique := make([]string, 0, len(machineTags))
