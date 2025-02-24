@@ -4,18 +4,18 @@ go 1.23.0
 
 require (
 	github.com/go-logr/logr v1.4.2
-	github.com/gophercloud/gophercloud/v2 v2.4.0
+	github.com/gophercloud/gophercloud/v2 v2.5.0
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/openshift/api v0.0.0-20231003083825-c3f7566f6ef6
 	github.com/openshift/cluster-capi-operator/e2e v0.0.0-20250123104340-ddf11cf94960
-	k8s.io/api v0.31.5
-	k8s.io/apimachinery v0.31.5
-	k8s.io/client-go v0.31.5
+	k8s.io/api v0.31.6
+	k8s.io/apimachinery v0.31.6
+	k8s.io/client-go v0.31.6
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 	sigs.k8s.io/cluster-api v1.9.4
 	sigs.k8s.io/cluster-api-provider-openstack v0.8.0
-	sigs.k8s.io/controller-runtime v0.19.5
+	sigs.k8s.io/controller-runtime v0.19.6
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -67,9 +67,9 @@ require (
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/term v0.28.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/term v0.29.0 // indirect
+	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
@@ -77,7 +77,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.31.5 // indirect
+	k8s.io/apiextensions-apiserver v0.31.6 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20240521193020-835d969ad83a // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
