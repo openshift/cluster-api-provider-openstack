@@ -79,7 +79,6 @@ const (
 	KubeadmBootstrapProviderName             = "kubeadm"
 	TalosBootstrapProviderName               = "talos"
 	MicroK8sBootstrapProviderName            = "microk8s"
-	OracleCloudNativeBootstrapProviderName   = "ocne"
 	KubeKeyK3sBootstrapProviderName          = "kubekey-k3s"
 	RKE2BootstrapProviderName                = "rke2"
 	K0smotronBootstrapProviderName           = "k0sproject-k0smotron"
@@ -92,7 +91,6 @@ const (
 	TalosControlPlaneProviderName               = "talos"
 	MicroK8sControlPlaneProviderName            = "microk8s"
 	NestedControlPlaneProviderName              = "nested"
-	OracleCloudNativeControlPlaneProviderName   = "ocne"
 	KubeKeyK3sControlPlaneProviderName          = "kubekey-k3s"
 	KamajiControlPlaneProviderName              = "kamaji"
 	RKE2ControlPlaneProviderName                = "rke2"
@@ -108,7 +106,8 @@ const (
 
 // Add-on providers.
 const (
-	HelmAddonProviderName = "helm"
+	HelmAddonProviderName  = "helm"
+	FleetAddonProviderName = "rancher-fleet"
 )
 
 // Runtime extensions providers.
@@ -357,11 +356,6 @@ func (p *providersClient) defaults() []Provider {
 			providerType: clusterctlv1.BootstrapProviderType,
 		},
 		&provider{
-			name:         OracleCloudNativeBootstrapProviderName,
-			url:          "https://github.com/verrazzano/cluster-api-provider-ocne/releases/latest/bootstrap-components.yaml",
-			providerType: clusterctlv1.BootstrapProviderType,
-		},
-		&provider{
 			name:         RKE2BootstrapProviderName,
 			url:          "https://github.com/rancher/cluster-api-provider-rke2/releases/latest/bootstrap-components.yaml",
 			providerType: clusterctlv1.BootstrapProviderType,
@@ -404,11 +398,6 @@ func (p *providersClient) defaults() []Provider {
 			providerType: clusterctlv1.ControlPlaneProviderType,
 		},
 		&provider{
-			name:         OracleCloudNativeControlPlaneProviderName,
-			url:          "https://github.com/verrazzano/cluster-api-provider-ocne/releases/latest/control-plane-components.yaml",
-			providerType: clusterctlv1.ControlPlaneProviderType,
-		},
-		&provider{
 			name:         KamajiControlPlaneProviderName,
 			url:          "https://github.com/clastix/cluster-api-control-plane-provider-kamaji/releases/latest/control-plane-components.yaml",
 			providerType: clusterctlv1.ControlPlaneProviderType,
@@ -442,6 +431,11 @@ func (p *providersClient) defaults() []Provider {
 		},
 
 		// Add-on providers
+		&provider{
+			name:         FleetAddonProviderName,
+			url:          "https://github.com/rancher-sandbox/cluster-api-addon-provider-fleet/releases/latest/addon-components.yaml",
+			providerType: clusterctlv1.AddonProviderType,
+		},
 		&provider{
 			name:         HelmAddonProviderName,
 			url:          "https://github.com/kubernetes-sigs/cluster-api-addon-provider-helm/releases/latest/addon-components.yaml",
