@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -90,11 +91,20 @@ type ClusterUpgradeWithRuntimeSDKSpecInput struct {
 	// If not specified, this is a no-op.
 	PostUpgrade func(managementClusterProxy framework.ClusterProxy, workloadClusterNamespace, workloadClusterName string)
 
+	// ExtensionConfigName is the name of the ExtensionConfig. Defaults to "k8s-upgrade-with-runtimesdk".
+	// This value is provided to clusterctl as "EXTENSION_CONFIG_NAME" variable and can be used to template the
+	// name of the ExtensionConfig into the ClusterClass.
+	ExtensionConfigName string
+
 	// ExtensionServiceNamespace is the namespace where the service for the Runtime SDK is located
 	// and is used to configure in the test-namespace scoped ExtensionConfig.
 	ExtensionServiceNamespace string
+
 	// ExtensionServiceName is the name of the service to configure in the test-namespace scoped ExtensionConfig.
 	ExtensionServiceName string
+
+	// DeployClusterClassInSeparateNamespace defines if the ClusterClass should be deployed in a separate namespace.
+	DeployClusterClassInSeparateNamespace bool
 }
 
 // ClusterUpgradeWithRuntimeSDKSpec implements a spec that upgrades a cluster and runs the Kubernetes conformance suite.
@@ -109,9 +119,9 @@ func ClusterUpgradeWithRuntimeSDKSpec(ctx context.Context, inputGetter func() Cl
 	)
 
 	var (
-		input         ClusterUpgradeWithRuntimeSDKSpecInput
-		namespace     *corev1.Namespace
-		cancelWatches context.CancelFunc
+		input                            ClusterUpgradeWithRuntimeSDKSpecInput
+		namespace, clusterClassNamespace *corev1.Namespace
+		cancelWatches                    context.CancelFunc
 
 		controlPlaneMachineCount int64
 		workerMachineCount       int64
@@ -133,6 +143,9 @@ func ClusterUpgradeWithRuntimeSDKSpec(ctx context.Context, inputGetter func() Cl
 
 		Expect(input.ExtensionServiceNamespace).ToNot(BeEmpty())
 		Expect(input.ExtensionServiceName).ToNot(BeEmpty())
+		if input.ExtensionConfigName == "" {
+			input.ExtensionConfigName = specName
+		}
 
 		if input.ControlPlaneMachineCount == nil {
 			controlPlaneMachineCount = 1
@@ -148,6 +161,10 @@ func ClusterUpgradeWithRuntimeSDKSpec(ctx context.Context, inputGetter func() Cl
 
 		// Set up a Namespace where to host objects for this spec and create a watcher for the Namespace events.
 		namespace, cancelWatches = framework.SetupSpecNamespace(ctx, specName, input.BootstrapClusterProxy, input.ArtifactFolder, input.PostNamespaceCreated)
+		if input.DeployClusterClassInSeparateNamespace {
+			clusterClassNamespace = framework.CreateNamespace(ctx, framework.CreateNamespaceInput{Creator: input.BootstrapClusterProxy.GetClient(), Name: fmt.Sprintf("%s-clusterclass", namespace.Name)}, "40s", "10s")
+			Expect(clusterClassNamespace).ToNot(BeNil(), "Failed to create namespace")
+		}
 		clusterName = fmt.Sprintf("%s-%s", specName, util.RandomString(6))
 		clusterResources = new(clusterctl.ApplyClusterTemplateAndWaitResult)
 	})
@@ -161,8 +178,16 @@ func ClusterUpgradeWithRuntimeSDKSpec(ctx context.Context, inputGetter func() Cl
 
 		By("Deploy Test Extension ExtensionConfig")
 
+		namespaces := []string{namespace.Name}
+		if input.DeployClusterClassInSeparateNamespace {
+			namespaces = append(namespaces, clusterClassNamespace.Name)
+		}
+
+		// In this test we are defaulting all handlers to blocking because we expect the handlers to block the
+		// cluster lifecycle by default. Setting defaultAllHandlersToBlocking to true enforces that the test-extension
+		// automatically creates the ConfigMap with blocking preloaded responses.
 		Expect(input.BootstrapClusterProxy.GetClient().Create(ctx,
-			extensionConfig(specName, namespace.Name, input.ExtensionServiceNamespace, input.ExtensionServiceName))).
+			extensionConfig(input.ExtensionConfigName, input.ExtensionServiceNamespace, input.ExtensionServiceName, true, namespaces...))).
 			To(Succeed(), "Failed to create the extension config")
 
 		By("Creating a workload cluster; creation waits for BeforeClusterCreateHook to gate the operation")
@@ -175,6 +200,14 @@ func ClusterUpgradeWithRuntimeSDKSpec(ctx context.Context, inputGetter func() Cl
 		infrastructureProvider := clusterctl.DefaultInfrastructureProvider
 		if input.InfrastructureProvider != nil {
 			infrastructureProvider = *input.InfrastructureProvider
+		}
+
+		variables := map[string]string{
+			// This is used to template the name of the ExtensionConfig into the ClusterClass.
+			"EXTENSION_CONFIG_NAME": input.ExtensionConfigName,
+		}
+		if input.DeployClusterClassInSeparateNamespace {
+			variables["CLUSTER_CLASS_NAMESPACE"] = clusterClassNamespace.Name
 		}
 
 		clusterctl.ApplyClusterTemplateAndWait(ctx, clusterctl.ApplyClusterTemplateAndWaitInput{
@@ -190,6 +223,7 @@ func ClusterUpgradeWithRuntimeSDKSpec(ctx context.Context, inputGetter func() Cl
 				KubernetesVersion:        input.E2EConfig.GetVariable(KubernetesVersionUpgradeFrom),
 				ControlPlaneMachineCount: ptr.To[int64](controlPlaneMachineCount),
 				WorkerMachineCount:       ptr.To[int64](workerMachineCount),
+				ClusterctlVariables:      variables,
 			},
 			PreWaitForCluster: func() {
 				beforeClusterCreateTestHandler(ctx,
@@ -304,8 +338,8 @@ func ClusterUpgradeWithRuntimeSDKSpec(ctx context.Context, inputGetter func() Cl
 		if !input.SkipCleanup {
 			// Delete the extensionConfig first to ensure the BeforeDeleteCluster hook doesn't block deletion.
 			Eventually(func() error {
-				return input.BootstrapClusterProxy.GetClient().Delete(ctx, extensionConfig(specName, namespace.Name, input.ExtensionServiceNamespace, input.ExtensionServiceName))
-			}, 10*time.Second, 1*time.Second).Should(Succeed(), "delete extensionConfig failed")
+				return input.BootstrapClusterProxy.GetClient().Delete(ctx, extensionConfig(input.ExtensionConfigName, input.ExtensionServiceNamespace, input.ExtensionServiceName, true, namespace.Name))
+			}, 10*time.Second, 1*time.Second).Should(Succeed(), "Deleting ExtensionConfig failed")
 
 			Byf("Deleting cluster %s", klog.KObj(clusterResources.Cluster))
 			// While https://github.com/kubernetes-sigs/cluster-api/issues/2955 is addressed in future iterations, there is a chance
@@ -322,6 +356,14 @@ func ClusterUpgradeWithRuntimeSDKSpec(ctx context.Context, inputGetter func() Cl
 				Deleter: input.BootstrapClusterProxy.GetClient(),
 				Name:    namespace.Name,
 			})
+
+			if input.DeployClusterClassInSeparateNamespace {
+				Byf("Deleting namespace used for hosting the %q test spec ClusterClass", specName)
+				framework.DeleteNamespace(ctx, framework.DeleteNamespaceInput{
+					Deleter: input.BootstrapClusterProxy.GetClient(),
+					Name:    clusterClassNamespace.Name,
+				})
+			}
 		}
 		cancelWatches()
 	})
@@ -429,8 +471,8 @@ func machineSetPreflightChecksTestHandler(ctx context.Context, c client.Client, 
 // We make sure this cluster-wide object does not conflict with others by using a random generated
 // name and a NamespaceSelector selecting on the namespace of the current test.
 // Thus, this object is "namespaced" to the current test even though it's a cluster-wide object.
-func extensionConfig(name, namespace, extensionServiceNamespace, extensionServiceName string) *runtimev1.ExtensionConfig {
-	return &runtimev1.ExtensionConfig{
+func extensionConfig(name, extensionServiceNamespace, extensionServiceName string, defaultAllHandlersToBlocking bool, namespaces ...string) *runtimev1.ExtensionConfig {
+	cfg := &runtimev1.ExtensionConfig{
 		ObjectMeta: metav1.ObjectMeta{
 			// Note: We have to use a constant name here as we have to be able to reference it in the ClusterClass
 			// when configuring external patches.
@@ -448,25 +490,24 @@ func extensionConfig(name, namespace, extensionServiceNamespace, extensionServic
 					Namespace: extensionServiceNamespace,
 				},
 			},
-			NamespaceSelector: &metav1.LabelSelector{
-				// Note: we are limiting the test extension to be used by the namespace where the test is run.
-				MatchExpressions: []metav1.LabelSelectorRequirement{
-					{
-						Key:      "kubernetes.io/metadata.name",
-						Operator: metav1.LabelSelectorOpIn,
-						Values:   []string{namespace},
-					},
-				},
-			},
 			Settings: map[string]string{
-				// In the E2E test we are defaulting all handlers to blocking because cluster_upgrade_runtimesdk_test
-				// expects the handlers to block the cluster lifecycle by default.
-				// Setting this value to true enforces that the test-extension automatically creates the ConfigMap with
-				// blocking preloaded responses.
-				"defaultAllHandlersToBlocking": "true",
+				"defaultAllHandlersToBlocking": strconv.FormatBool(defaultAllHandlersToBlocking),
 			},
 		},
 	}
+	if len(namespaces) > 0 {
+		cfg.Spec.NamespaceSelector = &metav1.LabelSelector{
+			// Note: we are limiting the test extension to be used by the namespace where the test is run.
+			MatchExpressions: []metav1.LabelSelectorRequirement{
+				{
+					Key:      "kubernetes.io/metadata.name",
+					Operator: metav1.LabelSelectorOpIn,
+					Values:   namespaces,
+				},
+			},
+		}
+	}
+	return cfg
 }
 
 // Check that each hook in hooks has been called at least once by checking if its actualResponseStatus is in the hook response configmap.
