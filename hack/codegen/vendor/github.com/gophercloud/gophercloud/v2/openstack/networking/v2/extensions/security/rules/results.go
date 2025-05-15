@@ -1,6 +1,8 @@
 package rules
 
 import (
+	"time"
+
 	"github.com/gophercloud/gophercloud/v2"
 	"github.com/gophercloud/gophercloud/v2/pagination"
 )
@@ -56,6 +58,15 @@ type SecGroupRule struct {
 
 	// ProjectID is the project owner of this security group rule.
 	ProjectID string `json:"project_id"`
+
+	// RevisionNumber optionally set via extensions/standard-attr-revisions
+	RevisionNumber int `json:"revision_number"`
+
+	// Timestamp when the rule was created
+	CreatedAt time.Time `json:"created_at"`
+
+	// Timestamp when the rule was last updated
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // SecGroupRulePage is the page returned by a pager when traversing over a
@@ -103,6 +114,10 @@ type commonResult struct {
 	gophercloud.Result
 }
 
+type bulkResult struct {
+	gophercloud.Result
+}
+
 // Extract is a function that accepts a result and extracts a security rule.
 func (r commonResult) Extract() (*SecGroupRule, error) {
 	var s struct {
@@ -112,10 +127,25 @@ func (r commonResult) Extract() (*SecGroupRule, error) {
 	return s.SecGroupRule, err
 }
 
+// Extract is a function that accepts a result and extracts security rules.
+func (r bulkResult) Extract() ([]SecGroupRule, error) {
+	var s struct {
+		SecGroupRules []SecGroupRule `json:"security_group_rules"`
+	}
+	err := r.ExtractInto(&s)
+	return s.SecGroupRules, err
+}
+
 // CreateResult represents the result of a create operation. Call its Extract
 // method to interpret it as a SecGroupRule.
 type CreateResult struct {
 	commonResult
+}
+
+// CreateBulkResult represents the result of a bulk create operation. Call its
+// Extract method to interpret it as a slice of SecGroupRules.
+type CreateBulkResult struct {
+	bulkResult
 }
 
 // GetResult represents the result of a get operation. Call its Extract
