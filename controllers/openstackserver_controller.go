@@ -169,7 +169,7 @@ func patchServer(ctx context.Context, patchHelper *patch.Helper, openStackServer
 	return patchHelper.Patch(ctx, openStackServer, options...)
 }
 
-func (r *OpenStackServerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, _ controller.Options) error {
+func (r *OpenStackServerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
 	const imageRefPath = "spec.image.imageRef.name"
 
 	log := ctrl.LoggerFrom(ctx)
@@ -189,6 +189,7 @@ func (r *OpenStackServerReconciler) SetupWithManager(ctx context.Context, mgr ct
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
+		WithOptions(options).
 		For(&infrav1alpha1.OpenStackServer{}).
 		Watches(&orcv1alpha1.Image{},
 			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
@@ -418,11 +419,7 @@ func getOrCreateServerPorts(openStackServer *infrav1alpha1.OpenStackServer, netw
 	}
 	desiredPorts := resolved.Ports
 
-	if len(desiredPorts) == len(resources.Ports) {
-		return nil
-	}
-
-	if err := networkingService.CreatePorts(openStackServer, desiredPorts, resources); err != nil {
+	if err := networkingService.EnsurePorts(openStackServer, desiredPorts, resources); err != nil {
 		return fmt.Errorf("creating ports: %w", err)
 	}
 
@@ -602,6 +599,7 @@ func (r *OpenStackServerReconciler) getOrCreateIPAddressClaimForFloatingAddress(
 				},
 			},
 			Finalizers: []string{infrav1.IPClaimMachineFinalizer},
+			Labels:     map[string]string{},
 		},
 		Spec: ipamv1.IPAddressClaimSpec{
 			PoolRef: *poolRef,
