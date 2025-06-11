@@ -48,6 +48,7 @@ const (
 	HarvesterProviderName      = "harvester-harvester"
 	HetznerProviderName        = "hetzner"
 	HivelocityProviderName     = "hivelocity-hivelocity"
+	HuaweiProviderName         = "huawei"
 	OutscaleProviderName       = "outscale"
 	IBMCloudProviderName       = "ibmcloud"
 	InMemoryProviderName       = "in-memory"
@@ -72,6 +73,7 @@ const (
 	K0smotronProviderName      = "k0sproject-k0smotron"
 	IonosCloudProviderName     = "ionoscloud-ionoscloud"
 	VultrProviderName          = "vultr-vultr"
+	OpenNebulaProviderName     = "opennebula"
 )
 
 // Bootstrap providers.
@@ -274,6 +276,11 @@ func (p *providersClient) defaults() []Provider {
 			providerType: clusterctlv1.InfrastructureProviderType,
 		},
 		&provider{
+			name:         HuaweiProviderName,
+			url:          "https://github.com/HuaweiCloudDeveloper/cluster-api-provider-huawei/releases/latest/infrastructure-components.yaml",
+			providerType: clusterctlv1.InfrastructureProviderType,
+		},
+		&provider{
 			name:         OutscaleProviderName,
 			url:          "https://github.com/outscale/cluster-api-provider-outscale/releases/latest/infrastructure-components.yaml",
 			providerType: clusterctlv1.InfrastructureProviderType,
@@ -320,7 +327,7 @@ func (p *providersClient) defaults() []Provider {
 		},
 		&provider{
 			name:         K0smotronProviderName,
-			url:          "https://github.com/k0sproject/k0smotron/releases/latest/infrastructure-components.yaml",
+			url:          "https://github.com/k0smotron/k0smotron/releases/latest/infrastructure-components.yaml",
 			providerType: clusterctlv1.InfrastructureProviderType,
 		},
 		&provider{
@@ -331,6 +338,11 @@ func (p *providersClient) defaults() []Provider {
 		&provider{
 			name:         VultrProviderName,
 			url:          "https://github.com/vultr/cluster-api-provider-vultr/releases/latest/infrastructure-components.yaml",
+			providerType: clusterctlv1.InfrastructureProviderType,
+		},
+		&provider{
+			name:         OpenNebulaProviderName,
+			url:          "https://github.com/OpenNebula/cluster-api-provider-opennebula/releases/latest/infrastructure-components.yaml",
 			providerType: clusterctlv1.InfrastructureProviderType,
 		},
 
@@ -362,7 +374,7 @@ func (p *providersClient) defaults() []Provider {
 		},
 		&provider{
 			name:         K0smotronBootstrapProviderName,
-			url:          "https://github.com/k0sproject/k0smotron/releases/latest/bootstrap-components.yaml",
+			url:          "https://github.com/k0smotron/k0smotron/releases/latest/bootstrap-components.yaml",
 			providerType: clusterctlv1.BootstrapProviderType,
 		},
 		&provider{
@@ -409,7 +421,7 @@ func (p *providersClient) defaults() []Provider {
 		},
 		&provider{
 			name:         K0smotronControlPlaneProviderName,
-			url:          "https://github.com/k0sproject/k0smotron/releases/latest/control-plane-components.yaml",
+			url:          "https://github.com/k0smotron/k0smotron/releases/latest/control-plane-components.yaml",
 			providerType: clusterctlv1.ControlPlaneProviderType,
 		},
 		&provider{
