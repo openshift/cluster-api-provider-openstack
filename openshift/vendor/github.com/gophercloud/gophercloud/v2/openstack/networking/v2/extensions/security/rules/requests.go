@@ -29,6 +29,7 @@ type ListOpts struct {
 	Marker         string `q:"marker"`
 	SortKey        string `q:"sort_key"`
 	SortDir        string `q:"sort_dir"`
+	RevisionNumber *int   `q:"revision_number"`
 }
 
 // List returns a Pager which allows you to iterate over a collection of
@@ -146,6 +147,23 @@ func Create(ctx context.Context, c *gophercloud.ServiceClient, opts CreateOptsBu
 		return
 	}
 	resp, err := c.Post(ctx, rootURL(c), b, &r.Body, nil)
+	_, r.Header, r.Err = gophercloud.ParseResponse(resp, err)
+	return
+}
+
+// CreateBulk is an operation which adds new security group rules and associates them
+// with an existing security group (whose ID is specified in CreateOpts).
+// As of Dalmatian (2024.2) neutron only allows bulk creation of rules when
+// they all belong to the same tenant and security group.
+// https://github.com/openstack/neutron/blob/6183792/neutron/db/securitygroups_db.py#L814-L828
+func CreateBulk(ctx context.Context, c *gophercloud.ServiceClient, opts []CreateOpts) (r CreateBulkResult) {
+	body, err := gophercloud.BuildRequestBody(opts, "security_group_rules")
+	if err != nil {
+		r.Err = err
+		return
+	}
+
+	resp, err := c.Post(ctx, rootURL(c), body, &r.Body, nil)
 	_, r.Header, r.Err = gophercloud.ParseResponse(resp, err)
 	return
 }
