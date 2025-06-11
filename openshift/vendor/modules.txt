@@ -648,7 +648,7 @@ sigs.k8s.io/cluster-api/util/annotations
 sigs.k8s.io/cluster-api/util/conditions
 sigs.k8s.io/cluster-api/util/contract
 # sigs.k8s.io/cluster-api-provider-openstack v0.10.5 => ../
-## explicit; go 1.22
+## explicit; go 1.22.0
 sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha1
 sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1
 sigs.k8s.io/cluster-api-provider-openstack/pkg/clients
