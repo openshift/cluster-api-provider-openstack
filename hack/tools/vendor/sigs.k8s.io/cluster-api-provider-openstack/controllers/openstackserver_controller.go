@@ -77,6 +77,8 @@ type OpenStackServerReconciler struct {
 
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=openstackservers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=openstackservers/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddressclaims;ipaddressclaims/status,verbs=get;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=ipam.cluster.x-k8s.io,resources=ipaddresses;ipaddresses/status,verbs=get;list;watch
 // +kubebuilder:rbac:groups=openstack.k-orc.cloud,resources=images,verbs=get;list;watch
 
 func (r *OpenStackServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (result ctrl.Result, reterr error) {
@@ -170,7 +172,7 @@ func patchServer(ctx context.Context, patchHelper *patch.Helper, openStackServer
 	return patchHelper.Patch(ctx, openStackServer, options...)
 }
 
-func (r *OpenStackServerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, _ controller.Options) error {
+func (r *OpenStackServerReconciler) SetupWithManager(ctx context.Context, mgr ctrl.Manager, options controller.Options) error {
 	const imageRefPath = "spec.image.imageRef.name"
 
 	log := ctrl.LoggerFrom(ctx)
@@ -190,6 +192,7 @@ func (r *OpenStackServerReconciler) SetupWithManager(ctx context.Context, mgr ct
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
+		WithOptions(options).
 		For(&infrav1alpha1.OpenStackServer{}).
 		Watches(&orcv1alpha1.Image{},
 			handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
@@ -213,6 +216,10 @@ func (r *OpenStackServerReconciler) SetupWithManager(ctx context.Context, mgr ct
 				return requests
 			}),
 			builder.WithPredicates(predicates.NewBecameAvailable(mgr.GetLogger(), &orcv1alpha1.Image{})),
+		).
+		Watches(
+			&ipamv1.IPAddressClaim{},
+			handler.EnqueueRequestForOwner(mgr.GetScheme(), mgr.GetRESTMapper(), &infrav1alpha1.OpenStackServer{}),
 		).
 		Complete(r)
 }
