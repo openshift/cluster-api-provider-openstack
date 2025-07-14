@@ -40,7 +40,6 @@ import (
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	infrav1alpha5 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha5"
 	infrav1alpha6 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha6"
@@ -70,8 +69,6 @@ var (
 	syncPeriod                  time.Duration
 	restConfigQPS               float32
 	restConfigBurst             int
-	webhookPort                 int
-	webhookCertDir              string
 	healthAddr                  string
 	lbProvider                  string
 	caCertsPath                 string
@@ -133,12 +130,6 @@ func InitFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&restConfigBurst, "kube-api-burst", 30,
 		"Maximum number of queries that should be allowed in one burst from the controller client to the Kubernetes API server. Defaults to 30")
-
-	fs.IntVar(&webhookPort, "webhook-port", 9443,
-		"Webhook Server port")
-
-	fs.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs/",
-		"Webhook cert dir, only used when webhook-port is specified.")
 
 	fs.StringVar(&healthAddr, "health-addr", ":9440",
 		"The address the health endpoint binds to.")
@@ -228,12 +219,6 @@ func main() {
 				},
 			},
 		},
-		WebhookServer: webhook.NewServer(
-			webhook.Options{
-				Port:    webhookPort,
-				CertDir: webhookCertDir,
-			},
-		),
 		HealthProbeBindAddress: healthAddr,
 	})
 	if err != nil {
@@ -249,26 +234,12 @@ func main() {
 
 	scopeFactory := scope.NewFactory(scopeCacheMaxSize)
 
-	setupChecks(mgr)
 	setupReconcilers(ctx, mgr, caCerts, scopeFactory)
-	setupWebhooks(mgr)
 
 	// +kubebuilder:scaffold:builder
 	setupLog.Info("starting manager", "version", version.Get().String())
 	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
-	}
-}
-
-func setupChecks(mgr ctrl.Manager) {
-	if err := mgr.AddReadyzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
-		setupLog.Error(err, "unable to create ready check")
-		os.Exit(1)
-	}
-
-	if err := mgr.AddHealthzCheck("webhook", mgr.GetWebhookServer().StartedChecker()); err != nil {
-		setupLog.Error(err, "unable to create health check")
 		os.Exit(1)
 	}
 }
@@ -292,37 +263,6 @@ func setupReconcilers(ctx context.Context, mgr ctrl.Manager, caCerts []byte, sco
 		CaCertificates:   caCerts,
 	}).SetupWithManager(ctx, mgr, concurrency(openStackMachineConcurrency)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenStackMachine")
-		os.Exit(1)
-	}
-}
-
-func setupWebhooks(mgr ctrl.Manager) {
-	if err := (&infrav1.OpenStackMachineTemplateWebhook{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenStackMachineTemplate")
-		os.Exit(1)
-	}
-	if err := (&infrav1.OpenStackMachineTemplateList{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenStackMachineTemplateList")
-		os.Exit(1)
-	}
-	if err := (&infrav1.OpenStackCluster{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenStackCluster")
-		os.Exit(1)
-	}
-	if err := (&infrav1.OpenStackClusterTemplate{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenStackClusterTemplate")
-		os.Exit(1)
-	}
-	if err := (&infrav1.OpenStackMachine{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenStackMachine")
-		os.Exit(1)
-	}
-	if err := (&infrav1.OpenStackMachineList{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenStackMachineList")
-		os.Exit(1)
-	}
-	if err := (&infrav1.OpenStackClusterList{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenStackClusterList")
 		os.Exit(1)
 	}
 }
