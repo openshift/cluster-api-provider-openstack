@@ -11,9 +11,9 @@ require (
 	github.com/onsi/gomega v1.36.2
 	github.com/openshift/api v0.0.0-20231003083825-c3f7566f6ef6
 	github.com/openshift/cluster-capi-operator/e2e v0.0.0-20241031122839-87f4fd28a59e
-	k8s.io/api v0.30.13
-	k8s.io/apimachinery v0.30.13
-	k8s.io/client-go v0.30.13
+	k8s.io/api v0.30.14
+	k8s.io/apimachinery v0.30.14
+	k8s.io/client-go v0.30.14
 	k8s.io/utils v0.0.0-20240502163921-fe8a2dddb1d0
 	sigs.k8s.io/cluster-api v1.8.12
 	sigs.k8s.io/cluster-api-provider-openstack v0.8.0
@@ -75,7 +75,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.30.13 // indirect
+	k8s.io/apiextensions-apiserver v0.30.14 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20240521193020-835d969ad83a // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
