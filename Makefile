@@ -27,7 +27,7 @@ unexport GOPATH
 TRACE ?= 0
 
 # Go
-GO_VERSION ?= 1.23.8
+GO_VERSION ?= 1.23.10
 
 # Directories.
 ARTIFACTS ?= $(REPO_ROOT)/_artifacts
@@ -517,6 +517,8 @@ templates/cluster-template-%.yaml: kustomize/v1beta1/% $(KUSTOMIZE) FORCE
 .PHONY: release-templates
 release-templates: $(RELEASE_DIR) templates ## Generate release templates
 	cp templates/cluster-template*.yaml $(RELEASE_DIR)/
+	cp templates/clusterclass*.yaml $(RELEASE_DIR)/
+	cp templates/image-template*.yaml $(RELEASE_DIR)/
 
 IMAGE_PATCH_DIR := $(ARTIFACTS)/image-patch
 
