@@ -21,7 +21,5 @@ aliases:
   cluster-api-openstack-maintainers:
     - emilienm
     - lentzi90
-    - mdbooth
   cluster-api-openstack-reviewers:
-  cluster-api-openstack-emeritus-maintainers:
-    - jichenjc
+    - smoshiur1237
