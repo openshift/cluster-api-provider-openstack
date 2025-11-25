@@ -59,3 +59,33 @@ verify: generate
 
 .PHONY: ALWAYS
 ALWAYS:
+
+# FIXME(stephenfin): Delete everything above this once we are fully migrated to manifests-gen
+
+BIN_DIR := bin
+TOOLS_DIR := tools
+
+MANIFESTS_GEN := go run ./vendor/github.com/openshift/cluster-capi-operator/manifests-gen/
+
+.PHONY: check-env
+check-env:
+ifndef PROVIDER_VERSION
+	$(error PROVIDER_VERSION is undefined)
+endif
+
+.PHONY: update-manifests-gen
+update-manifests-gen:
+	cd tools && go get github.com/openshift/cluster-capi-operator/manifests-gen@main github.com/openshift/cluster-capi-operator@main && go mod tidy && go mod vendor
+
+.PHONY: ocp-manifests
+ocp-manifests: check-env ## Builds openshift specific manifests
+	cd tools && $(MANIFESTS_GEN) \
+		--manifests-path "../capi-operator-manifests" \
+		--kustomize-dir "../../openshift" \
+		--name cluster-api-provider-openstack \
+		--install-order 20 \
+		--attribute type=infrastructure \
+		--attribute version="${PROVIDER_VERSION}" \
+		--self-image-ref registry.ci.openshift.org/openshift:openstack-cluster-api-controllers \
+		--platform OpenStack \
+		--protect-cluster-resource openstackcluster
