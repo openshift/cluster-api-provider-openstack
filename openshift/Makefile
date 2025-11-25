@@ -48,36 +48,17 @@ $(KUSTOMIZE):
 $(CONTROLLER_GEN):
 	$(MAKE) -C $(TOOLS_DIR) bin/controller-gen
 
-$(GOLANGCI_LINT):
-	$(MAKE) -C $(TOOLS_DIR) bin/golangci-lint
-
 .PHONY: verify
-verify: lint modules generate
+verify: generate
 	@if !(git diff --quiet HEAD); then \
 		git diff; \
 		echo "generated files are out of date, run make generate"; exit 1; \
 	fi
 
-.PHONY: lint
-lint: $(GOLANGCI_LINT) ## Lint codebase
-	$(GOLANGCI_LINT) run -v --fast=false
-
-.PHONY: lint-update
-lint-update: $(GOLANGCI_LINT) ## Lint codebase
-	$(GOLANGCI_LINT) run -v --fast=false --fix
-
-.PHONY: modules
-modules:
-	go mod tidy
-	go mod vendor
-
+# FIXME(stephenfin): Remove the CI job that relies on this: all logic has moved to CCAPIO now
 .PHONY: test
 test:
-	go test $(shell go list ./... | grep -v /e2e)
-
-.PHONY: e2e
-e2e:
-	./hack/test.sh "./e2e/..." 30m
+	echo "done"
 
 .PHONY: ALWAYS
 ALWAYS:
