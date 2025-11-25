@@ -26,7 +26,6 @@ endef
 
 manifest_names = 00_credentials-request 04_infrastructure-components
 infrastructure_components = kustomize/cluster-capi-configmap/infrastructure-components.yaml
-infracluster_role = kustomize/infracluster-controller/role.yaml
 
 .PHONY: generate
 generate: $(foreach m,$(manifest_names),$(call manifest_name,$(m)))
@@ -34,14 +33,11 @@ generate: $(foreach m,$(manifest_names),$(call manifest_name,$(m)))
 $(call manifest_name,00_credentials-request): $(KUSTOMIZE) ALWAYS | $(manifests_dir)
 	$(KUSTOMIZE) build kustomize/credentials-request > $@
 
-$(infrastructure_components): $(KUSTOMIZE) $(infracluster_role) ALWAYS
+$(infrastructure_components): $(KUSTOMIZE) ALWAYS
 	$(KUSTOMIZE) build kustomize/infrastructure-components > $@
 
 $(call manifest_name,04_infrastructure-components): $(KUSTOMIZE) $(infrastructure_components) ALWAYS | $(manifests_dir)
 	$(KUSTOMIZE) build kustomize/cluster-capi-configmap > $@
-
-$(infracluster_role): $(CONTROLLER_GEN) ALWAYS
-	$(CONTROLLER_GEN) rbac:roleName=infracluster-controller paths=./pkg/infraclustercontroller output:stdout > $@
 
 $(manifests_dir):
 	mkdir -p $@
