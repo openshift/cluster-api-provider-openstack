@@ -60,5 +60,10 @@ verify: generate
 test:
 	echo "done"
 
+# FIXME(stephenfin): Remove this once we've reworked the CI job that relies on this to call the script directly
+.PHONY: e2e
+e2e:
+	./e2e-tests.sh
+
 .PHONY: ALWAYS
 ALWAYS:
