@@ -27,11 +27,6 @@ COPY ./ ./
 ARG ARCH
 ARG ldflags
 
-WORKDIR /workspace/openshift
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} \
-    go build -ldflags "${ldflags} -extldflags '-static'" \
-    -o ../infracluster-controller cmd/manager.go
-
 WORKDIR /workspace
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} \
     go build -ldflags "${ldflags} -extldflags '-static'" \
@@ -41,7 +36,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} \
 FROM registry.ci.openshift.org/ocp/4.21:base-rhel9
 WORKDIR /
 COPY --from=builder /workspace/manager .
-COPY --from=builder /workspace/infracluster-controller .
 COPY ./openshift/manifests ./manifests
 
 # Use uid of nonroot user (65532) because kubernetes expects numeric user when applying pod security policies

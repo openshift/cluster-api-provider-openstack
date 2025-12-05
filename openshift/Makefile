@@ -26,7 +26,6 @@ endef
 
 manifest_names = 00_credentials-request 04_infrastructure-components
 infrastructure_components = kustomize/cluster-capi-configmap/infrastructure-components.yaml
-infracluster_role = kustomize/infracluster-controller/role.yaml
 
 .PHONY: generate
 generate: $(foreach m,$(manifest_names),$(call manifest_name,$(m)))
@@ -34,14 +33,11 @@ generate: $(foreach m,$(manifest_names),$(call manifest_name,$(m)))
 $(call manifest_name,00_credentials-request): $(KUSTOMIZE) ALWAYS | $(manifests_dir)
 	$(KUSTOMIZE) build kustomize/credentials-request > $@
 
-$(infrastructure_components): $(KUSTOMIZE) $(infracluster_role) ALWAYS
+$(infrastructure_components): $(KUSTOMIZE) ALWAYS
 	$(KUSTOMIZE) build kustomize/infrastructure-components > $@
 
 $(call manifest_name,04_infrastructure-components): $(KUSTOMIZE) $(infrastructure_components) ALWAYS | $(manifests_dir)
 	$(KUSTOMIZE) build kustomize/cluster-capi-configmap > $@
-
-$(infracluster_role): $(CONTROLLER_GEN) ALWAYS
-	$(CONTROLLER_GEN) rbac:roleName=infracluster-controller paths=./pkg/infraclustercontroller output:stdout > $@
 
 $(manifests_dir):
 	mkdir -p $@
@@ -52,36 +48,22 @@ $(KUSTOMIZE):
 $(CONTROLLER_GEN):
 	$(MAKE) -C $(TOOLS_DIR) bin/controller-gen
 
-$(GOLANGCI_LINT):
-	$(MAKE) -C $(TOOLS_DIR) bin/golangci-lint
-
 .PHONY: verify
-verify: lint modules generate
+verify: generate
 	@if !(git diff --quiet HEAD); then \
 		git diff; \
 		echo "generated files are out of date, run make generate"; exit 1; \
 	fi
 
-.PHONY: lint
-lint: $(GOLANGCI_LINT) ## Lint codebase
-	$(GOLANGCI_LINT) run -v --fast=false
-
-.PHONY: lint-update
-lint-update: $(GOLANGCI_LINT) ## Lint codebase
-	$(GOLANGCI_LINT) run -v --fast=false --fix
-
-.PHONY: modules
-modules:
-	go mod tidy
-	go mod vendor
-
+# FIXME(stephenfin): Remove the CI job that relies on this: all logic has moved to CCAPIO now
 .PHONY: test
 test:
-	go test $(shell go list ./... | grep -v /e2e)
+	echo "done"
 
+# FIXME(stephenfin): Remove this once we've reworked the CI job that relies on this to call the script directly
 .PHONY: e2e
 e2e:
-	./hack/test.sh "./e2e/..." 30m
+	./e2e-tests.sh
 
 .PHONY: ALWAYS
 ALWAYS:
