@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2021 The Kubernetes Authors.
@@ -49,13 +48,11 @@ var _ = Describe("conformance tests", func() {
 		Expect(e2eCtx.E2EConfig.Variables).To(HaveKey(shared.KubernetesVersion))
 		// Setup a Namespace where to host objects for this spec and create a watcher for the namespace events.
 		namespace = shared.SetupSpecNamespace(ctx, specName, e2eCtx)
-
-		shared.ApplyCoreImagesPlus(ctx, e2eCtx)
 	})
 
 	It(specName, func(ctx context.Context) {
 		name := fmt.Sprintf("cluster-%s", namespace.Name)
-		kubernetesVersion := e2eCtx.E2EConfig.GetVariable(shared.KubernetesVersion)
+		kubernetesVersion := e2eCtx.E2EConfig.MustGetVariable(shared.KubernetesVersion)
 
 		flavor := shared.FlavorDefault
 		// * with UseCIArtifacts we use the latest Kubernetes ci release
@@ -65,9 +62,9 @@ var _ = Describe("conformance tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		workerMachineCount, err := strconv.ParseInt(e2eCtx.E2EConfig.GetVariable("CONFORMANCE_WORKER_MACHINE_COUNT"), 10, 64)
+		workerMachineCount, err := strconv.ParseInt(e2eCtx.E2EConfig.MustGetVariable("CONFORMANCE_WORKER_MACHINE_COUNT"), 10, 64)
 		Expect(err).NotTo(HaveOccurred())
-		controlPlaneMachineCount, err := strconv.ParseInt(e2eCtx.E2EConfig.GetVariable("CONFORMANCE_CONTROL_PLANE_MACHINE_COUNT"), 10, 64)
+		controlPlaneMachineCount, err := strconv.ParseInt(e2eCtx.E2EConfig.MustGetVariable("CONFORMANCE_CONTROL_PLANE_MACHINE_COUNT"), 10, 64)
 		Expect(err).NotTo(HaveOccurred())
 
 		experiment := gmeasure.NewExperiment(specName)

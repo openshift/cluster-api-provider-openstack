@@ -15,7 +15,7 @@
 ROOT_DIR_RELATIVE := ../..
 include $(ROOT_DIR_RELATIVE)/common.mk
 
-GOLANGCI_LINT_VERSION ?= v1.64.6
+GOLANGCI_LINT_VERSION ?= v2.6.2
 
 # GOTESTSUM version without the leading 'v'
 GOTESTSUM_VERSION ?= 1.12.0
@@ -142,7 +142,7 @@ $(MOCKGEN): go.mod go.sum | $(BIN_DIR) # Build mockgen from tools folder.
 
 RELEASE_NOTES := $(BIN_DIR)/release-notes
 $(RELEASE_NOTES): go.mod go.sum | $(BIN_DIR)
-	go build -tags tools -o $@ sigs.k8s.io/cluster-api/hack/tools/release
+	go build -tags tools -o $@ sigs.k8s.io/cluster-api/hack/tools/release/notes
 
 PLANTUML := $(BIN_DIR)/plantuml-sentinal
 $(PLANTUML): plantuml.Dockerfile ../../versions.mk | $(BIN_DIR)

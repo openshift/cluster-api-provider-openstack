@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2021 The Kubernetes Authors.
@@ -25,9 +24,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework"
 
-	orcv1alpha1 "github.com/k-orc/openstack-resource-controller/api/v1alpha1"
+	orcv1alpha1 "github.com/k-orc/openstack-resource-controller/v2/api/v1alpha1"
 
 	infrav1alpha1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha1"
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
@@ -55,13 +55,12 @@ const (
 	FlavorWithoutLB            = "without-lb"
 	FlavorMultiNetwork         = "multi-network"
 	FlavorMultiAZ              = "multi-az"
-	FlavorWithoutORC           = "without-orc"
-	FlavorV1alpha7             = "v1alpha7"
 	FlavorMDRemediation        = "md-remediation"
 	FlavorKCPRemediation       = "kcp-remediation"
 	FlavorFlatcar              = "flatcar"
 	FlavorKubernetesUpgrade    = "k8s-upgrade"
 	FlavorFlatcarSysext        = "flatcar-sysext"
+	FlavorHealthMonitor        = "health-monitor"
 )
 
 // DefaultScheme returns the default scheme to use for testing.
@@ -70,6 +69,7 @@ func DefaultScheme() *runtime.Scheme {
 	framework.TryAddDefaultSchemes(sc)
 
 	err := errors.Join(
+		clusterv1beta1.AddToScheme(sc),
 		orcv1alpha1.AddToScheme(sc),
 		infrav1alpha1.AddToScheme(sc),
 		infrav1.AddToScheme(sc),

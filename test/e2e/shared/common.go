@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2021 The Kubernetes Authors.
@@ -33,8 +32,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	expv1 "sigs.k8s.io/cluster-api/exp/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/cluster-api/test/framework"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	"sigs.k8s.io/cluster-api/util"
@@ -85,8 +83,10 @@ func DumpSpecResourcesAndCleanup(ctx context.Context, specName string, namespace
 				panic(r)
 			}()
 			framework.DeleteAllClustersAndWait(ctx, framework.DeleteAllClustersAndWaitInput{
-				Client:    e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
-				Namespace: namespace.Name,
+				ClusterProxy:         e2eCtx.Environment.BootstrapClusterProxy,
+				ClusterctlConfigPath: e2eCtx.Settings.ConfigPath,
+				Namespace:            namespace.Name,
+				ArtifactFolder:       e2eCtx.Settings.ArtifactFolder,
 			}, e2eCtx.E2EConfig.GetIntervals(specName, "wait-delete-cluster")...)
 		}()
 
@@ -118,9 +118,11 @@ func ClusterForSpec(ctx context.Context, e2eCtx *E2EContext, namespace *corev1.N
 func dumpSpecResources(ctx context.Context, e2eCtx *E2EContext, namespace *corev1.Namespace, directory ...string) {
 	paths := append([]string{e2eCtx.Settings.ArtifactFolder, "clusters", e2eCtx.Environment.BootstrapClusterProxy.GetName(), "resources"}, directory...)
 	framework.DumpAllResources(ctx, framework.DumpAllResourcesInput{
-		Lister:    e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
-		Namespace: namespace.Name,
-		LogPath:   filepath.Join(paths...),
+		Lister:               e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
+		KubeConfigPath:       e2eCtx.Environment.BootstrapClusterProxy.GetKubeconfigPath(),
+		ClusterctlConfigPath: e2eCtx.Settings.ConfigPath,
+		Namespace:            namespace.Name,
+		LogPath:              filepath.Join(paths...),
 	})
 }
 
@@ -166,8 +168,7 @@ func getOpenStackClusterFromMachine(ctx context.Context, client client.Client, m
 	}
 
 	key = types.NamespacedName{
-		Namespace: cluster.Spec.InfrastructureRef.Namespace,
-		Name:      cluster.Spec.InfrastructureRef.Name,
+		Name: cluster.Spec.InfrastructureRef.Name,
 	}
 	openStackCluster := &infrav1.OpenStackCluster{}
 	err = client.Get(ctx, key, openStackCluster)
@@ -185,16 +186,16 @@ type OpenStackLogCollector struct {
 
 // CollectMachineLog gets logs for the OpenStack resources related to the given machine.
 func (o OpenStackLogCollector) CollectMachineLog(ctx context.Context, managementClusterClient client.Client, m *clusterv1.Machine, outputPath string) error {
-	Logf("Collecting logs for machine %q and storing them in %q", m.ObjectMeta.Name, outputPath)
+	Logf("Collecting logs for machine %q and storing them in %q", m.Name, outputPath)
 
 	if err := os.MkdirAll(outputPath, 0o750); err != nil {
 		return fmt.Errorf("couldn't create directory %q for logs: %s", outputPath, err)
 	}
 
-	if m.Spec.ProviderID == nil {
+	if m.Spec.ProviderID == "" {
 		return fmt.Errorf("unable to get logs for machine since it has no provider ID")
 	}
-	providerID := getIDFromProviderID(*m.Spec.ProviderID)
+	providerID := getIDFromProviderID(m.Spec.ProviderID)
 
 	consolLog, err := GetOpenStackServerConsoleLog(o.E2EContext, providerID)
 	if err != nil {
@@ -232,7 +233,7 @@ func (o OpenStackLogCollector) CollectMachineLog(ctx context.Context, management
 	if openStackCluster.Status.Bastion == nil {
 		Logf("Skipping log collection for machine %q since no bastion is available", m.Name)
 	} else {
-		srvUser := o.E2EContext.E2EConfig.GetVariable(SSHUserMachine)
+		srvUser := o.E2EContext.E2EConfig.MustGetVariable(SSHUserMachine)
 		executeCommands(
 			ctx,
 			o.E2EContext.Settings.ArtifactFolder,
@@ -282,7 +283,7 @@ func (o OpenStackLogCollector) CollectMachineLog(ctx context.Context, management
 }
 
 // CollectMachinePoolLog is not yet implemented for the OpenStack provider.
-func (o OpenStackLogCollector) CollectMachinePoolLog(_ context.Context, _ client.Client, _ *expv1.MachinePool, _ string) error {
+func (o OpenStackLogCollector) CollectMachinePoolLog(_ context.Context, _ client.Client, _ *clusterv1.MachinePool, _ string) error {
 	return fmt.Errorf("not implemented")
 }
 

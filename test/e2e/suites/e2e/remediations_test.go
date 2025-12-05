@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2021 The Kubernetes Authors.
@@ -31,10 +30,6 @@ import (
 
 var _ = Describe("When testing unhealthy machines remediation", func() {
 	Describe("When testing MachineDeployment remediation", func() {
-		BeforeEach(func(ctx context.Context) {
-			shared.ApplyCoreImagesPlus(ctx, e2eCtx)
-		})
-
 		capi_e2e.MachineDeploymentRemediationSpec(context.TODO(), func() capi_e2e.MachineDeploymentRemediationSpecInput {
 			return capi_e2e.MachineDeploymentRemediationSpecInput{
 				E2EConfig:             e2eCtx.E2EConfig,

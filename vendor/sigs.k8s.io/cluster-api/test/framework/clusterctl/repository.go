@@ -121,7 +121,8 @@ func CreateRepository(ctx context.Context, input CreateRepositoryInput) string {
 			Type: provider.Type,
 		}
 		providers = append(providers, p)
-		if !(clusterctlv1.ProviderType(provider.Type) == clusterctlv1.IPAMProviderType || clusterctlv1.ProviderType(provider.Type) == clusterctlv1.RuntimeExtensionProviderType || clusterctlv1.ProviderType(provider.Type) == clusterctlv1.AddonProviderType) {
+		providerType := clusterctlv1.ProviderType(provider.Type)
+		if providerType != clusterctlv1.IPAMProviderType && providerType != clusterctlv1.RuntimeExtensionProviderType && providerType != clusterctlv1.AddonProviderType {
 			providersV1_2 = append(providersV1_2, p)
 		}
 	}
@@ -139,7 +140,7 @@ func CreateRepository(ctx context.Context, input CreateRepositoryInput) string {
 		},
 	}
 	for key := range input.E2EConfig.Variables {
-		clusterctlConfigFile.Values[key] = input.E2EConfig.GetVariable(key)
+		clusterctlConfigFile.Values[key] = input.E2EConfig.MustGetVariable(key)
 	}
 	Expect(clusterctlConfigFile.write()).To(Succeed(), "Failed to write clusterctlConfigFile")
 
@@ -152,7 +153,7 @@ func CreateRepository(ctx context.Context, input CreateRepositoryInput) string {
 		},
 	}
 	for key := range input.E2EConfig.Variables {
-		clusterctlConfigFileV1_2.Values[key] = input.E2EConfig.GetVariable(key)
+		clusterctlConfigFileV1_2.Values[key] = input.E2EConfig.MustGetVariable(key)
 	}
 	Expect(clusterctlConfigFileV1_2.write()).To(Succeed(), "Failed to write v1.2 clusterctlConfigFile")
 
@@ -196,7 +197,7 @@ func AdjustConfigPathForBinary(clusterctlBinaryPath, clusterctlConfigPath string
 	Expect(err).ToNot(HaveOccurred())
 
 	if version.LT(semver.MustParse("1.3.0")) {
-		return strings.Replace(clusterctlConfigPath, clusterctlConfigFileName, clusterctlConfigV1_2FileName, -1)
+		return strings.ReplaceAll(clusterctlConfigPath, clusterctlConfigFileName, clusterctlConfigV1_2FileName)
 	}
 	return clusterctlConfigPath
 }

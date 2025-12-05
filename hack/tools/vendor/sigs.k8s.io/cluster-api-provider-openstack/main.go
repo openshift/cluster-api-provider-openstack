@@ -33,8 +33,8 @@ import (
 	logsv1 "k8s.io/component-base/logs/api/v1"
 	_ "k8s.io/component-base/logs/json/register"
 	"k8s.io/klog/v2"
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
-	ipamv1 "sigs.k8s.io/cluster-api/exp/ipam/api/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	ipamv1 "sigs.k8s.io/cluster-api/api/ipam/v1beta2"
 	"sigs.k8s.io/cluster-api/util/flags"
 	ctrl "sigs.k8s.io/controller-runtime"
 	cache "sigs.k8s.io/controller-runtime/pkg/cache"
@@ -43,10 +43,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	orcv1alpha1 "github.com/k-orc/openstack-resource-controller/api/v1alpha1"
+	orcv1alpha1 "github.com/k-orc/openstack-resource-controller/v2/api/v1alpha1"
 
 	infrav1alpha1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha1"
-	infrav1alpha7 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-openstack/controllers"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/metrics"
@@ -101,7 +100,6 @@ func init() {
 	_ = clusterv1.AddToScheme(scheme)
 	_ = ipamv1.AddToScheme(scheme)
 	_ = infrav1.AddToScheme(scheme)
-	_ = infrav1alpha7.AddToScheme(scheme)
 	_ = infrav1alpha1.AddToScheme(scheme)
 	_ = orcv1alpha1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme

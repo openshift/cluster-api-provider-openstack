@@ -189,5 +189,4 @@ docs/book/book/
 
 # Don't ignore anything in vendor directories
 !/vendor/**
-!/orc/vendor/**
 !/hack/tools/vendor/**
