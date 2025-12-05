@@ -1,45 +1,18 @@
-# Copyright 2019 The Kubernetes Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-# Build the manager binary
 FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.24-openshift-4.21 AS builder
-WORKDIR /workspace
-
-# Run this with docker build --build_arg goproxy=$(go env GOPROXY) to override the goproxy
-ARG goproxy=https://proxy.golang.org
-ENV GOPROXY=$goproxy
-
-# Copy the sources
-COPY ./ ./
-
-# Build
-ARG ARCH
-ARG ldflags
 
 WORKDIR /workspace
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} \
-    go build -ldflags "${ldflags} -extldflags '-static'" \
-    -o manager
+COPY . .
+RUN CGO_ENABLED=0 GOOS=${GOOS} GOPROXY=${GOPROXY} go build \
+  -ldflags "${LDFLAGS} -extldflags '-static'" \
+  -o manager \
+  main.go
 
-# Production image
 FROM registry.ci.openshift.org/ocp/4.21:base-rhel9
-WORKDIR /
-COPY --from=builder /workspace/manager .
-COPY ./openshift/manifests ./manifests
 
-# Use uid of nonroot user (65532) because kubernetes expects numeric user when applying pod security policies
-USER 65532
+LABEL description="Cluster API Provider OpenStack Controller Manager"
+COPY --from=builder /workspace/manager .
+COPY ./openshift/manifests /manifests
+
 ENTRYPOINT ["/manager"]
 
-LABEL io.openshift.release.operator true
+LABEL io.openshift.release.operator=true
