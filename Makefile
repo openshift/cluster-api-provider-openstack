@@ -27,7 +27,7 @@ unexport GOPATH
 TRACE ?= 0
 
 # Go
-GO_VERSION ?= 1.23.10
+GO_VERSION ?= 1.24.11
 
 # Directories.
 ARTIFACTS ?= $(REPO_ROOT)/_artifacts
@@ -61,7 +61,6 @@ TRIVY_VER := 0.49.1
 
 # Binaries.
 CONTROLLER_GEN := $(TOOLS_BIN_DIR)/controller-gen
-CONVERSION_GEN := $(TOOLS_BIN_DIR)/conversion-gen
 ENVSUBST := $(TOOLS_BIN_DIR)/envsubst
 GINKGO := $(TOOLS_BIN_DIR)/ginkgo
 GOJQ := $(TOOLS_BIN_DIR)/gojq
@@ -121,6 +120,8 @@ PULL_POLICY ?= Always
 # Set build time variables including version details
 LDFLAGS := $(shell source ./hack/version.sh; version::ldflags)
 
+# Extra arguments for govulncheck, e.g. "-show verbose"
+GOVULNCHECK_ARGS ?=
 
 ## --------------------------------------
 ##@ Testing
@@ -176,8 +177,6 @@ E2E_NO_ARTIFACT_TEMPLATES_DIR=test/e2e/data/infrastructure-openstack-no-artifact
 .PHONY: e2e-templates
 e2e-templates: ## Generate cluster templates for e2e tests
 e2e-templates: $(addprefix $(E2E_NO_ARTIFACT_TEMPLATES_DIR)/, \
-		 cluster-template-v1alpha7.yaml \
-		 cluster-template-without-orc.yaml \
 		 cluster-template-md-remediation.yaml \
 		 cluster-template-kcp-remediation.yaml \
 		 cluster-template-multi-az.yaml \
@@ -187,7 +186,8 @@ e2e-templates: $(addprefix $(E2E_NO_ARTIFACT_TEMPLATES_DIR)/, \
 		 cluster-template-flatcar.yaml \
      cluster-template-k8s-upgrade.yaml \
 		 cluster-template-flatcar-sysext.yaml \
-		 cluster-template-no-bastion.yaml)
+		 cluster-template-no-bastion.yaml \
+		 cluster-template-health-monitor.yaml)
 # Currently no templates that require CI artifacts
 # $(addprefix $(E2E_TEMPLATES_DIR)/, add-templates-here.yaml) \
 
@@ -197,7 +197,7 @@ $(E2E_NO_ARTIFACT_TEMPLATES_DIR)/cluster-template.yaml: $(E2E_KUSTOMIZE_DIR)/wit
 $(E2E_NO_ARTIFACT_TEMPLATES_DIR)/cluster-template-%.yaml: $(E2E_KUSTOMIZE_DIR)/% $(KUSTOMIZE) FORCE
 	$(KUSTOMIZE) build "$<" > "$@"
 
-e2e-prerequisites: e2e-templates e2e-image test-e2e-image-prerequisites ## Build all artifacts required by e2e tests
+e2e-prerequisites: $(GINKGO) e2e-templates e2e-image ## Build all artifacts required by e2e tests
 
 # Can be run manually, e.g. via:
 # export OPENSTACK_CLOUD_YAML_FILE="$(pwd)/clouds.yaml"
@@ -211,15 +211,15 @@ test-e2e: $(GINKGO) e2e-prerequisites ## Run e2e tests
 			-config-path="$(E2E_CONF_PATH)" -artifacts-folder="$(ARTIFACTS)" \
 			-data-folder="$(E2E_DATA_DIR)" $(E2E_ARGS)
 
+# Pre-compile tests
+# This is not required, but it will make the tests start faster
+.PHONY: build-e2e-tests
+build-e2e-tests: $(GINKGO)
+	$(GINKGO) build -tags=e2e ./test/e2e/suites/e2e/...
+
 .PHONY: e2e-image
 e2e-image: CONTROLLER_IMG_TAG = "gcr.io/k8s-staging-capi-openstack/capi-openstack-controller:e2e"
 e2e-image: docker-build
-
-# Pull all the images references in test/e2e/data/e2e_conf.yaml
-test-e2e-image-prerequisites:
-	docker pull registry.k8s.io/cluster-api/cluster-api-controller:v1.9.3
-	docker pull registry.k8s.io/cluster-api/kubeadm-bootstrap-controller:v1.9.3
-	docker pull registry.k8s.io/cluster-api/kubeadm-control-plane-controller:v1.9.3
 
 CONFORMANCE_E2E_ARGS ?= -kubetest.config-file=$(KUBETEST_CONF_PATH)
 CONFORMANCE_E2E_ARGS += $(E2E_ARGS)
@@ -272,14 +272,14 @@ $(GOVULNCHECK): # Build govulncheck.
 
 .PHONY: lint
 lint: $(GOLANGCI_LINT) ## Lint codebase
-	$(GOLANGCI_LINT) run -v --fast=false
+	$(GOLANGCI_LINT) run -v
 
 .PHONY: lint-update
 lint-update: $(GOLANGCI_LINT) ## Lint codebase
-	$(GOLANGCI_LINT) run -v --fast=false --fix
+	$(GOLANGCI_LINT) run -v --fix
 
 lint-fast: $(GOLANGCI_LINT) ## Run only faster linters to detect possible issues
-	$(GOLANGCI_LINT) run -v --fast=true
+	$(GOLANGCI_LINT) run -v --fast-only
 
 ## --------------------------------------
 ##@ Generate
@@ -304,7 +304,7 @@ generate-openshift:
 	$(MAKE) -C $(REPO_ROOT)/openshift generate
 
 .PHONY: generate
-generate: templates generate-controller-gen generate-codegen generate-conversion-gen generate-go generate-manifests generate-api-docs ## Generate all generated code
+generate: templates generate-controller-gen generate-codegen generate-go generate-manifests generate-api-docs ## Generate all generated code
 
 .PHONY: generate-go
 generate-go: $(MOCKGEN)
@@ -319,15 +319,6 @@ generate-controller-gen: $(CONTROLLER_GEN)
 .PHONY: generate-codegen
 generate-codegen: generate-controller-gen
 	./hack/update-codegen.sh
-
-.PHONY: generate-conversion-gen
-generate-conversion-gen: $(CONVERSION_GEN)
-	$(CONVERSION_GEN) \
-		--extra-peer-dirs=./pkg/utils/optional \
-		--extra-peer-dirs=./pkg/utils/conversioncommon \
-		--output-file=zz_generated.conversion.go \
-		--go-header-file=./hack/boilerplate/boilerplate.generatego.txt \
-		./api/v1alpha7
 
 .PHONY: generate-manifests
 generate-manifests: $(CONTROLLER_GEN) ## Generate manifests e.g. CRD, RBAC etc.
@@ -347,7 +338,7 @@ generate-manifests: $(CONTROLLER_GEN) ## Generate manifests e.g. CRD, RBAC etc.
 		rbac:roleName=manager-role
 
 .PHONY: generate-api-docs
-generate-api-docs: generate-api-docs-v1beta1 generate-api-docs-v1alpha7 generate-api-docs-v1alpha1
+generate-api-docs: generate-api-docs-v1beta1 generate-api-docs-v1alpha1
 generate-api-docs-%: $(GEN_CRD_API_REFERENCE_DOCS) FORCE
 	$(GEN_CRD_API_REFERENCE_DOCS) \
 		-api-dir=./api/$* \
@@ -499,7 +490,9 @@ generate-release-notes: $(RELEASE_NOTES_DIR) $(RELEASE_NOTES)
 	if [ -n "${PRE_RELEASE}" ]; then \
 	echo -e ":rotating_light: This is a RELEASE CANDIDATE. Use it only for testing purposes. If you find any bugs, file an [issue](https://github.com/kubernetes-sigs/cluster-api-provider-openstack/issues/new/choose).\n" >> $(RELEASE_NOTES_DIR)/$(RELEASE_TAG).md; \
 	fi
-	"$(RELEASE_NOTES)" --from=$(PREVIOUS_TAG) >> $(RELEASE_NOTES_DIR)/$(RELEASE_TAG).md
+	"$(RELEASE_NOTES)" --repository=kubernetes-sigs/cluster-api-provider-openstack \
+	  --prefix-area-label=false --add-kubernetes-version-support=false \
+	  --from=$(PREVIOUS_TAG) --release=$(RELEASE_TAG) >> $(RELEASE_NOTES_DIR)/$(RELEASE_TAG).md
 
 .PHONY: templates
 templates: ## Generate cluster templates
@@ -517,6 +510,8 @@ templates/cluster-template-%.yaml: kustomize/v1beta1/% $(KUSTOMIZE) FORCE
 .PHONY: release-templates
 release-templates: $(RELEASE_DIR) templates ## Generate release templates
 	cp templates/cluster-template*.yaml $(RELEASE_DIR)/
+	cp templates/clusterclass*.yaml $(RELEASE_DIR)/
+	cp templates/image-template*.yaml $(RELEASE_DIR)/
 
 IMAGE_PATCH_DIR := $(ARTIFACTS)/image-patch
 
@@ -613,8 +608,8 @@ verify-container-images: ## Verify container images
 
 .PHONY: verify-govulncheck
 verify-govulncheck: $(GOVULNCHECK) ## Verify code for vulnerabilities
-	$(GOVULNCHECK) ./... && R1=$$? || R1=$$?; \
-	$(GOVULNCHECK) -C "$(TOOLS_DIR)" ./... && R2=$$? || R2=$$?; \
+	$(GOVULNCHECK) $(GOVULNCHECK_ARGS) ./... && R1=$$? || R1=$$?; \
+	$(GOVULNCHECK) $(GOVULNCHECK_ARGS) -C "$(TOOLS_DIR)" ./... && R2=$$? || R2=$$?; \
 	if [ "$$R1" -ne "0" ] || [ "$$R2" -ne "0" ]; then \
 		exit 1; \
 	fi
@@ -626,17 +621,6 @@ verify-security: ## Verify code and images for vulnerabilities
 	if [ "$$R1" -ne "0" ] || [ "$$R2" -ne "0" ]; then \
 	  echo "Check for vulnerabilities failed! There are vulnerabilities to be fixed"; \
 		exit 1; \
-	fi
-
-.PHONY: vendor verify-vendoring
-vendor:
-	go mod vendor
-	cd $(TOOLS_DIR); go mod vendor
-
-verify-vendoring: vendor
-	@if !(git diff --quiet HEAD); then \
-		git diff; \
-		echo "vendored files are out of date, run go mod vendor"; exit 1; \
 	fi
 
 .PHONY: compile-e2e

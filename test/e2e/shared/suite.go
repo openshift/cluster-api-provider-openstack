@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2021 The Kubernetes Authors.
@@ -63,8 +62,8 @@ func Node1BeforeSuite(ctx context.Context, e2eCtx *E2EContext) []byte {
 	Logf("Loading the e2e test configuration from %q", e2eCtx.Settings.ConfigPath)
 	e2eCtx.E2EConfig = LoadE2EConfig(e2eCtx.Settings.ConfigPath)
 
-	Expect(e2eCtx.E2EConfig.GetVariable(OpenStackCloudYAMLFile)).To(BeAnExistingFile(), "Invalid test suite argument. Value of environment variable OPENSTACK_CLOUD_YAML_FILE should be an existing file: %s", e2eCtx.E2EConfig.GetVariable(OpenStackCloudYAMLFile))
-	Logf("Loading the clouds.yaml from %q", e2eCtx.E2EConfig.GetVariable(OpenStackCloudYAMLFile))
+	Expect(e2eCtx.E2EConfig.MustGetVariable(OpenStackCloudYAMLFile)).To(BeAnExistingFile(), "Invalid test suite argument. Value of environment variable OPENSTACK_CLOUD_YAML_FILE should be an existing file: %s", e2eCtx.E2EConfig.MustGetVariable(OpenStackCloudYAMLFile))
+	Logf("Loading the clouds.yaml from %q", e2eCtx.E2EConfig.MustGetVariable(OpenStackCloudYAMLFile))
 
 	templates := []clusterctl.Files{}
 
@@ -155,10 +154,7 @@ func Node1BeforeSuite(ctx context.Context, e2eCtx *E2EContext) []byte {
 	e2eCtx.Environment.BootstrapClusterProvider, e2eCtx.Environment.BootstrapClusterProxy = setupBootstrapCluster(e2eCtx.E2EConfig, e2eCtx.Environment.Scheme, e2eCtx.Settings.UseExistingCluster)
 
 	Logf("Initializing the bootstrap cluster")
-	initBootstrapCluster(e2eCtx)
-
-	// Create credentials used by all glance images
-	CreateGlanceCredentials(ctx, e2eCtx)
+	initBootstrapCluster(ctx, e2eCtx)
 
 	conf := synchronizedBeforeTestSuiteConfig{
 		ArtifactFolder:          e2eCtx.Settings.ArtifactFolder,
@@ -196,8 +192,8 @@ func AllNodesBeforeSuite(e2eCtx *E2EContext, data []byte) {
 	e2eCtx.Settings.GinkgoNodes = conf.GinkgoNodes
 	e2eCtx.Settings.GinkgoSlowSpecThreshold = conf.GinkgoSlowSpecThreshold
 
-	openStackCloudYAMLFile := e2eCtx.E2EConfig.GetVariable(OpenStackCloudYAMLFile)
-	openStackCloud := e2eCtx.E2EConfig.GetVariable(OpenStackCloud)
+	openStackCloudYAMLFile := e2eCtx.E2EConfig.MustGetVariable(OpenStackCloudYAMLFile)
+	openStackCloud := e2eCtx.E2EConfig.MustGetVariable(OpenStackCloud)
 	SetEnvVar("OPENSTACK_CLOUD_YAML_B64", getEncodedOpenStackCloudYAML(openStackCloudYAMLFile), true)
 	SetEnvVar("OPENSTACK_CLOUD_PROVIDER_CONF_B64", getEncodedOpenStackCloudProviderConf(openStackCloudYAMLFile, openStackCloud), true)
 	SetEnvVar("OPENSTACK_SSH_KEY_NAME", DefaultSSHKeyPairName, false)

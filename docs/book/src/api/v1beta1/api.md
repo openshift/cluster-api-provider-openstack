@@ -331,9 +331,7 @@ Kubernetes cluster, which also disables SecurityGroups</p>
 <td>
 <code>controlPlaneEndpoint</code><br/>
 <em>
-<a href="https://doc.crds.dev/github.com/kubernetes-sigs/cluster-api@v1.6.0">
-sigs.k8s.io/cluster-api/api/v1beta1.APIEndpoint
-</a>
+sigs.k8s.io/cluster-api/api/core/v1beta1.APIEndpoint
 </em>
 </td>
 <td>
@@ -983,6 +981,87 @@ string
 <td>
 <em>(Optional)</em>
 <p>Flavor is the flavor name that will be used to create the APIServerLoadBalancer Spec.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>monitor</code><br/>
+<em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.APIServerLoadBalancerMonitor">
+APIServerLoadBalancerMonitor
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Monitor contains configuration for the load balancer health monitor.</p>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="infrastructure.cluster.x-k8s.io/v1beta1.APIServerLoadBalancerMonitor">APIServerLoadBalancerMonitor
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.APIServerLoadBalancer">APIServerLoadBalancer</a>)
+</p>
+<p>
+<p>APIServerLoadBalancerMonitor contains configuration for the load balancer health monitor.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>delay</code><br/>
+<em>
+int
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Delay is the time in seconds between sending probes to members.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>timeout</code><br/>
+<em>
+int
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Timeout is the maximum time in seconds for a monitor to wait for a connection to be established before it times out.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>maxRetries</code><br/>
+<em>
+int
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>MaxRetries is the number of successful checks before changing the operating status of the member to ONLINE.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>maxRetriesDown</code><br/>
+<em>
+int
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>MaxRetriesDown is the number of allowed check failures before changing the operating status of the member to ERROR.</p>
 </td>
 </tr>
 </tbody>
@@ -2492,9 +2571,7 @@ Kubernetes cluster, which also disables SecurityGroups</p>
 <td>
 <code>controlPlaneEndpoint</code><br/>
 <em>
-<a href="https://doc.crds.dev/github.com/kubernetes-sigs/cluster-api@v1.6.0">
-sigs.k8s.io/cluster-api/api/v1beta1.APIEndpoint
-</a>
+sigs.k8s.io/cluster-api/api/core/v1beta1.APIEndpoint
 </em>
 </td>
 <td>
@@ -2657,9 +2734,7 @@ LoadBalancer
 <td>
 <code>failureDomains</code><br/>
 <em>
-<a href="https://doc.crds.dev/github.com/kubernetes-sigs/cluster-api@v1.6.0">
-sigs.k8s.io/cluster-api/api/v1beta1.FailureDomains
-</a>
+sigs.k8s.io/cluster-api/api/core/v1beta1.FailureDomains
 </em>
 </td>
 <td>
@@ -3072,9 +3147,7 @@ Kubernetes cluster, which also disables SecurityGroups</p>
 <td>
 <code>controlPlaneEndpoint</code><br/>
 <em>
-<a href="https://doc.crds.dev/github.com/kubernetes-sigs/cluster-api@v1.6.0">
-sigs.k8s.io/cluster-api/api/v1beta1.APIEndpoint
-</a>
+sigs.k8s.io/cluster-api/api/core/v1beta1.APIEndpoint
 </em>
 </td>
 <td>
@@ -3621,9 +3694,7 @@ controller&rsquo;s output.</p>
 <td>
 <code>conditions</code><br/>
 <em>
-<a href="https://doc.crds.dev/github.com/kubernetes-sigs/cluster-api@v1.6.0">
-sigs.k8s.io/cluster-api/api/v1beta1.Conditions
-</a>
+sigs.k8s.io/cluster-api/api/core/v1beta1.Conditions
 </em>
 </td>
 <td>

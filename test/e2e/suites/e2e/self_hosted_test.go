@@ -1,5 +1,4 @@
 //go:build e2e
-// +build e2e
 
 /*
 Copyright 2022 The Kubernetes Authors.
@@ -29,9 +28,7 @@ import (
 )
 
 var _ = Describe("When testing Cluster API provider Openstack working on [self-hosted] clusters", func() {
-	BeforeEach(func(ctx context.Context) {
-		shared.ApplyCoreImagesPlus(ctx, e2eCtx, upgradeImage)
-
+	BeforeEach(func() {
 		setDownloadE2EImageEnvVar()
 	})
 

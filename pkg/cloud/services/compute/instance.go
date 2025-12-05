@@ -33,7 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	orcv1alpha1 "github.com/k-orc/openstack-resource-controller/api/v1alpha1"
+	orcv1alpha1 "github.com/k-orc/openstack-resource-controller/v2/api/v1alpha1"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
@@ -65,8 +65,7 @@ func (s *Service) createInstanceImpl(eventObject runtime.Object, instanceSpec *I
 		})
 	}
 
-	instanceCreateTimeout := getTimeout("CLUSTER_API_OPENSTACK_INSTANCE_CREATE_TIMEOUT", timeoutInstanceCreate)
-	instanceCreateTimeout *= time.Minute
+	instanceCreateTimeout := getTimeout("CLUSTER_API_OPENSTACK_INSTANCE_CREATE_TIMEOUT", timeoutInstanceCreate, time.Minute)
 
 	// Don't set ImageRef on the server if we're booting from volume
 	var serverImageRef string
@@ -311,7 +310,8 @@ func (s *Service) getBlockDevices(eventObject runtime.Object, instanceSpec *Inst
 			return nil, fmt.Errorf("block device name 'root' is reserved")
 		}
 
-		if blockDeviceSpec.Storage.Type == infrav1.VolumeBlockDevice {
+		switch blockDeviceSpec.Storage.Type {
+		case infrav1.VolumeBlockDevice:
 			blockDevice, err := s.getOrCreateVolumeBuilder(eventObject, instanceSpec, &blockDeviceSpec, "", fmt.Sprintf("Additional block device for %s", instanceSpec.Name))
 			if err != nil {
 				return nil, err
@@ -319,11 +319,11 @@ func (s *Service) getBlockDevices(eventObject runtime.Object, instanceSpec *Inst
 			bdUUID = blockDevice.ID
 			sourceType = servers.SourceVolume
 			destinationType = servers.DestinationVolume
-		} else if blockDeviceSpec.Storage.Type == infrav1.LocalBlockDevice {
+		case infrav1.LocalBlockDevice:
 			sourceType = servers.SourceBlank
 			destinationType = servers.DestinationLocal
 			localDiskSizeGiB = blockDeviceSpec.SizeGiB
-		} else {
+		default:
 			return nil, fmt.Errorf("invalid block device type %s", blockDeviceSpec.Storage.Type)
 		}
 
@@ -605,14 +605,14 @@ func (s *Service) GetInstanceStatusByName(eventObject runtime.Object, name strin
 	return nil, nil
 }
 
-func getTimeout(name string, timeout int) time.Duration {
+func getTimeout(name string, timeout int, unit time.Duration) time.Duration {
 	if v := os.Getenv(name); v != "" {
 		timeout, err := strconv.Atoi(v)
 		if err == nil {
-			return time.Duration(timeout)
+			return time.Duration(timeout) * unit
 		}
 	}
-	return time.Duration(timeout)
+	return time.Duration(timeout) * unit
 }
 
 // requiresTagging checks if the instanceSpec requires tagging,
