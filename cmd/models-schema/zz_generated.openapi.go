@@ -23485,12 +23485,6 @@ func schema_cluster_api_api_core_v1beta1_MachineDeploymentSpec(ref common.Refere
 							Ref:         ref("sigs.k8s.io/cluster-api/api/core/v1beta1.MachineNamingStrategy"),
 						},
 					},
-					"machineNamingStrategy": {
-						SchemaProps: spec.SchemaProps{
-							Description: "machineNamingStrategy allows changing the naming pattern used when creating Machines. Note: InfraMachines & BootstrapConfigs will use the same name as the corresponding Machines.",
-							Ref:         ref("sigs.k8s.io/cluster-api/api/v1beta1.MachineNamingStrategy"),
-						},
-					},
 					"minReadySeconds": {
 						SchemaProps: spec.SchemaProps{
 							Description: "minReadySeconds is the minimum number of seconds for which a Node for a newly created machine should be ready before considering the replica available. Defaults to 0 (machine will be considered available as soon as the Node is ready)",
@@ -25422,12 +25416,6 @@ func schema_cluster_api_api_core_v1beta1_MachineSetSpec(ref common.ReferenceCall
 						SchemaProps: spec.SchemaProps{
 							Description: "machineNamingStrategy allows changing the naming pattern used when creating Machines. Note: InfraMachines & BootstrapConfigs will use the same name as the corresponding Machines.",
 							Ref:         ref("sigs.k8s.io/cluster-api/api/core/v1beta1.MachineNamingStrategy"),
-						},
-					},
-					"machineNamingStrategy": {
-						SchemaProps: spec.SchemaProps{
-							Description: "machineNamingStrategy allows changing the naming pattern used when creating Machines. Note: InfraMachines & BootstrapConfigs will use the same name as the corresponding Machines.",
-							Ref:         ref("sigs.k8s.io/cluster-api/api/v1beta1.MachineNamingStrategy"),
 						},
 					},
 				},

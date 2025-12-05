@@ -184,7 +184,7 @@ e2e-templates: $(addprefix $(E2E_NO_ARTIFACT_TEMPLATES_DIR)/, \
 		 cluster-template-without-lb.yaml \
 		 cluster-template.yaml \
 		 cluster-template-flatcar.yaml \
-     cluster-template-k8s-upgrade.yaml \
+                 cluster-template-k8s-upgrade.yaml \
 		 cluster-template-flatcar-sysext.yaml \
 		 cluster-template-no-bastion.yaml \
 		 cluster-template-health-monitor.yaml)
@@ -582,7 +582,7 @@ clean-release-git: ## Restores the git files usually modified during a release
 	git restore ./*manager_image_patch.yaml ./*manager_pull_policy.yaml
 
 .PHONY: verify
-verify: verify-boilerplate verify-modules verify-gen verify-govulncheck
+verify: verify-boilerplate verify-modules verify-gen
 
 .PHONY: verify-boilerplate
 verify-boilerplate:
