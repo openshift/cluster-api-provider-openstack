@@ -28,7 +28,6 @@ import (
 	"sigs.k8s.io/kind/pkg/cmd"
 	"sigs.k8s.io/kind/pkg/exec"
 
-	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/test/framework/internal/log"
 )
 
@@ -37,7 +36,7 @@ const (
 	DefaultNodeImageRepository = "kindest/node"
 
 	// DefaultNodeImageVersion is the default Kubernetes version to be used for creating a kind cluster.
-	DefaultNodeImageVersion = "v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+	DefaultNodeImageVersion = "v1.34.0@sha256:7416a61b42b1662ca6ca89f02028ac133a309a2a30ba309614e8ec94d976dc5a"
 )
 
 // KindClusterOption is a NewKindClusterProvider option.
@@ -70,7 +69,7 @@ func WithDockerSockMount() KindClusterOption {
 // the new kind cluster.
 func WithIPv6Family() KindClusterOption {
 	return kindClusterOptionAdapter(func(k *KindClusterProvider) {
-		k.ipFamily = clusterv1.IPv6IPFamily
+		k.ipFamily = kindv1.IPv6Family
 	})
 }
 
@@ -78,7 +77,7 @@ func WithIPv6Family() KindClusterOption {
 // the new kind cluster.
 func WithDualStackFamily() KindClusterOption {
 	return kindClusterOptionAdapter(func(k *KindClusterProvider) {
-		k.ipFamily = clusterv1.DualStackIPFamily
+		k.ipFamily = kindv1.DualStackFamily
 	})
 }
 
@@ -115,7 +114,7 @@ type KindClusterProvider struct {
 	withDockerSock    bool
 	kubeconfigPath    string
 	nodeImage         string
-	ipFamily          clusterv1.ClusterIPFamily
+	ipFamily          kindv1.ClusterIPFamily
 	logFolder         string
 	extraPortMappings []kindv1.PortMapping
 }
@@ -149,21 +148,25 @@ func (k *KindClusterProvider) createKindCluster() {
 		},
 		Nodes: []kindv1.Node{
 			{
+				Role:              kindv1.ControlPlaneRole,
 				ExtraPortMappings: k.extraPortMappings,
 			},
 		},
 	}
 
-	if k.ipFamily == clusterv1.IPv6IPFamily {
+	if k.ipFamily == kindv1.IPv6Family {
 		cfg.Networking.IPFamily = kindv1.IPv6Family
 	}
-	if k.ipFamily == clusterv1.DualStackIPFamily {
+	if k.ipFamily == kindv1.DualStackFamily {
 		cfg.Networking.IPFamily = kindv1.DualStackFamily
 	}
 	kindv1.SetDefaultsCluster(cfg)
 
 	if k.withDockerSock {
-		setDockerSockConfig(cfg)
+		cfg.Nodes[0].ExtraMounts = append(cfg.Nodes[0].ExtraMounts, kindv1.Mount{
+			HostPath:      "/var/run/docker.sock",
+			ContainerPath: "/var/run/docker.sock",
+		})
 	}
 
 	kindCreateOptions = append(kindCreateOptions, kind.CreateWithV1Alpha4Config(cfg))
@@ -194,21 +197,6 @@ func (k *KindClusterProvider) createKindCluster() {
 			errStr += "\n" + string(runErr.Output)
 		}
 		Expect(err).ToNot(HaveOccurred(), errStr)
-	}
-}
-
-// setDockerSockConfig returns a kind config for mounting /var/run/docker.sock into the kind node.
-func setDockerSockConfig(cfg *kindv1.Cluster) {
-	cfg.Nodes = []kindv1.Node{
-		{
-			Role: kindv1.ControlPlaneRole,
-			ExtraMounts: []kindv1.Mount{
-				{
-					HostPath:      "/var/run/docker.sock",
-					ContainerPath: "/var/run/docker.sock",
-				},
-			},
-		},
 	}
 }
 
