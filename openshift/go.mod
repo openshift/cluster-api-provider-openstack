@@ -4,8 +4,8 @@ go 1.23.0
 
 require (
 	github.com/go-logr/logr v1.4.3
-	github.com/gophercloud/gophercloud/v2 v2.9.0
-	github.com/onsi/ginkgo/v2 v2.27.3
+	github.com/gophercloud/gophercloud/v2 v2.10.0
+	github.com/onsi/ginkgo/v2 v2.27.5
 	github.com/onsi/gomega v1.38.2
 	github.com/openshift/api v0.0.0-20231003083825-c3f7566f6ef6
 	github.com/openshift/cluster-capi-operator/e2e v0.0.0-20250123104340-ddf11cf94960
