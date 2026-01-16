@@ -787,7 +787,7 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(ports).To(HaveLen(len(expectedPorts)))
 
-				var seenNetworks []string
+				seenNetworks := make([]string, 0, len(ports))
 				var seenAddresses clusterv1.MachineAddresses
 				for j := range ports {
 					port := &ports[j]
