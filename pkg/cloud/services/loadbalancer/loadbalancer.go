@@ -249,7 +249,7 @@ func getCanonicalAllowedCIDRs(openStackCluster *infrav1.OpenStackCluster) []stri
 	}
 
 	// Filter invalid CIDRs and convert any IPs into CIDRs.
-	validCIDRs := []string{}
+	validCIDRs := make([]string, 0, len(allowedCIDRs))
 	for _, v := range allowedCIDRs {
 		switch {
 		case utilsnet.IsIPv4String(v):
