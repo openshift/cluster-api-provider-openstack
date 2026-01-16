@@ -27,11 +27,7 @@ unexport GOPATH
 TRACE ?= 0
 
 # Go
-GO_VERSION ?= 1.25.12
-
-# Ensure correct toolchain is used
-GOTOOLCHAIN = go$(GO_VERSION)
-export GOTOOLCHAIN
+GO_VERSION ?= 1.24.12
 
 # Directories.
 ARTIFACTS ?= $(REPO_ROOT)/_artifacts
