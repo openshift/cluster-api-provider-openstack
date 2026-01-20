@@ -56,17 +56,10 @@ func (*openStackClusterWebhook) ValidateCreate(_ context.Context, objRaw runtime
 	}
 
 	if newObj.Spec.ManagedSecurityGroups != nil {
-		for _, rule := range newObj.Spec.ManagedSecurityGroups.AllNodesSecurityGroupRules {
-			if rule.RemoteManagedGroups != nil && (rule.RemoteGroupID != nil || rule.RemoteIPPrefix != nil) {
-				allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "managedSecurityGroups", "allNodesSecurityGroupRules"), "remoteManagedGroups cannot be used with remoteGroupID or remoteIPPrefix"))
-			}
-			if rule.RemoteGroupID != nil && (rule.RemoteManagedGroups != nil || rule.RemoteIPPrefix != nil) {
-				allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "managedSecurityGroups", "allNodesSecurityGroupRules"), "remoteGroupID cannot be used with remoteManagedGroups or remoteIPPrefix"))
-			}
-			if rule.RemoteIPPrefix != nil && (rule.RemoteManagedGroups != nil || rule.RemoteGroupID != nil) {
-				allErrs = append(allErrs, field.Forbidden(field.NewPath("spec", "managedSecurityGroups", "allNodesSecurityGroupRules"), "remoteIPPrefix cannot be used with remoteManagedGroups or remoteGroupID"))
-			}
-		}
+		allErrs = append(allErrs, validateSecurityGroupRulesRemoteMutualExclusionV1Beta1(
+			newObj.Spec.ManagedSecurityGroups.AllNodesSecurityGroupRules,
+			field.NewPath("spec", "managedSecurityGroups", "allNodesSecurityGroupRules"),
+		)...)
 	}
 
 	return aggregateObjErrors(newObj.GroupVersionKind().GroupKind(), newObj.Name, allErrs)
