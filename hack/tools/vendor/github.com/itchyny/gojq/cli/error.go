@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/itchyny/go-yaml"
 	"github.com/mattn/go-runewidth"
 
 	"github.com/itchyny/gojq"
@@ -121,18 +122,24 @@ type yamlParseError struct {
 }
 
 func (err *yamlParseError) Error() string {
-	var line int
-	msg := strings.TrimPrefix(
-		strings.TrimPrefix(err.err.Error(), "yaml: "),
-		"unmarshal errors:\n  ")
-	if _, e := fmt.Sscanf(msg, "line %d: ", &line); e != nil {
-		return "invalid yaml: " + err.fname
+	var index int
+	var message string
+	var pe *yaml.ParserError
+	var te *yaml.TypeError
+	if errors.As(err.err, &pe) {
+		index, message = pe.Index, pe.Message
+	} else if errors.As(err.err, &te) {
+		var ue *yaml.UnmarshalError
+		for _, e := range te.Errors {
+			if errors.As(e, &ue) {
+				index, message = ue.Index, ue.Err.Error()
+				break
+			}
+		}
 	}
-	_, msg, _ = strings.Cut(msg, ": ")
-	msg, _, _ = strings.Cut(msg, "\n")
-	linestr := getLineByLine(err.contents, line)
+	linestr, line, column := getLineByOffset(err.contents, index+1)
 	return fmt.Sprintf("invalid yaml: %s:%d\n%s  %s",
-		err.fname, line, formatLineInfo(linestr, line, 0), msg)
+		err.fname, line, formatLineInfo(linestr, line, column), message)
 }
 
 func getLineByOffset(str string, offset int) (linestr string, line, column int) {
@@ -163,24 +170,6 @@ func getLineByOffset(str string, offset int) (linestr string, line, column int) 
 		offset = len(linestr)
 	}
 	column = runewidth.StringWidth(linestr[:offset])
-	return
-}
-
-func getLineByLine(str string, line int) (linestr string) {
-	ss := &stringScanner{str, 0}
-	for {
-		str, _, ok := ss.next()
-		if !ok {
-			break
-		}
-		if line--; line == 0 {
-			linestr = str
-			break
-		}
-	}
-	if len(linestr) > 64 {
-		linestr = trimLastInvalidRune(linestr[:64])
-	}
 	return
 }
 
