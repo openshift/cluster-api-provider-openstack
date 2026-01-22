@@ -15,7 +15,7 @@
 ROOT_DIR_RELATIVE := ../..
 include $(ROOT_DIR_RELATIVE)/common.mk
 
-GOLANGCI_LINT_VERSION ?= v2.6.2
+GOLANGCI_LINT_VERSION ?= v2.7.2
 
 # GOTESTSUM version without the leading 'v'
 GOTESTSUM_VERSION ?= 1.12.0
@@ -71,6 +71,26 @@ CONVERSION_GEN := $(BIN_DIR)/conversion-gen
 $(CONVERSION_GEN): go.mod go.sum | $(BIN_DIR)
 	go build -tags=tools -o $@ k8s.io/code-generator/cmd/conversion-gen
 
+OPENAPI_GEN := $(BIN_DIR)/openapi-gen
+$(OPENAPI_GEN): go.mod go.sum | $(BIN_DIR)
+	go build -tags=tools -o $@ k8s.io/kube-openapi/cmd/openapi-gen
+
+APPLYCONFIGURATION_GEN := $(BIN_DIR)/applyconfiguration-gen
+$(APPLYCONFIGURATION_GEN): go.mod go.sum | $(BIN_DIR)
+	go build -tags=tools -o $@ k8s.io/code-generator/cmd/applyconfiguration-gen
+
+CLIENT_GEN := $(BIN_DIR)/client-gen
+$(CLIENT_GEN): go.mod go.sum | $(BIN_DIR)
+	go build -tags=tools -o $@ k8s.io/code-generator/cmd/client-gen
+
+LISTER_GEN := $(BIN_DIR)/lister-gen
+$(LISTER_GEN): go.mod go.sum | $(BIN_DIR)
+	go build -tags=tools -o $@ k8s.io/code-generator/cmd/lister-gen
+
+INFORMER_GEN := $(BIN_DIR)/informer-gen
+$(INFORMER_GEN): go.mod go.sum | $(BIN_DIR)
+	go build -tags=tools -o $@ k8s.io/code-generator/cmd/informer-gen
+
 ENVSUBST := $(BIN_DIR)/envsubst
 $(ENVSUBST): go.mod go.sum | $(BIN_DIR) # Build envsubst from tools folder.
 	go build -tags=tools -o $@ github.com/a8m/envsubst/cmd/envsubst
@@ -81,7 +101,7 @@ $(SETUP_ENVTEST): go.mod go.sum | $(BIN_DIR)
 
 GOTESTSUM := $(BIN_DIR)/gotestsum
 $(GOTESTSUM): | $(BIN_DIR)
-	curl -L https://github.com/gotestyourself/gotestsum/releases/download/v$(GOTESTSUM_VERSION)/gotestsum_$(GOTESTSUM_VERSION)_linux_$(ARCH).tar.gz | \
+	curl -L https://github.com/gotestyourself/gotestsum/releases/download/v$(GOTESTSUM_VERSION)/gotestsum_$(GOTESTSUM_VERSION)_$(OS)_$(ARCH).tar.gz | \
 		tar -C $(BIN_DIR) -zxvf - gotestsum
 
 GH_SHARE := $(SHARE_DIR)/gh

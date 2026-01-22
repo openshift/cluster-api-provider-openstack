@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package shared
+package e2eshared
 
 import (
 	"errors"
@@ -36,6 +36,7 @@ import (
 const (
 	DefaultSSHKeyPairName      = "cluster-api-provider-openstack-sigs-k8s-io"
 	KubeContext                = "KUBE_CONTEXT"
+	KubernetesKindVersion      = "KUBERNETES_KIND_VERSION"
 	KubernetesVersion          = "KUBERNETES_VERSION"
 	CCMPath                    = "CCM"
 	CCMResources               = "CCM_RESOURCES"
@@ -51,6 +52,7 @@ const (
 	OpenStackNodeMachineFlavor = "OPENSTACK_NODE_MACHINE_FLAVOR"
 	SSHUserMachine             = "SSH_USER_MACHINE"
 	FlavorDefault              = ""
+	FlavorTopology             = "topology"
 	FlavorNoBastion            = "no-bastion"
 	FlavorWithoutLB            = "without-lb"
 	FlavorMultiNetwork         = "multi-network"
@@ -61,6 +63,9 @@ const (
 	FlavorKubernetesUpgrade    = "k8s-upgrade"
 	FlavorFlatcarSysext        = "flatcar-sysext"
 	FlavorHealthMonitor        = "health-monitor"
+	FlavorCapiV1Beta1          = "capi-v1beta1"
+	FlavorClusterIdentity      = "cluster-identity"
+	FlavorTopologyAutoscaler   = "topology-autoscaler"
 )
 
 // DefaultScheme returns the default scheme to use for testing.

@@ -4,5 +4,5 @@ kind: Kustomization
 resources:
 - ../default
 
-patchesStrategicMerge:
-- patch-cluster-health-monitor.yaml
+patches:
+- path: patch-cluster-health-monitor.yaml

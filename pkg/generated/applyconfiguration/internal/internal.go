@@ -22,7 +22,7 @@ import (
 	fmt "fmt"
 	sync "sync"
 
-	typed "sigs.k8s.io/structured-merge-diff/v4/typed"
+	typed "sigs.k8s.io/structured-merge-diff/v6/typed"
 )
 
 func Parser() *typed.Parser {
@@ -73,6 +73,8 @@ var schemaYAML = typed.YAMLObject(`types:
         scalar: string
       default: ""
     elementRelationship: atomic
+- name: io.k8s.apimachinery.pkg.api.resource.Quantity
+  scalar: untyped
 - name: io.k8s.apimachinery.pkg.apis.meta.v1.FieldsV1
   map:
     elementType:
@@ -85,6 +87,38 @@ var schemaYAML = typed.YAMLObject(`types:
         elementType:
           namedType: __untyped_deduced_
         elementRelationship: separable
+- name: io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector
+  map:
+    fields:
+    - name: matchExpressions
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelectorRequirement
+          elementRelationship: atomic
+    - name: matchLabels
+      type:
+        map:
+          elementType:
+            scalar: string
+    elementRelationship: atomic
+- name: io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelectorRequirement
+  map:
+    fields:
+    - name: key
+      type:
+        scalar: string
+      default: ""
+    - name: operator
+      type:
+        scalar: string
+      default: ""
+    - name: values
+      type:
+        list:
+          elementType:
+            scalar: string
+          elementRelationship: atomic
 - name: io.k8s.apimachinery.pkg.apis.meta.v1.ManagedFieldsEntry
   map:
     fields:
@@ -200,6 +234,44 @@ var schemaYAML = typed.YAMLObject(`types:
     elementRelationship: atomic
 - name: io.k8s.apimachinery.pkg.apis.meta.v1.Time
   scalar: untyped
+- name: io.k8s.sigs.cluster-api-provider-openstack.api.v1alpha1.OpenStackClusterIdentity
+  map:
+    fields:
+    - name: apiVersion
+      type:
+        scalar: string
+    - name: kind
+      type:
+        scalar: string
+    - name: metadata
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta
+      default: {}
+    - name: spec
+      type:
+        namedType: io.k8s.sigs.cluster-api-provider-openstack.api.v1alpha1.OpenStackClusterIdentitySpec
+      default: {}
+- name: io.k8s.sigs.cluster-api-provider-openstack.api.v1alpha1.OpenStackClusterIdentitySpec
+  map:
+    fields:
+    - name: namespaceSelector
+      type:
+        namedType: io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector
+    - name: secretRef
+      type:
+        namedType: io.k8s.sigs.cluster-api-provider-openstack.api.v1alpha1.OpenStackCredentialSecretReference
+      default: {}
+- name: io.k8s.sigs.cluster-api-provider-openstack.api.v1alpha1.OpenStackCredentialSecretReference
+  map:
+    fields:
+    - name: name
+      type:
+        scalar: string
+      default: ""
+    - name: namespace
+      type:
+        scalar: string
+      default: ""
 - name: io.k8s.sigs.cluster-api-provider-openstack.api.v1alpha1.OpenStackServer
   map:
     fields:
@@ -528,6 +600,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: type
       type:
         scalar: string
+- name: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.ClusterInitialization
+  map:
+    fields:
+    - name: provisioned
+      type:
+        scalar: boolean
 - name: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.ExternalRouterIPParam
   map:
     fields:
@@ -605,6 +683,12 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             scalar: string
           elementRelationship: atomic
+- name: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.MachineInitialization
+  map:
+    fields:
+    - name: provisioned
+      type:
+        scalar: boolean
 - name: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.MachineResources
   map:
     fields:
@@ -730,6 +814,12 @@ var schemaYAML = typed.YAMLObject(`types:
           elementType:
             scalar: string
           elementRelationship: atomic
+- name: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.NodeInfo
+  map:
+    fields:
+    - name: operatingSystem
+      type:
+        scalar: string
 - name: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.OpenStackCluster
   map:
     fields:
@@ -845,6 +935,12 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: bastionSecurityGroup
       type:
         namedType: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.SecurityGroupStatus
+    - name: conditions
+      type:
+        list:
+          elementType:
+            namedType: io.k8s.sigs.cluster-api.api.core.v1beta1.Condition
+          elementRelationship: atomic
     - name: controlPlaneSecurityGroup
       type:
         namedType: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.SecurityGroupStatus
@@ -862,6 +958,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: failureReason
       type:
         scalar: string
+    - name: initialization
+      type:
+        namedType: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.ClusterInitialization
     - name: network
       type:
         namedType: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.NetworkStatusWithSubnets
@@ -918,6 +1017,9 @@ var schemaYAML = typed.YAMLObject(`types:
         scalar: string
       default: ""
     - name: region
+      type:
+        scalar: string
+    - name: type
       type:
         scalar: string
 - name: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.OpenStackMachine
@@ -1041,6 +1143,9 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: failureReason
       type:
         scalar: string
+    - name: initialization
+      type:
+        namedType: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.MachineInitialization
     - name: instanceID
       type:
         scalar: string
@@ -1074,6 +1179,10 @@ var schemaYAML = typed.YAMLObject(`types:
       type:
         namedType: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.OpenStackMachineTemplateSpec
       default: {}
+    - name: status
+      type:
+        namedType: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.OpenStackMachineTemplateStatus
+      default: {}
 - name: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.OpenStackMachineTemplateResource
   map:
     fields:
@@ -1087,6 +1196,18 @@ var schemaYAML = typed.YAMLObject(`types:
     - name: template
       type:
         namedType: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.OpenStackMachineTemplateResource
+      default: {}
+- name: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.OpenStackMachineTemplateStatus
+  map:
+    fields:
+    - name: capacity
+      type:
+        map:
+          elementType:
+            namedType: io.k8s.apimachinery.pkg.api.resource.Quantity
+    - name: nodeInfo
+      type:
+        namedType: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.NodeInfo
       default: {}
 - name: io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.PortOpts
   map:

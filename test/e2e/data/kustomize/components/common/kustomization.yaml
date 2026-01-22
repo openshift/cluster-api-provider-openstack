@@ -1,0 +1,42 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+components:
+- ../images
+patches:
+# Set AZ and enable bastion
+- target:
+    kind: OpenStackCluster
+    name: \${CLUSTER_NAME}
+  path: patch-cluster.yaml
+# Use network name instead of ID for external network
+- patch: |-
+    - op: "remove"
+      path: "/spec/externalNetwork"
+    - op: "add"
+      path: "/spec/externalNetwork"
+      value:
+        filter:
+          name: "${OPENSTACK_EXTERNAL_NETWORK_NAME}"
+  target:
+    kind: OpenStackCluster
+# Use ORC image references
+- target:
+    group: infrastructure.cluster.x-k8s.io
+    version: v1beta1
+    kind: OpenStackMachineTemplate
+  patch: |-
+    - op: replace
+      path: /spec/template/spec/image
+      value:
+        imageRef:
+          name: node-image
+- target:
+    group: infrastructure.cluster.x-k8s.io
+    version: v1beta1
+    kind: OpenStackCluster
+  patch: |-
+    - op: replace
+      path: /spec/bastion/spec/image
+      value:
+        imageRef:
+          name: bastion-image

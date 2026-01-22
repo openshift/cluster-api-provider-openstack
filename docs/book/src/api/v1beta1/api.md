@@ -857,6 +857,18 @@ OpenStackMachineTemplateResource
 </table>
 </td>
 </tr>
+<tr>
+<td>
+<code>status</code><br/>
+<em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.OpenStackMachineTemplateStatus">
+OpenStackMachineTemplateStatus
+</a>
+</em>
+</td>
+<td>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="infrastructure.cluster.x-k8s.io/v1beta1.APIServerLoadBalancer">APIServerLoadBalancer
@@ -1565,6 +1577,38 @@ availability zone.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="infrastructure.cluster.x-k8s.io/v1beta1.ClusterInitialization">ClusterInitialization
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.OpenStackClusterStatus">OpenStackClusterStatus</a>)
+</p>
+<p>
+<p>ClusterInitialization represents the initialization status of the cluster.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>provisioned</code><br/>
+<em>
+bool
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Provisioned is set to true when the initial provisioning of the cluster infrastructure is completed.
+The value of this field is never updated after provisioning is completed.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="infrastructure.cluster.x-k8s.io/v1beta1.ExternalRouterIPParam">ExternalRouterIPParam
 </h3>
 <p>
@@ -1956,6 +2000,38 @@ subnet in the list is taken into account.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="infrastructure.cluster.x-k8s.io/v1beta1.MachineInitialization">MachineInitialization
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.OpenStackMachineStatus">OpenStackMachineStatus</a>)
+</p>
+<p>
+<p>MachineInitialization contains information about the initialization status of the machine.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>provisioned</code><br/>
+<em>
+bool
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Provisioned is set to true when the initial provisioning of the machine infrastructure is completed.
+The value of this field is never updated after provisioning is completed.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="infrastructure.cluster.x-k8s.io/v1beta1.MachineResources">MachineResources
 </h3>
 <p>
@@ -2289,6 +2365,38 @@ NetworkStatus
 <p>NeutronTag represents a tag on a Neutron resource.
 It may not be empty and may not contain commas.</p>
 </p>
+<h3 id="infrastructure.cluster.x-k8s.io/v1beta1.NodeInfo">NodeInfo
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.OpenStackMachineTemplateStatus">OpenStackMachineTemplateStatus</a>)
+</p>
+<p>
+<p>NodeInfo contains information about the node&rsquo;s architecture and operating system.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>operatingSystem</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>operatingSystem is a string representing the operating system of the node.
+This may be a string like &lsquo;linux&rsquo; or &lsquo;windows&rsquo;.</p>
+</td>
+</tr>
+</tbody>
+</table>
 <h3 id="infrastructure.cluster.x-k8s.io/v1beta1.OpenStackClusterSpec">OpenStackClusterSpec
 </h3>
 <p>
@@ -2672,6 +2780,22 @@ bool
 </td>
 <td>
 <p>Ready is true when the cluster infrastructure is ready.</p>
+<p>Deprecated: This field is deprecated and will be removed in a future API version.
+Use status.conditions to determine the ready state of the cluster.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>initialization</code><br/>
+<em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.ClusterInitialization">
+ClusterInitialization
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Initialization contains information about the initialization status of the cluster.</p>
 </td>
 </tr>
 <tr>
@@ -2824,6 +2948,8 @@ responsible controller itself being critically misconfigured.</p>
 <p>Any transient errors that occur during the reconciliation of
 OpenStackClusters can be added as events to the OpenStackCluster object
 and/or logged in the controller&rsquo;s output.</p>
+<p>Deprecated: This field is deprecated and will be removed in a future API version.
+Use status.conditions to report failures.</p>
 </td>
 </tr>
 <tr>
@@ -2849,6 +2975,23 @@ responsible controller itself being critically misconfigured.</p>
 <p>Any transient errors that occur during the reconciliation of
 OpenStackClusters can be added as events to the OpenStackCluster object
 and/or logged in the controller&rsquo;s output.</p>
+<p>Deprecated: This field is deprecated and will be removed in a future API version.
+Use status.conditions to report failures.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>conditions</code><br/>
+<em>
+sigs.k8s.io/cluster-api/api/core/v1beta1.Conditions
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Conditions defines current service state of the OpenStackCluster.
+This field surfaces into Cluster&rsquo;s status.conditions[InfrastructureReady] condition.
+The Ready condition must surface issues during the entire lifecycle of the OpenStackCluster
+(both during initial provisioning and after the initial provisioning is completed).</p>
 </td>
 </tr>
 </tbody>
@@ -3277,15 +3420,27 @@ provider identity to be used to provision cluster resources.</p>
 <tbody>
 <tr>
 <td>
+<code>type</code><br/>
+<em>
+string
+</em>
+</td>
+<td>
+<p>Type specifies the identity reference type. Defaults to Secret for backward compatibility.</p>
+</td>
+</tr>
+<tr>
+<td>
 <code>name</code><br/>
 <em>
 string
 </em>
 </td>
 <td>
-<p>Name is the name of a secret in the same namespace as the resource being provisioned.
-The secret must contain a key named <code>clouds.yaml</code> which contains an OpenStack clouds.yaml file.
-The secret may optionally contain a key named <code>cacert</code> containing a PEM-encoded CA certificate.</p>
+<p>Name is the name of a Secret (type=Secret) in the same namespace as the resource being provisioned,
+or the name of an OpenStackClusterIdentity (type=ClusterIdentity).
+The Secret must contain a key named <code>clouds.yaml</code> which contains an OpenStack clouds.yaml file.
+The Secret may optionally contain a key named <code>cacert</code> containing a PEM-encoded CA certificate.</p>
 </td>
 </tr>
 <tr>
@@ -3585,6 +3740,22 @@ bool
 <td>
 <em>(Optional)</em>
 <p>Ready is true when the provider resource is ready.</p>
+<p>Deprecated: This field is deprecated and will be removed in a future API version.
+Use status.conditions to determine the ready state of the machine.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>initialization</code><br/>
+<em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.MachineInitialization">
+MachineInitialization
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Initialization contains information about the initialization status of the machine.</p>
 </td>
 </tr>
 <tr>
@@ -3663,6 +3834,10 @@ sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/errors.DeprecatedCAPIMachin
 </em>
 </td>
 <td>
+<em>(Optional)</em>
+<p>FailureReason explains the reson behind a failure.</p>
+<p>Deprecated: This field is deprecated and will be removed in a future API version.
+Use status.conditions to report failures.</p>
 </td>
 </tr>
 <tr>
@@ -3688,6 +3863,8 @@ responsible controller itself being critically misconfigured.</p>
 <p>Any transient errors that occur during the reconciliation of Machines
 can be added as events to the Machine object and/or logged in the
 controller&rsquo;s output.</p>
+<p>Deprecated: This field is deprecated and will be removed in a future API version.
+Use status.conditions to report failures.</p>
 </td>
 </tr>
 <tr>
@@ -3698,6 +3875,11 @@ sigs.k8s.io/cluster-api/api/core/v1beta1.Conditions
 </em>
 </td>
 <td>
+<em>(Optional)</em>
+<p>Conditions defines current service state of the OpenStackMachine.
+This field surfaces into Machine&rsquo;s status.conditions[InfrastructureReady] condition.
+The Ready condition must surface issues during the entire lifecycle of the OpenStackMachine
+(both during initial provisioning and after the initial provisioning is completed).</p>
 </td>
 </tr>
 </tbody>
@@ -3987,6 +4169,52 @@ OpenStackMachineTemplateResource
 </em>
 </td>
 <td>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 id="infrastructure.cluster.x-k8s.io/v1beta1.OpenStackMachineTemplateStatus">OpenStackMachineTemplateStatus
+</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.OpenStackMachineTemplate">OpenStackMachineTemplate</a>)
+</p>
+<p>
+<p>OpenStackMachineTemplateStatus defines the observed state of OpenStackMachineTemplate.</p>
+</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>capacity</code><br/>
+<em>
+Kubernetes core/v1.ResourceList
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>Capacity defines the resource capacity for this machine.
+This value is used for autoscaling from zero operations as defined in:
+<a href="https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20210310-opt-in-autoscaling-from-zero.md">https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20210310-opt-in-autoscaling-from-zero.md</a></p>
+</td>
+</tr>
+<tr>
+<td>
+<code>nodeInfo,omitempty,omitzero</code><br/>
+<em>
+<a href="#infrastructure.cluster.x-k8s.io/v1beta1.NodeInfo">
+NodeInfo
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
 </td>
 </tr>
 </tbody>

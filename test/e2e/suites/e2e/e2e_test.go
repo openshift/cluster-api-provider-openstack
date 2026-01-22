@@ -60,7 +60,7 @@ import (
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-openstack/internal/util/ssa"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/generated/applyconfiguration/api/v1beta1"
-	"sigs.k8s.io/cluster-api-provider-openstack/test/e2e/shared"
+	shared "sigs.k8s.io/cluster-api-provider-openstack/test/e2e/shared"
 )
 
 const specName = "e2e"
@@ -187,6 +187,26 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 			// We expect 4 security group rules that allow Calico traffic on the control plane
 			// from both the control plane and worker machines and vice versa, that makes 8 rules.
 			Expect(calicoSGRules).To(Equal(8))
+
+			infraRef := md[0].Spec.Template.Spec.InfrastructureRef
+			Expect(infraRef.Kind).To(Equal("OpenStackMachineTemplate"))
+
+			tmplKey := apimachinerytypes.NamespacedName{
+				Namespace: namespace.Name,
+				Name:      infraRef.Name,
+			}
+
+			// We expect OpenStackMachineTemplate.status.capacity to be set
+			// by the OpenStackMachineTemplate controller
+			shared.Logf("Check the OpenStackMachineTemplate.status")
+			Eventually(func(g Gomega) {
+				var tmpl infrav1.OpenStackMachineTemplate
+				err := e2eCtx.Environment.BootstrapClusterProxy.GetClient().Get(ctx, tmplKey, &tmpl)
+				g.Expect(err).NotTo(HaveOccurred())
+
+				g.Expect(tmpl.Status.Capacity).NotTo(BeNil(), "status.capacity should be initialized")
+				g.Expect(tmpl.Status.Capacity).NotTo(BeEmpty(), "status.capacity should not be empty")
+			}, e2eCtx.E2EConfig.GetIntervals(specName, "wait-machine-status")...).Should(Succeed())
 
 			shared.Logf("Check the bastion")
 			openStackCluster, err = shared.ClusterForSpec(ctx, e2eCtx, namespace)
@@ -327,6 +347,33 @@ var _ = Describe("e2e tests [PR-Blocking]", func() {
 			securityGroupsList, err = shared.DumpOpenStackSecurityGroups(e2eCtx, groups.ListOpts{Tags: clusterName})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(securityGroupsList).To(HaveLen(3))
+		})
+	})
+
+	Describe("Workload cluster (cluster-identity)", func() {
+		It("should be creatable and deletable", func(ctx context.Context) {
+			shared.Logf("Creating a cluster with ClusterIdentity")
+			clusterName := fmt.Sprintf("cluster-%s", namespace.Name)
+			configCluster := defaultConfigCluster(clusterName, namespace.Name)
+			configCluster.ControlPlaneMachineCount = ptr.To(int64(1))
+			configCluster.WorkerMachineCount = ptr.To(int64(1))
+			configCluster.Flavor = shared.FlavorClusterIdentity
+			createCluster(ctx, configCluster, clusterResources)
+
+			md := clusterResources.MachineDeployments
+			workerMachines := framework.GetMachinesByMachineDeployments(ctx, framework.GetMachinesByMachineDeploymentsInput{
+				Lister:            e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
+				ClusterName:       clusterName,
+				Namespace:         namespace.Name,
+				MachineDeployment: *md[0],
+			})
+			controlPlaneMachines := framework.GetControlPlaneMachinesByCluster(ctx, framework.GetControlPlaneMachinesByClusterInput{
+				Lister:      e2eCtx.Environment.BootstrapClusterProxy.GetClient(),
+				ClusterName: clusterName,
+				Namespace:   namespace.Name,
+			})
+			Expect(workerMachines).To(HaveLen(int(*configCluster.WorkerMachineCount)))
+			Expect(controlPlaneMachines).To(HaveLen(int(*configCluster.ControlPlaneMachineCount)))
 		})
 	})
 
