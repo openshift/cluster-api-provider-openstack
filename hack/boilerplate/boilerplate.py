@@ -160,7 +160,6 @@ prune_dirs = [
     '.git',
     '.tiltbuild',
     'vendor',
-    'orc',
     'openshift',
 ]
 

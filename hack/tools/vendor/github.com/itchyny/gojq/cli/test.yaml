@@ -73,9 +73,13 @@
 - name: number input
   args:
     - '.'
-  input: '128'
+  input: '128 3.14 10.0 6.02e23 5e1000'
   expected: |
     128
+    3.14
+    10.0
+    6.02e23
+    5e1000
 
 - name: number query
   args:
@@ -336,6 +340,13 @@
   expected: |
     4722366482869645213696
 
+- name: object indexing with floating-point number with trailing zeros
+  args:
+    - '.foo'
+  input: '{"foo": 100.000}'
+  expected: |
+    100.000
+
 - name: object indexing by keywords
   args:
     - '.and,.or,.try'
@@ -542,6 +553,17 @@
     [[],[],[0],[0,1],[],[0],[0,1],[0,1,2]]
     [[],[],[],[],[2],[0,1],[],[0],[0,1],[0,1,2],[1],[],[],[1],[1,2],[],[],[],[],[2],[],[],[],[],[]]
 
+- name: array indexing and slicing by floating-point number
+  args:
+    - -c
+    - '[.[-2.8,-1.2,0.3,1.7,2.2]], [.[0.3,1.7:]], [.[:0.3,1.7]], [.[0.3,1.7,2.2:0.3,1.7,2.2]]'
+  input: '[0, 1, 2]'
+  expected: |
+    [1,2,0,1,2]
+    [[0,1,2],[1,2]]
+    [[0],[0,1]]
+    [[0],[0,1],[0,1,2],[],[1],[1,2],[],[],[2]]
+
 - name: array indexing and slicing by large number
   args:
     - -c
@@ -702,13 +724,28 @@
   error: |
     expected a number for indexing an array but got: object ({})
 
-- name: string indexing and slicing
+- name: string indexing
   args:
-    - -c
-    - '[.[-5],.[-1],.[0],.[3],.[4],.[6],.[2:4],.[-4:-2]]'
+    - '.[-5,-1,0,3,4,6]'
   input: '"１２３４５"'
   expected: |
-    ["１","５","１","４","５",null,"３４","２３"]
+    "１"
+    "５"
+    "１"
+    "４"
+    "５"
+    null
+
+- name: string slicing
+  args:
+    - '.[3:], .[:3], .[2:4], .[-4:-2], .[1.5:3.5]'
+  input: '"１２３４５"'
+  expected: |
+    "４５"
+    "１２３"
+    "３４"
+    "２３"
+    "２３４"
 
 - name: string indexing not number error
   args:
@@ -890,6 +927,30 @@
     [
       1,
       -1
+    ]
+
+- name: unary operator with type function
+  args:
+    - '., -. | type'
+  input: '-100'
+  expected: |
+    "number"
+    "number"
+
+- name: arithmetic operator with variable binding
+  args:
+    - '1 + 2 as $x | -$x'
+  input: 'null'
+  expected: |
+    -3
+
+- name: alternative operator with variable binding
+  args:
+    - 'true // 1 as $x | [$x]'
+  input: 'null'
+  expected: |
+    [
+      true
     ]
 
 - name: object construction
@@ -1251,7 +1312,7 @@
     0
     42
     42
-    0
+    0.0
     3.14
     3.14
     4722366482869645213696
@@ -1799,6 +1860,38 @@
     "range cannot be applied to: string (\"\")"
     "range cannot be applied to: array ([])"
 
+- name: toboolean function
+  args:
+    - 'toboolean'
+  input: |
+    "true"
+    "false"
+    true
+    false
+  expected: |
+    true
+    false
+    true
+    false
+
+- name: toboolean function error
+  args:
+    - 'try toboolean catch .'
+  input: |
+    null
+    ""
+    " true "
+    "FALSE"
+    []
+    {}
+  expected: |
+    "toboolean cannot be applied to: null"
+    "toboolean cannot be applied to \"\": invalid boolean"
+    "toboolean cannot be applied to \" true \": invalid boolean"
+    "toboolean cannot be applied to \"FALSE\": invalid boolean"
+    "toboolean cannot be applied to: array ([])"
+    "toboolean cannot be applied to: object ({})"
+
 - name: tonumber function
   args:
     - 'tonumber'
@@ -2145,6 +2238,32 @@
   expected: |
     "rtrimstr({}) cannot be applied to: string (\"x\")"
     "rtrimstr(\"x\") cannot be applied to: number (10)"
+
+- name: trimstr function
+  args:
+    - 'trimstr("foo")'
+  input: |
+    ""
+    "fo"
+    "foo"
+    "fofoo"
+    "foobarfoo"
+    "foofoofoo"
+  expected: |
+    ""
+    "fo"
+    ""
+    "fo"
+    "bar"
+    "foo"
+
+- name: trimstr function error
+  args:
+    - '("x" | try trimstr({}) catch .), (10 | try trimstr("x") catch .)'
+  input: '0'
+  expected: |
+    "trimstr({}) cannot be applied to: string (\"x\")"
+    "trimstr(\"x\") cannot be applied to: number (10)"
 
 - name: ltrim function
   args:
@@ -2853,7 +2972,7 @@
 
 - name: multiply strings
   args:
-    - '[-1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 3.7, 10, 9444732965739290427392 / 4722366482869645213696, 100000000, infinite, -infinite, nan, -1e300, 1e300][] * "abc"'
+    - '(-1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 3.7, 10, nan) * "abc"'
   input: 'null'
   expected: |
     null
@@ -2864,13 +2983,17 @@
     "abc"
     "abcabcabc"
     "abcabcabcabcabcabcabcabcabcabc"
-    "abcabc"
     null
-    null
-    null
-    null
-    null
-    null
+
+- name: multiply strings error
+  args:
+    - -r
+    - '(infinite, 1e300, 720000000) as $n | try ($n * "abc") catch .'
+  input: 'null'
+  expected: |
+    repeat string result too large: "abc" * 1.7976931348623157e+308
+    repeat string result too large: "abc" * 1e+300
+    repeat string result too large: "abc" * 720000000
 
 - name: multiply empty string
   args:
@@ -2885,6 +3008,16 @@
     ""
     ""
     ""
+
+- name: add objects
+  args:
+    - -c
+    - '.[0] + .[]'
+  input: '[{"a": 1}, {"b": 2}, {"a": 3}]'
+  expected: |
+    {"a":1}
+    {"a":1,"b":2}
+    {"a":3}
 
 - name: multiply objects
   args:
@@ -2901,17 +3034,24 @@
   args:
     - -c
     - '.[] / .[]'
-  input: '["abc", "a", "b"]'
+  input: '["abc", "a", "b", ""]'
   expected: |
     ["",""]
     ["a"]
     ["b"]
+    []
     ["","bc"]
     ["",""]
     ["b"]
+    []
     ["a","c"]
     ["a"]
     ["",""]
+    []
+    ["a","b","c"]
+    ["a"]
+    ["b"]
+    []
 
 - name: add and subtract arrays
   args:
@@ -5011,10 +5151,10 @@
 
 - name: assignment operator array index limit error
   args:
-    - '.[200000000] = 1'
+    - '.[999999999] = 1'
   input: '[]'
   error: |
-    array index too large: 200000000
+    array index too large: 999999999
 
 - name: assignment operator with select
   args:
@@ -5531,57 +5671,62 @@
 - name: gmtime, localtime functions
   args:
     - -c
-    - 'gmtime, localtime'
+    - 'gmtime, localtime | map(. * 1000000 | floor / 1000000)'
   input: '1500000000 1567890123.456 1600000000.111'
-  expected: | # tested with UTC-7
+  expected: | # UTC-7 (TZ=Etc/GMT+7)
     [2017,6,14,2,40,0,5,194]
     [2017,6,13,19,40,0,4,193]
-    [2019,8,7,21,2,3.4560000889999998,6,249]
-    [2019,8,7,14,2,3.4560000889999998,6,249]
-    [2020,8,13,12,26,40.111000061,0,256]
-    [2020,8,13,5,26,40.111000061,0,256]
+    [2019,8,7,21,2,3.456,6,249]
+    [2019,8,7,14,2,3.456,6,249]
+    [2020,8,13,12,26,40.111,0,256]
+    [2020,8,13,5,26,40.111,0,256]
 
 - name: mktime, strftime, strflocaltime, todate functions
   args:
-    - -c
-    - 'mktime, ((.,mktime) | strftime("%Y-%m-%dT%H:%M:%SZ")), ((.,mktime) | strflocaltime("%Y-%m-%dT%H:%M:%S%z")), todate'
+    - -cr
+    - '(.,mktime | .,strftime("%Y-%m-%dT%H:%M:%SZ"),strflocaltime("%Y-%m-%dT%H:%M:%S%z")), todate'
   input: |
     [2017,6,14,2,40,0,5,194]
-    [2019,8,7,21,2,3.4560000889999998,6,249]
-    [2020,8,13,12,26,40.111000061,0,256]
+    [2019,8,7,21,2,3.456,6,249]
+    [2020,8,13,12,26,40.111,0,256]
     [2024,7,20]
     [2025]
   expected: |
+    [2017,6,14,2,40,0,5,194]
+    2017-07-14T02:40:00Z
+    2017-07-14T02:40:00-0700
     1500000000
-    "2017-07-14T02:40:00Z"
-    "2017-07-14T02:40:00Z"
-    "2017-07-14T02:40:00-0700"
-    "2017-07-13T19:40:00-0700"
-    "2017-07-14T02:40:00Z"
+    2017-07-14T02:40:00Z
+    2017-07-13T19:40:00-0700
+    2017-07-14T02:40:00Z
+    [2019,8,7,21,2,3.456,6,249]
+    2019-09-07T21:02:03Z
+    2019-09-07T21:02:03-0700
     1567890123.456
-    "2019-09-07T21:02:03Z"
-    "2019-09-07T21:02:03Z"
-    "2019-09-07T21:02:03-0700"
-    "2019-09-07T14:02:03-0700"
-    "2019-09-07T21:02:03Z"
+    2019-09-07T21:02:03Z
+    2019-09-07T14:02:03-0700
+    2019-09-07T21:02:03Z
+    [2020,8,13,12,26,40.111,0,256]
+    2020-09-13T12:26:40Z
+    2020-09-13T12:26:40-0700
     1600000000.111
-    "2020-09-13T12:26:40Z"
-    "2020-09-13T12:26:40Z"
-    "2020-09-13T12:26:40-0700"
-    "2020-09-13T05:26:40-0700"
-    "2020-09-13T12:26:40Z"
+    2020-09-13T12:26:40Z
+    2020-09-13T05:26:40-0700
+    2020-09-13T12:26:40Z
+    [2024,7,20]
+    2024-08-20T00:00:00Z
+    2024-08-20T00:00:00-0700
     1724112000
-    "2024-08-20T00:00:00Z"
-    "2024-08-20T00:00:00Z"
-    "2024-08-20T00:00:00-0700"
-    "2024-08-19T17:00:00-0700"
-    "2024-08-20T00:00:00Z"
+    2024-08-20T00:00:00Z
+    2024-08-19T17:00:00-0700
+    2024-08-20T00:00:00Z
+    [2025]
+    2024-12-31T00:00:00Z
+    2024-12-31T00:00:00-0700
     1735603200
-    "2024-12-31T00:00:00Z"
-    "2024-12-31T00:00:00Z"
-    "2024-12-31T00:00:00-0700"
-    "2024-12-30T17:00:00-0700"
-    "2024-12-31T00:00:00Z"
+    2024-12-31T00:00:00Z
+    2024-12-30T17:00:00-0700
+    2024-12-31T00:00:00Z
 
 - name: strptime, fromdate functions
   args:
@@ -6851,6 +6996,17 @@
       "foo": 42
     }
 
+- name: NO_COLOR environment variable
+  args:
+    - '.'
+  input: '{"foo":42}'
+  env:
+    - NO_COLOR=1
+  expected: |
+    {
+      "foo": 42
+    }
+
 - name: NO_COLOR environment variable with color output option
   args:
     - --color-output
@@ -6884,7 +7040,12 @@
     - '.'
   input: '{ "foo": ["hello", "world"] }'
   expected: |
-    {"foo":["hello","world"]}
+    {
+    "foo": [
+    "hello",
+    "world"
+    ]
+    }
 
 - name: indent option with deeply nested array
   args:
@@ -7309,12 +7470,12 @@
     - '.'
   input: |
     foo:
-      - 42: bar
+      - 42.10: bar
   expected: |
     {
       "foo": [
         {
-          "42": "bar"
+          "42.10": "bar"
         }
       ]
     }
@@ -7327,12 +7488,35 @@
     foo: 2021-01-02
     bar: 2021-01-02t10:11:12Z
     baz: "2021-01-02"
-  expected: | # it is impossible to keep the original timestamp strings
+    qux: !!timestamp 2021-01-02
+  expected: |
     {
-      "bar": "2021-01-02T10:11:12Z",
+      "bar": "2021-01-02t10:11:12Z",
       "baz": "2021-01-02",
-      "foo": "2021-01-02T00:00:00Z"
+      "foo": "2021-01-02",
+      "qux": "2021-01-02"
     }
+
+- name: yaml input option with large numbers
+  args:
+    - --yaml-input
+    - '.[] + 1'
+  input: |
+    - 9223372036854775807
+    - 18446744073709551615
+    - 18446744073709551616
+    - 99999999999999999999999
+    - 0b111111111111111111111111111111111111111111111111111111111111111
+    - 0o777777777777777777777
+    - 0x7FFFFFFFFFFFFFFF
+  expected: |
+    9223372036854775808
+    18446744073709551616
+    18446744073709551617
+    100000000000000000000000
+    9223372036854775808
+    9223372036854775808
+    9223372036854775808
 
 - name: yaml input option with slurp option
   args:
@@ -7390,6 +7574,19 @@
         2 | 10
             ^  could not find expected ':'
 
+- name: yaml input option error
+  args:
+    - --yaml-input
+    - '.'
+  input: |
+    foo: 10
+    bar: ]
+    baz:
+  error: |
+    invalid yaml: <stdin>:2
+        2 | bar: ]
+                 ^  did not find expected node content
+
 - name: yaml input option multiple errors
   args:
     - --yaml-input
@@ -7398,6 +7595,7 @@
     foo: 1
     bar: 2
     foo: 3
+    bar: 4
   error: |
     invalid yaml: <stdin>:3
         3 | foo: 3
@@ -7411,7 +7609,7 @@
   error: |
     invalid yaml: testdata/2.yaml:5
         5 |   a: b: c
-            ^  mapping values are not allowed in this context
+                  ^  mapping values are not allowed in this context
 
 - name: yaml file input error in dos format
   args:
@@ -7421,7 +7619,7 @@
   error: |
     invalid yaml: testdata/3.yaml:5
         5 |   a: b: c
-            ^  mapping values are not allowed in this context
+                  ^  mapping values are not allowed in this context
 
 - name: yaml file input error in mac format
   args:
@@ -7431,7 +7629,7 @@
   error: |
     invalid yaml: testdata/4.yaml:5
         5 |   a: b: c
-            ^  mapping values are not allowed in this context
+                  ^  mapping values are not allowed in this context
 
 - name: yaml output option
   args:

@@ -21,7 +21,7 @@ package applyconfiguration
 import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
-	testing "k8s.io/client-go/testing"
+	managedfields "k8s.io/apimachinery/pkg/util/managedfields"
 	v1alpha1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha1"
 	v1beta1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	apiv1alpha1 "sigs.k8s.io/cluster-api-provider-openstack/pkg/generated/applyconfiguration/api/v1alpha1"
@@ -34,6 +34,12 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=infrastructure.cluster.x-k8s.io, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithKind("OpenStackClusterIdentity"):
+		return &apiv1alpha1.OpenStackClusterIdentityApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("OpenStackClusterIdentitySpec"):
+		return &apiv1alpha1.OpenStackClusterIdentitySpecApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("OpenStackCredentialSecretReference"):
+		return &apiv1alpha1.OpenStackCredentialSecretReferenceApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("OpenStackServer"):
 		return &apiv1alpha1.OpenStackServerApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("OpenStackServerSpec"):
@@ -66,6 +72,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1beta1.BlockDeviceStorageApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("BlockDeviceVolume"):
 		return &apiv1beta1.BlockDeviceVolumeApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("ClusterInitialization"):
+		return &apiv1beta1.ClusterInitializationApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("ExternalRouterIPParam"):
 		return &apiv1beta1.ExternalRouterIPParamApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("FilterByNeutronTags"):
@@ -78,6 +86,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1beta1.ImageParamApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("LoadBalancer"):
 		return &apiv1beta1.LoadBalancerApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("MachineInitialization"):
+		return &apiv1beta1.MachineInitializationApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("MachineResources"):
 		return &apiv1beta1.MachineResourcesApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("ManagedSecurityGroups"):
@@ -90,6 +100,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1beta1.NetworkStatusApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("NetworkStatusWithSubnets"):
 		return &apiv1beta1.NetworkStatusWithSubnetsApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("NodeInfo"):
+		return &apiv1beta1.NodeInfoApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("OpenStackCluster"):
 		return &apiv1beta1.OpenStackClusterApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("OpenStackClusterSpec"):
@@ -116,6 +128,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &apiv1beta1.OpenStackMachineTemplateResourceApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("OpenStackMachineTemplateSpec"):
 		return &apiv1beta1.OpenStackMachineTemplateSpecApplyConfiguration{}
+	case v1beta1.SchemeGroupVersion.WithKind("OpenStackMachineTemplateStatus"):
+		return &apiv1beta1.OpenStackMachineTemplateStatusApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("PortOpts"):
 		return &apiv1beta1.PortOptsApplyConfiguration{}
 	case v1beta1.SchemeGroupVersion.WithKind("PortStatus"):
@@ -173,6 +187,6 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 	return nil
 }
 
-func NewTypeConverter(scheme *runtime.Scheme) *testing.TypeConverter {
-	return &testing.TypeConverter{Scheme: scheme, TypeResolver: internal.Parser()}
+func NewTypeConverter(scheme *runtime.Scheme) managedfields.TypeConverter {
+	return managedfields.NewSchemeTypeConverter(scheme, internal.Parser())
 }

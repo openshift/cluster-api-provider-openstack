@@ -2,6 +2,8 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -33,11 +35,7 @@ func (e *encoder) flush() error {
 
 func (e *encoder) marshal(v any, w io.Writer) error {
 	e.out = w
-	err := e.encode(v)
-	if ferr := e.flush(); ferr != nil && err == nil {
-		err = ferr
-	}
-	return err
+	return cmp.Or(e.encode(v), e.flush())
 }
 
 func (e *encoder) encode(v any) error {
@@ -56,6 +54,8 @@ func (e *encoder) encode(v any) error {
 		e.encodeFloat64(v)
 	case *big.Int:
 		e.write(v.Append(e.buf[:0], 10), numberColor)
+	case json.Number:
+		e.write([]byte(v.String()), numberColor)
 	case string:
 		e.encodeString(v, stringColor)
 	case []any:
@@ -166,7 +166,7 @@ func (e *encoder) encodeArray(vs []any) error {
 		if i > 0 {
 			e.writeByte(',', arrayColor)
 		}
-		if e.indent != 0 {
+		if e.indent >= 0 {
 			e.writeIndent()
 		}
 		if err := e.encode(v); err != nil {
@@ -174,7 +174,7 @@ func (e *encoder) encodeArray(vs []any) error {
 		}
 	}
 	e.depth -= e.indent
-	if len(vs) > 0 && e.indent != 0 {
+	if len(vs) > 0 && e.indent >= 0 {
 		e.writeIndent()
 	}
 	e.writeByte(']', arrayColor)
@@ -201,12 +201,12 @@ func (e *encoder) encodeObject(vs map[string]any) error {
 		if i > 0 {
 			e.writeByte(',', objectColor)
 		}
-		if e.indent != 0 {
+		if e.indent >= 0 {
 			e.writeIndent()
 		}
 		e.encodeString(kv.key, objectKeyColor)
 		e.writeByte(':', objectColor)
-		if e.indent != 0 {
+		if e.indent >= 0 {
 			e.w.WriteByte(' ')
 		}
 		if err := e.encode(kv.val); err != nil {
@@ -214,7 +214,7 @@ func (e *encoder) encodeObject(vs map[string]any) error {
 		}
 	}
 	e.depth -= e.indent
-	if len(vs) > 0 && e.indent != 0 {
+	if len(vs) > 0 && e.indent >= 0 {
 		e.writeIndent()
 	}
 	e.writeByte('}', objectColor)

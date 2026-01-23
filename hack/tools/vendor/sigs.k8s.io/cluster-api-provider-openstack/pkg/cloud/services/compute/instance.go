@@ -25,8 +25,10 @@ import (
 	"time"
 
 	"github.com/gophercloud/gophercloud/v2/openstack/blockstorage/v3/volumes"
+	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/flavors"
 	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/keypairs"
 	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/servers"
+	"github.com/gophercloud/gophercloud/v2/openstack/image/v2/images"
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/ports"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -240,14 +242,14 @@ func (s *Service) getOrCreateVolumeBuilder(eventObject runtime.Object, instanceS
 
 func resolveVolumeOpts(instanceSpec *InstanceSpec, volumeOpts *infrav1.BlockDeviceVolume) (az, volType string) {
 	if volumeOpts == nil {
-		return
+		return az, volType
 	}
 
 	volType = volumeOpts.Type
 
 	volumeAZ := volumeOpts.AvailabilityZone
 	if volumeAZ == nil {
-		return
+		return az, volType
 	}
 
 	switch volumeAZ.From {
@@ -259,7 +261,7 @@ func resolveVolumeOpts(instanceSpec *InstanceSpec, volumeOpts *infrav1.BlockDevi
 	case infrav1.VolumeAZFromMachine:
 		az = instanceSpec.FailureDomain
 	}
-	return
+	return az, volType
 }
 
 // getBlockDevices returns a list of block devices that were created and attached to the instance. It returns an error
@@ -449,6 +451,14 @@ func (s *Service) GetFlavorID(flavorID, flavorName *string) (string, error) {
 	return "", fmt.Errorf("no flavors were found: name=%v", *flavorName)
 }
 
+func (s *Service) GetFlavor(flavorID string) (*flavors.Flavor, error) {
+	return s.getComputeClient().GetFlavor(flavorID)
+}
+
+func (s *Service) GetImageDetails(imageID string) (*images.Image, error) {
+	return s.getImageClient().GetImage(imageID)
+}
+
 // GetManagementPort returns the port which is used for management and external
 // traffic. Cluster floating IPs must be associated with this port.
 func (s *Service) GetManagementPort(openStackCluster *infrav1.OpenStackCluster, instanceStatus *InstanceStatus) (*ports.Port, error) {
@@ -490,10 +500,15 @@ func (s *Service) DeleteInstance(eventObject runtime.Object, instanceStatus *Ins
 		if err != nil {
 			return false, err
 		}
-		if i != nil {
-			return false, nil
+		// Server not found means it has been permanently deleted
+		if i == nil {
+			return true, nil
 		}
-		return true, nil
+		// Server in SOFT_DELETED or DELETED state means deletion succeeded. This respects OpenStack's soft delete policy.
+		if i.State() == infrav1.InstanceStateSoftDeleted || i.State() == infrav1.InstanceStateDeleted {
+			return true, nil
+		}
+		return false, nil
 	})
 	if err != nil {
 		record.Warnf(eventObject, "FailedDeleteServer", "Failed to delete server %s with id %s: %v", instance.Name, instance.ID, err)
