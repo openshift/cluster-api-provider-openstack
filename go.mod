@@ -8,31 +8,31 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.6.0
-	github.com/gophercloud/gophercloud/v2 v2.7.0
+	github.com/gophercloud/gophercloud/v2 v2.8.0
 	github.com/gophercloud/utils/v2 v2.0.0-20240812072210-8ce1fc0f2894
 	github.com/hashicorp/go-version v1.7.0
 	github.com/k-orc/openstack-resource-controller v0.0.0-00010101000000-000000000000
 	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/prometheus/client_golang v1.22.0
-	github.com/spf13/pflag v1.0.6
-	github.com/ulikunitz/xz v0.5.12
+	github.com/spf13/pflag v1.0.10
+	github.com/ulikunitz/xz v0.5.15
 	go.uber.org/mock v0.5.1
 	golang.org/x/crypto v0.33.0
 	golang.org/x/text v0.22.0
 	gopkg.in/ini.v1 v1.67.0
-	k8s.io/api v0.30.13
-	k8s.io/apiextensions-apiserver v0.30.13
-	k8s.io/apimachinery v0.30.13
-	k8s.io/client-go v0.30.13
-	k8s.io/component-base v0.30.13
+	k8s.io/api v0.30.14
+	k8s.io/apiextensions-apiserver v0.30.14
+	k8s.io/apimachinery v0.30.14
+	k8s.io/client-go v0.30.14
+	k8s.io/component-base v0.30.14
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661
 	sigs.k8s.io/cluster-api v1.8.12
 	sigs.k8s.io/cluster-api/test v1.8.12
 	sigs.k8s.io/controller-runtime v0.18.7
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1
-	sigs.k8s.io/yaml v1.4.0
+	sigs.k8s.io/yaml v1.6.0
 )
 
 require (
@@ -128,6 +128,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
+	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
@@ -144,7 +145,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiserver v0.30.13 // indirect
+	k8s.io/apiserver v0.30.14 // indirect
 	k8s.io/cluster-bootstrap v0.30.3 // indirect
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.30.0 // indirect
