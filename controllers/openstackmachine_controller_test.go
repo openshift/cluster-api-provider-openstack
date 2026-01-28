@@ -581,12 +581,12 @@ func TestGetPortIDs(t *testing.T) {
 	}
 }
 
-func TestReconcileMachineState(t *testing.T) {
+func TestReconcileMachineState(t *testing.T) { //nolint:gocyclo,cyclop // this is test code
 	tests := []struct {
 		name                            string
-		instanceState                   infrav1.InstanceState
+		instanceState                   *infrav1.InstanceState
 		machineHasNodeRef               bool
-		serverInstanceReadyMessage      string
+		serverConditions                []clusterv1beta1.Condition
 		expectRequeue                   bool
 		expectedInstanceReadyCondition  *clusterv1beta1.Condition
 		expectedReadyCondition          *clusterv1beta1.Condition
@@ -594,8 +594,83 @@ func TestReconcileMachineState(t *testing.T) {
 		expectFailureSet                bool
 	}{
 		{
+			name:          "Nil InstanceState with DependencyFailed condition propagates error to machine",
+			instanceState: nil,
+			serverConditions: []clusterv1beta1.Condition{
+				{
+					Type:     infrav1.InstanceReadyCondition,
+					Status:   corev1.ConditionFalse,
+					Severity: clusterv1beta1.ConditionSeverityError,
+					Reason:   infrav1.DependencyFailedReason,
+					Message:  "Failed to resolve server spec: image not found",
+				},
+			},
+			expectRequeue: true,
+			expectedInstanceReadyCondition: &clusterv1beta1.Condition{
+				Type:     infrav1.InstanceReadyCondition,
+				Status:   corev1.ConditionFalse,
+				Severity: clusterv1beta1.ConditionSeverityError,
+				Reason:   infrav1.DependencyFailedReason,
+				Message:  "Failed to resolve server spec: image not found",
+			},
+			expectedReadyCondition: &clusterv1beta1.Condition{
+				Type:     clusterv1beta1.ReadyCondition,
+				Status:   corev1.ConditionFalse,
+				Severity: clusterv1beta1.ConditionSeverityError,
+				Reason:   infrav1.DependencyFailedReason,
+				Message:  "Failed to resolve server spec: image not found",
+			},
+		},
+		{
+			name:          "Nil InstanceState with InstanceNotReady condition propagates info to machine",
+			instanceState: nil,
+			serverConditions: []clusterv1beta1.Condition{
+				{
+					Type:     infrav1.InstanceReadyCondition,
+					Status:   corev1.ConditionFalse,
+					Severity: clusterv1beta1.ConditionSeverityInfo,
+					Reason:   infrav1.InstanceNotReadyReason,
+					Message:  "Waiting for dependencies",
+				},
+			},
+			expectRequeue: true,
+			expectedInstanceReadyCondition: &clusterv1beta1.Condition{
+				Type:     infrav1.InstanceReadyCondition,
+				Status:   corev1.ConditionFalse,
+				Severity: clusterv1beta1.ConditionSeverityInfo,
+				Reason:   infrav1.InstanceNotReadyReason,
+				Message:  "Waiting for dependencies",
+			},
+			expectedReadyCondition: &clusterv1beta1.Condition{
+				Type:     clusterv1beta1.ReadyCondition,
+				Status:   corev1.ConditionFalse,
+				Severity: clusterv1beta1.ConditionSeverityInfo,
+				Reason:   infrav1.InstanceNotReadyReason,
+				Message:  "Waiting for dependencies",
+			},
+		},
+		{
+			name:          "Nil InstanceState with no server condition sets default waiting conditions",
+			instanceState: nil,
+			expectRequeue: true,
+			expectedInstanceReadyCondition: &clusterv1beta1.Condition{
+				Type:     infrav1.InstanceReadyCondition,
+				Status:   corev1.ConditionFalse,
+				Severity: clusterv1beta1.ConditionSeverityInfo,
+				Reason:   infrav1.InstanceNotReadyReason,
+				Message:  "Waiting for instance to be created",
+			},
+			expectedReadyCondition: &clusterv1beta1.Condition{
+				Type:     clusterv1beta1.ReadyCondition,
+				Status:   corev1.ConditionFalse,
+				Severity: clusterv1beta1.ConditionSeverityInfo,
+				Reason:   infrav1.InstanceNotReadyReason,
+				Message:  "Waiting for instance to be created",
+			},
+		},
+		{
 			name:          "Instance state ACTIVE sets conditions to True and initialization.provisioned",
-			instanceState: infrav1.InstanceStateActive,
+			instanceState: ptr.To(infrav1.InstanceStateActive),
 			expectRequeue: false,
 			expectedInstanceReadyCondition: &clusterv1beta1.Condition{
 				Type:   infrav1.InstanceReadyCondition,
@@ -609,7 +684,7 @@ func TestReconcileMachineState(t *testing.T) {
 		},
 		{
 			name:              "Instance state ERROR sets conditions to False without NodeRef",
-			instanceState:     infrav1.InstanceStateError,
+			instanceState:     ptr.To(infrav1.InstanceStateError),
 			machineHasNodeRef: false,
 			expectRequeue:     true,
 			expectedInstanceReadyCondition: &clusterv1beta1.Condition{
@@ -628,7 +703,7 @@ func TestReconcileMachineState(t *testing.T) {
 		},
 		{
 			name:              "Instance state ERROR with NodeRef does not set failure",
-			instanceState:     infrav1.InstanceStateError,
+			instanceState:     ptr.To(infrav1.InstanceStateError),
 			machineHasNodeRef: true,
 			expectRequeue:     true,
 			expectedInstanceReadyCondition: &clusterv1beta1.Condition{
@@ -646,30 +721,38 @@ func TestReconcileMachineState(t *testing.T) {
 			expectFailureSet: false,
 		},
 		{
-			name:                       "Instance state ERROR surfaces the OpenStackServer error message",
-			instanceState:              infrav1.InstanceStateError,
-			machineHasNodeRef:          true,
-			serverInstanceReadyMessage: "Quota exceeded for cores, ram: Requested 16, 32768, but already used 20, 65536 of 20, 65536 cores, ram",
-			expectRequeue:              true,
+			name:              "Instance state ERROR propagates error message from server condition",
+			instanceState:     ptr.To(infrav1.InstanceStateError),
+			machineHasNodeRef: false,
+			serverConditions: []clusterv1beta1.Condition{
+				{
+					Type:     infrav1.InstanceReadyCondition,
+					Status:   corev1.ConditionFalse,
+					Severity: clusterv1beta1.ConditionSeverityError,
+					Reason:   infrav1.InstanceStateErrorReason,
+					Message:  "Server entered ERROR state: No valid host was found",
+				},
+			},
+			expectRequeue: true,
 			expectedInstanceReadyCondition: &clusterv1beta1.Condition{
 				Type:     infrav1.InstanceReadyCondition,
 				Status:   corev1.ConditionFalse,
 				Severity: clusterv1beta1.ConditionSeverityError,
 				Reason:   infrav1.InstanceStateErrorReason,
-				Message:  "Quota exceeded for cores, ram: Requested 16, 32768, but already used 20, 65536 of 20, 65536 cores, ram",
+				Message:  "Server entered ERROR state: No valid host was found",
 			},
 			expectedReadyCondition: &clusterv1beta1.Condition{
 				Type:     clusterv1beta1.ReadyCondition,
 				Status:   corev1.ConditionFalse,
 				Severity: clusterv1beta1.ConditionSeverityError,
 				Reason:   infrav1.InstanceStateErrorReason,
-				Message:  "Quota exceeded for cores, ram: Requested 16, 32768, but already used 20, 65536 of 20, 65536 cores, ram",
+				Message:  "Server entered ERROR state: No valid host was found",
 			},
-			expectFailureSet: false,
+			expectFailureSet: true,
 		},
 		{
 			name:          "Instance state DELETED sets conditions to False",
-			instanceState: infrav1.InstanceStateDeleted,
+			instanceState: ptr.To(infrav1.InstanceStateDeleted),
 			expectRequeue: true,
 			expectedInstanceReadyCondition: &clusterv1beta1.Condition{
 				Type:     infrav1.InstanceReadyCondition,
@@ -686,7 +769,7 @@ func TestReconcileMachineState(t *testing.T) {
 		},
 		{
 			name:          "Instance state BUILD sets ReadyCondition to False",
-			instanceState: infrav1.InstanceStateBuild,
+			instanceState: ptr.To(infrav1.InstanceStateBuild),
 			expectRequeue: true,
 			expectedReadyCondition: &clusterv1beta1.Condition{
 				Type:     clusterv1beta1.ReadyCondition,
@@ -697,7 +780,7 @@ func TestReconcileMachineState(t *testing.T) {
 		},
 		{
 			name:          "Instance state SHUTOFF sets conditions to Unknown",
-			instanceState: infrav1.InstanceStateShutoff,
+			instanceState: ptr.To(infrav1.InstanceStateShutoff),
 			expectRequeue: true,
 			expectedInstanceReadyCondition: &clusterv1beta1.Condition{
 				Type:   infrav1.InstanceReadyCondition,
@@ -748,7 +831,7 @@ func TestReconcileMachineState(t *testing.T) {
 				},
 				Status: infrav1alpha1.OpenStackServerStatus{
 					InstanceID:    ptr.To(testInstanceID),
-					InstanceState: ptr.To(tt.instanceState),
+					InstanceState: tt.instanceState,
 				},
 			}
 			if tt.serverInstanceReadyMessage != "" {
@@ -760,6 +843,11 @@ func TestReconcileMachineState(t *testing.T) {
 						Message: tt.serverInstanceReadyMessage,
 					},
 				}
+			}
+
+			// Set any pre-existing conditions on the OpenStackServer
+			for i := range tt.serverConditions {
+				v1beta1conditions.Set(openStackServer, &tt.serverConditions[i])
 			}
 
 			r := &OpenStackMachineReconciler{}
@@ -788,6 +876,9 @@ func TestReconcileMachineState(t *testing.T) {
 					if tt.expectedInstanceReadyCondition.Severity != "" && condition.Severity != tt.expectedInstanceReadyCondition.Severity {
 						t.Errorf("expected %s severity %s, got %s", tt.expectedInstanceReadyCondition.Type, tt.expectedInstanceReadyCondition.Severity, condition.Severity)
 					}
+					if tt.expectedInstanceReadyCondition.Message != "" && condition.Message != tt.expectedInstanceReadyCondition.Message {
+						t.Errorf("expected %s message %q, got %q", tt.expectedInstanceReadyCondition.Type, tt.expectedInstanceReadyCondition.Message, condition.Message)
+					}
 				}
 			}
 
@@ -805,6 +896,9 @@ func TestReconcileMachineState(t *testing.T) {
 					}
 					if tt.expectedReadyCondition.Severity != "" && condition.Severity != tt.expectedReadyCondition.Severity {
 						t.Errorf("expected %s severity %s, got %s", tt.expectedReadyCondition.Type, tt.expectedReadyCondition.Severity, condition.Severity)
+					}
+					if tt.expectedReadyCondition.Message != "" && condition.Message != tt.expectedReadyCondition.Message {
+						t.Errorf("expected %s message %q, got %q", tt.expectedReadyCondition.Type, tt.expectedReadyCondition.Message, condition.Message)
 					}
 				}
 			}
