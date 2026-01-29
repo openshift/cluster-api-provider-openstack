@@ -843,7 +843,6 @@ var _ = Describe("OpenStackMachine controller", func() {
 		testNum            int
 	)
 
-	capiClusterName := "capi-cluster"
 	testClusterName := "test-cluster"
 	testMachineName := "test-machine"
 	capiMachineName := "capi-machine"
