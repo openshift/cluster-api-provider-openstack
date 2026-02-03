@@ -12,8 +12,8 @@ require (
 	github.com/gophercloud/utils/v2 v2.0.0-20241220104409-2e0af06694a1
 	github.com/hashicorp/go-version v1.9.0
 	github.com/k-orc/openstack-resource-controller/v2 v2.4.0
-	github.com/onsi/ginkgo/v2 v2.28.2
-	github.com/onsi/gomega v1.42.0
+	github.com/onsi/ginkgo/v2 v2.28.1
+	github.com/onsi/gomega v1.39.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/pflag v1.1.0
 	go.uber.org/mock v0.6.0
@@ -83,7 +83,7 @@ require (
 	github.com/google/go-github/v53 v53.2.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/pprof v0.0.0-20260115054156-294ebfa9ad83 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.7 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
@@ -141,11 +141,11 @@ require (
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // indirect
 	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
-	golang.org/x/oauth2 v0.34.0 // indirect
+	golang.org/x/oauth2 v0.33.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/term v0.40.0 // indirect
-	golang.org/x/time v0.11.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/term v0.39.0 // indirect
+	golang.org/x/time v0.9.0 // indirect
 	golang.org/x/tools v0.41.0 // indirect
 	golang.org/x/tools/go/expect v0.1.0-deprecated // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
