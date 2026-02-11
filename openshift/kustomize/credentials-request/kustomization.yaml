@@ -1,5 +1,0 @@
-resources:
-- credentials-request.yaml
-
-components:
-- ../components/common

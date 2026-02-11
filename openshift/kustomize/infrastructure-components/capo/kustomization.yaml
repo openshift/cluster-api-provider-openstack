@@ -1,9 +1,0 @@
-# The default namespaced component only replaces namespaces which aren't set,
-# but CAPO emits resources in the 'system' namespace which we need to override
-namespace: openshift-cluster-api
-
-resources:
-- ../../../../config/crd
-- ../../../../config/rbac
-- ../../../../config/manager
-- ../../../../config/webhook
