@@ -4,10 +4,6 @@ kind: Component
 resources:
 - vars.yaml
 
-commonAnnotations:
-  exclude.release.openshift.io/internal-openshift-hosted: "true"
-  include.release.openshift.io/self-managed-high-availability: "true"
-
 patches:
 # Common configuration for CAPI controller workloads
 - target:

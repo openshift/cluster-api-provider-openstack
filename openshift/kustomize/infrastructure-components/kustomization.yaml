@@ -11,7 +11,6 @@ components:
 - ../components/namespaced
 - ../components/common
 - ../components/certs
-- ../components/tech-preview
 
 images:
 - name: controller

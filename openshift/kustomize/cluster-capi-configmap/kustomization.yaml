@@ -4,7 +4,6 @@ kind: Kustomization
 components:
 - ../components/namespaced
 - ../components/common
-- ../components/tech-preview
 
 generatorOptions:
   disableNameSuffixHash: true
