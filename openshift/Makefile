@@ -55,15 +55,5 @@ verify: generate
 		echo "generated files are out of date, run make generate"; exit 1; \
 	fi
 
-# FIXME(stephenfin): Remove the CI job that relies on this: all logic has moved to CCAPIO now
-.PHONY: test
-test:
-	echo "done"
-
-# FIXME(stephenfin): Remove this once we've reworked the CI job that relies on this to call the script directly
-.PHONY: e2e
-e2e:
-	./e2e-tests.sh
-
 .PHONY: ALWAYS
 ALWAYS:
