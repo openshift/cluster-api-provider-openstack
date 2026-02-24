@@ -35,6 +35,8 @@ $(call manifest_name,00_credentials-request): $(KUSTOMIZE) ALWAYS | $(manifests_
 
 $(infrastructure_components): $(KUSTOMIZE) ALWAYS
 	$(KUSTOMIZE) build kustomize/infrastructure-components > $@
+	echo "---" >> $@
+	cat kustomize/infrastructure-components/validating-admission-policy.yaml >> $@
 
 $(call manifest_name,04_infrastructure-components): $(KUSTOMIZE) $(infrastructure_components) ALWAYS | $(manifests_dir)
 	$(KUSTOMIZE) build kustomize/cluster-capi-configmap > $@

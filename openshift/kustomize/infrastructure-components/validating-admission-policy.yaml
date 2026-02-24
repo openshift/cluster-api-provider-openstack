@@ -1,0 +1,39 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: openshift-cluster-api-protect-openstackcluster
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups:
+      - infrastructure.cluster.x-k8s.io
+      apiVersions:
+      - '*'
+      operations:
+      - DELETE
+      resources:
+      - openstackclusters
+  paramKind:
+    apiVersion: config.openshift.io/v1
+    kind: Infrastructure
+  validations:
+  - expression: '!(oldObject.metadata.name == params.status.infrastructureName)'
+    message: InfraCluster resources with metadata.name corresponding to the cluster
+      infrastructureName cannot be deleted.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: openshift-cluster-api-protect-openstackcluster
+spec:
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: openshift-cluster-api
+  paramRef:
+    name: cluster
+    parameterNotFoundAction: Deny
+  policyName: openshift-cluster-api-protect-openstackcluster
+  validationActions:
+  - Deny
