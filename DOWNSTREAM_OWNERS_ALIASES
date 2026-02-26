@@ -1,5 +1,17 @@
+# See the OWNERS_ALIASES docs: https://git.k8s.io/community/contributors/guide/owners.md#OWNERS_ALIASES
+
 aliases:
   shiftstack-team:
     - gryf
     - mandre
     - stephenfin
+    - eshulman2
+
+  cloud-team:
+    - JoelSpeed
+    - RadekManak
+    - damdo
+    - mdbooth
+    - nrb
+    - racheljpg
+    - theobarberbany
