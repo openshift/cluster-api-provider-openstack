@@ -92,6 +92,8 @@ type PortOpts struct {
 	// The names, uuids, filters or any combination these of the security groups to assign to the instance
 	SecurityGroupFilters []SecurityGroupFilter `json:"securityGroupFilters,omitempty"`
 	AllowedAddressPairs  []AddressPair         `json:"allowedAddressPairs,omitempty"`
+	// SymmetricAllowedAddressPairs if set to true, also updates the allowed_address_pairs of the VIP port with the IP address of the VM port for bidirectional security
+	SymmetricAllowedAddressPairs bool `json:"symmetricAllowedAddressPairs,omitempty"`
 	// Enables and disables trunk at port level. If not provided, openStackMachine.Spec.Trunk is inherited.
 	Trunk *bool `json:"trunk,omitempty"`
 

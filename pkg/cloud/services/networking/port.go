@@ -27,6 +27,7 @@ import (
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/ports"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/klog/v2"
 
 	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha7"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/record"
@@ -188,7 +189,67 @@ func (s *Service) GetOrCreatePort(eventObject runtime.Object, clusterName string
 		}
 	}
 
+	if len(addressPairs) > 0 && portOpts.SymmetricAllowedAddressPairs {
+		err := s.updateVIPsForSymmetricAllowedAddressPair(err, networkID, port, addressPairs)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return port, nil
+}
+
+// updateVIPsWithAllowedAddressPair updates the allowed_address_pairs of the VIP port with the IP address of the port
+func (s *Service) updateVIPsForSymmetricAllowedAddressPair(err error, networkID string, port *ports.Port, addressPairs []ports.AddressPair) error {
+	if len(port.FixedIPs) == 0 {
+		return fmt.Errorf("the port %v is created but it has no IP address", port.ID)
+	}
+
+	allPorts, err := s.client.ListPort(ports.ListOpts{
+		NetworkID: networkID,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Find matching VIP ports and update
+	for _, ap := range addressPairs {
+		for _, vip := range allPorts {
+			if vip.FixedIPs[0].IPAddress == ap.IPAddress {
+				err := s.updateVipWithAllowedAddressPairs(vip, port.FixedIPs[0].IPAddress, port.MACAddress)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) updateVipWithAllowedAddressPairs(vip ports.Port, portIPAddress, portMACAddress string) error {
+	// If IP Address is found, not to update VIP
+	isfound := false
+	for _, raw := range vip.AllowedAddressPairs {
+		if raw.IPAddress == portIPAddress {
+			isfound = true
+			break
+		}
+	}
+	if !isfound {
+		vip.AllowedAddressPairs = append(vip.AllowedAddressPairs, ports.AddressPair{
+			IPAddress:  portIPAddress,
+			MACAddress: portMACAddress,
+		})
+		updateOpts := ports.UpdateOpts{
+			AllowedAddressPairs: &vip.AllowedAddressPairs,
+		}
+		klog.Infof("Updating VIP port %v with allowed_address_pairs: %+v", vip.ID, vip.AllowedAddressPairs)
+		_, err := s.client.UpdatePort(vip.ID, updateOpts)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) getSubnetIDForFixedIP(subnet *infrav1.SubnetFilter, networkID string) (string, error) {
