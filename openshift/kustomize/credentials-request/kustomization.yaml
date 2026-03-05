@@ -1,6 +1,0 @@
-resources:
-- credentials-request.yaml
-
-components:
-- ../components/common
-- ../components/tech-preview
