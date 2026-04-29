@@ -9113,6 +9113,7 @@ spec:
   template:
     metadata:
       annotations:
+        openshift.io/required-scc: restricted-v2
         target.workload.openshift.io/management: '{"effect": "PreferredDuringScheduling"}'
       labels:
         cluster.x-k8s.io/provider: infrastructure-openstack
