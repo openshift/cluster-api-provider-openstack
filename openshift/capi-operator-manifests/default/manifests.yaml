@@ -9125,6 +9125,8 @@ spec:
         - --diagnostics-address=127.0.0.1:8080
         - --insecure-diagnostics=true
         - --feature-gates=PriorityQueue=${EXP_CAPO_PRIORITY_QUEUE:=false},AutoScaleFromZero=${EXP_CAPO_AUTOSCALE_FROM_ZERO:=false}
+        - --tls-min-version=${TLS_MIN_VERSION}
+        - --tls-cipher-suites=${TLS_CIPHER_SUITES}
         command:
         - /manager
         image: registry.ci.openshift.org/openshift:openstack-cluster-api-controllers
