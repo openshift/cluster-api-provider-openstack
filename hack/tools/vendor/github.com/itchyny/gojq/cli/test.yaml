@@ -1318,6 +1318,13 @@
     4722366482869645213696
     4722366482869645213696
 
+- name: abs function with minimum integer
+  args:
+    - '(-9223372036854775807 - 1) | abs'
+  input: 'null'
+  expected: |
+    9223372036854775808
+
 - name: length function
   args:
     - 'length'
@@ -1339,6 +1346,13 @@
     5
     0
     4722366482869645213696
+
+- name: length function with minimum integer
+  args:
+    - '(-9223372036854775807 - 1) | length'
+  input: 'null'
+  expected: |
+    9223372036854775808
 
 - name: length function error
   args:
@@ -1488,8 +1502,17 @@
   args:
     - -c
     - 'from_entries'
-  input: '[{"key":"a","Key":"b","value":1},{"Key":"b","Value":2},{"key":null,"name":"c","Name":"d","value":3},{"name":false,"Name":"d","value":null,"Value":4},{"key":"e"}]'
+  input: |
+    []
+    [
+      {"key":"a","Key":"b","value":1},
+      {"Key":"b","Value":2},
+      {"key":null,"name":"c","Name":"d","value":3},
+      {"name":false,"Name":"d","value":null,"Value":4},
+      {"key":"e"}
+    ]
   expected: |
+    {}
     {"a":1,"b":2,"c":3,"d":null,"e":null}
 
 - name: from_entries function missing key
@@ -1497,14 +1520,14 @@
     - 'from_entries'
   input: '[{"value":1}]'
   error: |
-    from_entries cannot be applied to [{"value":1}]: expected a string for object key but got: null
+    expected a string for object key but got: null
 
 - name: from_entries function key type error
   args:
     - 'from_entries'
   input: '[{"key":{},"value":1}]'
   error: |
-    from_entries cannot be applied to [{"key":{},"value":1}]: expected a string for object key but got: object ({})
+    expected a string for object key but got: object ({})
 
 - name: with_entries function
   args:
@@ -1659,6 +1682,13 @@
   input: '[]'
   error: |
     flatten depth should not be negative: -1
+
+- name: flatten/1 function depth error with nan
+  args:
+    - 'flatten(nan)'
+  input: '[]'
+  error: |
+    flatten depth should not be negative: null
 
 - name: min, min_by, max, max_by functions
   args:
@@ -2402,19 +2432,14 @@
   expected: |
     ",false,true,0,1,,a,b,abc"
 
-- name: join object order
-  args:
-    - 'join(",")'
-  input: '{"d":4, "c":3, "b":2, "a":1}'
-  expected: |
-    "1,2,3,4"
-
 - name: join function error item
   args:
     - 'try join(",") catch .'
-  input: '["1","2",[3,4,5]]'
+  input: '["1","2",[3,4,5]] [[]] [{}]'
   expected: |
-    "join cannot be applied to an array including: array ([3,4,5])"
+    "cannot add: string (\"1,2,\") and array ([3,4,5])"
+    "cannot add: string (\"\") and array ([])"
+    "cannot add: string (\"\") and object ({})"
 
 - name: join function error input
   args:
@@ -2427,6 +2452,27 @@
     "join(\",\") cannot be applied to: number (1)"
     "join(\",\") cannot be applied to: string (\"a\")"
 
+- name: join function null separator
+  args:
+    - 'join(null)'
+  input: '[] ["a"] ["a","b","c"] ["a",null,"b"] [null,null,null] [null]'
+  expected: |
+    ""
+    "a"
+    "abc"
+    "ab"
+    ""
+    ""
+
+- name: join function null elements
+  args:
+    - 'join(",")'
+  input: '[null] [null,null,null] ["a",null,"b"]'
+  expected: |
+    ""
+    ",,"
+    "a,,b"
+
 - name: join function non-string separator
   args:
     - '.[] | try join(1) catch .'
@@ -2434,7 +2480,7 @@
   expected: |
     ""
     "1"
-    "join(1) cannot be applied to: array ([1,2])"
+    "cannot add: string (\"1\") and number (1)"
 
 - name: ascii_downcase function
   args:
@@ -2795,6 +2841,18 @@
     [9,13,12,16,18,22,9,13,9,13,16,20,30,34,9,13,8,12,11,15,17,21,8,12,8,12,15,19,29,33,8,12]
     [10,14,13,17,19,23,10,14,10,14,17,21,31,35,10,14,9,13,12,16,18,22,9,13,9,13,16,20,30,34,9,13]
 
+- name: negate, multiply, divide, modulo minimum integer
+  args:
+    - -c
+    - '(-9223372036854775807-1) | -., .*-1, -1*., ./-1, .%-1'
+  input: 'null'
+  expected: |
+    9223372036854775808
+    9223372036854775808
+    9223372036854775808
+    9223372036854775808
+    0
+
 - name: integer division precision
   args:
     - '72 / (1, -2, 3, -4, 6, -8) * 100000000000000000000'
@@ -2997,11 +3055,12 @@
 
 - name: multiply empty string
   args:
-    - '(-9223372036854775808, -1, 0, 0.001, 0.999, 1, 7, 9223372036854775807) * ""'
+    - '(-9223372036854775808, -1, 0, 0.001, 0.999, 1, 7, 9223372036854775807, 1e300) * ""'
   input: 'null'
   expected: |
     null
     null
+    ""
     ""
     ""
     ""
@@ -4426,9 +4485,9 @@
   args:
     - -c
     - 'map(significand)'
-  input: '[0, -0.5, 1, -1.5, 2, 10, 64, 100]'
+  input: '[0, -0.5, 1, -1.5, 2, 10, 64, 100, 5e-324, -5e-324]'
   expected: |
-    [0,-1,1,-1.5,1,1.25,1,1.5625]
+    [0,-1,1,-1.5,1,1.25,1,1.5625,1,-1]
 
 - name: exp, exp10, exp2, expm1 functions
   args:
@@ -4449,6 +4508,15 @@
   expected: |
     [[0,0],[0.5,-1],[-0.5,0],[0.5,1],[-0.75,1],[0.5,2],[0.78125,2]]
     [[0,0],[0.25,0],[-0.5,-0],[0,1],[-0.5,-1],[0,2],[0.125,3]]
+
+- name: modf against infinite
+  args:
+    - -c
+    - 'infinite, -infinite | modf'
+  input: 'null'
+  expected: |
+    [0,1.7976931348623157e+308]
+    [-0,-1.7976931348623157e+308]
 
 - name: log, log10, log1p, log2, logb functions
   args:
@@ -4494,6 +4562,16 @@
     [0.125,0.5,0,0.25]
     [0.2,0.3,0.4,0.4]
     [0.1,0.2,0.1,0.3]
+
+- name: fdim/2, fmax/2, fmin/2 functions with nan
+  args:
+    - -c
+    - '[fdim(1,nan; 1,nan)], [fmax(1,nan; 1,nan)], [fmin(1,nan; 1,nan)]'
+  input: 'null'
+  expected: |
+    [0,null,null,null]
+    [1,1,1,null]
+    [1,1,1,null]
 
 - name: copysign/2, drem/2, fmod/2, remainder/2 functions
   args:
@@ -4814,6 +4892,13 @@
   error: |
     setpath([{"end":1,"start":0}]; 10) cannot be applied to []: expected an array but got: number (10)
 
+- name: setpath function error
+  args:
+    - 'setpath([{start:"x",end:2}]; [9])'
+  input: '[1,2,3]'
+  error: |
+    setpath([{"end":2,"start":"x"}]; [9]) cannot be applied to [1,2,3]: expected a number for indexing an array but got: string ("x")
+
 - name: delpaths function
   args:
     - -c
@@ -4856,6 +4941,17 @@
     {"x":[]}
     {}
 
+- name: delpaths function against null
+  args:
+    - 'delpaths([["a"]]), delpaths([["a","b"]]), delpaths([[0]]), delpaths([[-1]]), delpaths([[{start:1,end:2}]])'
+  input: 'null'
+  expected: |
+    null
+    null
+    null
+    null
+    null
+
 - name: delpaths function error
   args:
     - 'delpaths([{}])'
@@ -4869,6 +4965,13 @@
   input: '[]'
   error: |
     delpaths([["x"]]) cannot be applied to []: expected an object but got: array ([])
+
+- name: delpaths function error
+  args:
+    - 'delpaths([[{"start":1,"end":{}}]])'
+  input: '[1,2,3]'
+  error: |
+    delpaths([[{"end":{},"start":1}]]) cannot be applied to [1,2,3]: expected a number for indexing an array but got: object ({})
 
 - name: getpath function
   args:
@@ -4983,6 +5086,17 @@
   input: '50000'
   expected: |
     []
+
+- name: del function against null
+  args:
+    - 'del(.a), del(.a.b), del(.[0]), del(.[-1]), del(.[1:2])'
+  input: 'null'
+  expected: |
+    null
+    null
+    null
+    null
+    null
 
 - name: assignment operator against object
   args:
@@ -6409,28 +6523,30 @@
 - name: split/2 function
   args:
     - -c
-    - 'split("a"), split("a+"), split("a+"; ""), split("a+"; "i")'
+    - 'split("a"), split("a+"), split("a+"; ""), split("a+"; "i"), split(""; "")'
   input: '"abaacaAad"'
   expected: |
     ["","b","","c","A","d"]
     ["abaacaAad"]
     ["","b","c","A","d"]
     ["","b","c","d"]
+    ["","a","b","a","a","c","a","A","a","d",""]
 
 - name: splits function
   args:
     - -c
-    - '[splits("a")], [splits("a+")], [splits("a+"; "")], [splits("a+"; "i")]'
+    - '[splits("a")], [splits("a+")], [splits("a+"; "")], [splits("a+"; "i")], [splits(""; "")]'
   input: '"abaacaAad"'
   expected: |
     ["","b","","c","A","d"]
     ["","b","c","A","d"]
     ["","b","c","A","d"]
     ["","b","c","d"]
+    ["","a","b","a","a","c","a","A","a","d",""]
 
 - name: sub function
   args:
-    - 'sub("a"; "b"), sub("aaa"; "b"), sub("a"; "b","c"), sub("a(?<a>.)"; "\(.a)b\(.a)"; "ig"), sub("(?<foo>★)"; "\(.foo)☆\(.foo)"), sub("^"; "b")'
+    - 'sub("a"; "b"), sub("aaa"; "b"), sub("a"; "b","c"), sub("a(?<a>.)"; "\(.a)b\(.a)"; "ig"), sub("(?<foo>★)"; "\(.foo)☆\(.foo)"), sub("^"; "b"), sub("a"; empty)'
   input: '"abc☆★☆ABC"'
   expected: |
     "bbc☆★☆ABC"
@@ -6440,21 +6556,21 @@
     "bbbc☆★☆BbBC"
     "abc☆★☆★☆ABC"
     "babc☆★☆ABC"
+    "abc☆★☆ABC"
 
 - name: gsub function
   args:
-    - 'gsub("a"; "b"), gsub("a.c"; "b"), gsub("a"; "b","c"), gsub("a(?<a>..)"; "\(.a+.a)"; "i"), gsub("(?<foo>★)"; "\(.foo)☆\(.foo)"), gsub("^"; "a")'
+    - 'gsub("a"; "b"), gsub("a.c"; "b"), gsub("a"; "b","c"), gsub("a(?<a>..)"; "\(.a+.a)"; "i"), gsub("(?<foo>★)"; "\(.foo)☆\(.foo)"), gsub("^"; "a"), gsub("a"; empty)'
   input: '"abcABC☆★☆ABCabc"'
   expected: |
     "bbcABC☆★☆ABCbbc"
     "bABC☆★☆ABCb"
     "bbcABC☆★☆ABCbbc"
-    "cbcABC☆★☆ABCbbc"
-    "bbcABC☆★☆ABCcbc"
     "cbcABC☆★☆ABCcbc"
     "bcbcBCBC☆★☆BCBCbcbc"
     "abcABC☆★☆★☆ABCabc"
     "aabcABC☆★☆ABCabc"
+    "abcABC☆★☆ABCabc"
 
 - name: INDEX function
   args:
@@ -8542,14 +8658,15 @@
 
 - name: double dash with args option
   args:
+    - -c
     - --args
     - --
-    - 1
-    - 2
-    - 3
+    - $ARGS
+    - --
+    - 0
   input: '0'
   expected: |
-    0
+    {"named":{},"positional":["--","0"]}
 
 - name: $ARGS variable with jsonargs option
   args:
