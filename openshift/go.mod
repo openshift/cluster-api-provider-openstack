@@ -89,3 +89,5 @@ require (
 )
 
 replace sigs.k8s.io/cluster-api-provider-openstack => ../
+
+replace google.golang.org/grpc => github.com/openshift-sustaining/grpc-go v1.75.1-sec.1
