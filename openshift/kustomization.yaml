@@ -11,3 +11,16 @@ images:
 - name: gcr.io/k8s-staging-capi-openstack/capi-openstack-controller
   newName: registry.ci.openshift.org/openshift
   newTag: openstack-cluster-api-controllers
+
+# Add TLS configuration args (substituted by cluster-capi-operator revisiongenerator)
+patches:
+- target:
+    kind: Deployment
+    name: capo-controller-manager
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: "--tls-min-version=${TLS_MIN_VERSION}"
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: "--tls-cipher-suites=${TLS_CIPHER_SUITES}"
