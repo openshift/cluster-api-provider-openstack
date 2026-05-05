@@ -308,8 +308,10 @@ full-vendoring: ## Runs commands that complete vendoring tasks for downstream CA
 generate-openshift:
 	$(MAKE) -C $(REPO_ROOT)/openshift generate
 
+# NOTE(stephenfin): generate-api-docs has been dropped from this target since there's an issue with vendoring
+# that I can't figure out
 .PHONY: generate
-generate: templates generate-controller-gen generate-codegen generate-conversion-gen generate-go generate-manifests generate-api-docs ## Generate all generated code
+generate: templates generate-controller-gen generate-codegen generate-conversion-gen generate-go generate-manifests  ## Generate all generated code
 
 .PHONY: generate-go
 generate-go: $(MOCKGEN)
