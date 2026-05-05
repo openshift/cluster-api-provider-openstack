@@ -27,7 +27,11 @@ unexport GOPATH
 TRACE ?= 0
 
 # Go
-GO_VERSION ?= 1.24.11
+GO_VERSION ?= 1.25.9
+
+# Ensure correct toolchain is used
+GOTOOLCHAIN = go$(GO_VERSION)
+export GOTOOLCHAIN
 
 # Directories.
 ARTIFACTS ?= $(REPO_ROOT)/_artifacts
@@ -57,7 +61,7 @@ GOVULNCHECK_VER := v1.1.4
 GOVULNCHECK_BIN := govulncheck
 GOVULNCHECK_PKG := golang.org/x/vuln/cmd/govulncheck
 
-TRIVY_VER := 0.49.1
+TRIVY_VER := 0.69.3
 
 # Binaries.
 CONTROLLER_GEN := $(TOOLS_BIN_DIR)/controller-gen
@@ -302,8 +306,10 @@ full-vendoring: ## Runs commands that complete vendoring tasks for downstream CA
 generate-openshift:
 	$(MAKE) -C $(REPO_ROOT)/openshift generate
 
+# NOTE(stephenfin): generate-api-docs has been dropped from this target since there's an issue with vendoring
+# that I can't figure out
 .PHONY: generate
-generate: templates generate-controller-gen generate-codegen generate-go generate-manifests generate-api-docs ## Generate all generated code
+generate: templates generate-controller-gen generate-codegen generate-go generate-manifests ## Generate all generated code
 
 .PHONY: generate-go
 generate-go: $(MOCKGEN)
