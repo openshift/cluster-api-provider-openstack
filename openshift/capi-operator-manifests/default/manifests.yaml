@@ -9203,6 +9203,9 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.openstackcluster.infrastructure.cluster.x-k8s.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: openshift-cluster-api
   rules:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
@@ -9224,6 +9227,9 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.openstackclustertemplate.infrastructure.cluster.x-k8s.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: openshift-cluster-api
   rules:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
@@ -9245,6 +9251,9 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.openstackmachine.infrastructure.cluster.x-k8s.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: openshift-cluster-api
   rules:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
@@ -9266,6 +9275,9 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.openstackmachinetemplate.infrastructure.cluster.x-k8s.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: openshift-cluster-api
   rules:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
@@ -9287,6 +9299,9 @@ webhooks:
   failurePolicy: Fail
   matchPolicy: Equivalent
   name: validation.openstackserver.infrastructure.cluster.x-k8s.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: openshift-cluster-api
   rules:
   - apiGroups:
     - infrastructure.cluster.x-k8s.io
