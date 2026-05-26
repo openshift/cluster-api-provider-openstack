@@ -46,6 +46,7 @@ const (
 	networkPrefix           string = "k8s-clusterapi"
 	kubeapiLBSuffix         string = "kubeapi"
 	waitForOctaviaLBCleanup        = 15 * time.Second
+	loadBalancerProtocolTCP        = "TCP"
 )
 
 const (
