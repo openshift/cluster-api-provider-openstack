@@ -184,7 +184,7 @@ existing external network as long as there is only one. It is an
 error if ExternalNetwork is not defined and there are multiple
 external networks unless EnableExternalNetwork is also set to false.</p>
 <p>If ExternalNetwork is not defined and there are no external networks
-the controller will proceed as though EnableExternalNetwork was set to true.</p>
+the controller will proceed as though EnableExternalNetwork was set to false.</p>
 </td>
 </tr>
 <tr>
@@ -2751,7 +2751,7 @@ existing external network as long as there is only one. It is an
 error if ExternalNetwork is not defined and there are multiple
 external networks unless EnableExternalNetwork is also set to false.</p>
 <p>If ExternalNetwork is not defined and there are no external networks
-the controller will proceed as though EnableExternalNetwork was set to true.</p>
+the controller will proceed as though EnableExternalNetwork was set to false.</p>
 </td>
 </tr>
 <tr>
@@ -3216,7 +3216,7 @@ existing external network as long as there is only one. It is an
 error if ExternalNetwork is not defined and there are multiple
 external networks unless EnableExternalNetwork is also set to false.</p>
 <p>If ExternalNetwork is not defined and there are no external networks
-the controller will proceed as though EnableExternalNetwork was set to true.</p>
+the controller will proceed as though EnableExternalNetwork was set to false.</p>
 </td>
 </tr>
 <tr>
@@ -4683,14 +4683,14 @@ rule:create_port:binding:profile</p>
 </tr>
 <tr>
 <td>
-<code>disablePortSecurity</code><br/>
+<code>enablePortSecurity</code><br/>
 <em>
 bool
 </em>
 </td>
 <td>
 <em>(Optional)</em>
-<p>disablePortSecurity enables or disables the port security when set.
+<p>enablePortSecurity enables or disables the port security when set.
 When not set, it takes the value of the corresponding field at the network level.</p>
 </td>
 </tr>
