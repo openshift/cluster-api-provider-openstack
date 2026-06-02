@@ -17,9 +17,12 @@ limitations under the License.
 package networking
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	common "github.com/gophercloud/gophercloud/openstack/common/extensions"
+	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/attributestags"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/portsbinding"
 	"github.com/gophercloud/gophercloud/openstack/networking/v2/extensions/portsecurity"
@@ -149,6 +152,7 @@ func Test_GetOrCreatePort(t *testing.T) {
 							AllowedAddressPairs: []ports.AddressPair{},
 						},
 					}).Return(&ports.Port{ID: portID1}, nil)
+				m.ListExtensions().Return([]extensions.Extension{}, nil)
 			},
 			&ports.Port{ID: portID1},
 			false,
@@ -232,6 +236,7 @@ func Test_GetOrCreatePort(t *testing.T) {
 					Return(&ports.Port{
 						ID: portID1,
 					}, nil)
+				m.ListExtensions().Return([]extensions.Extension{{Extension: common.Extension{Alias: "standard-attr-tag"}}}, nil)
 				m.ReplaceAllAttributesTags("ports", portID1, attributestags.ReplaceAllOpts{Tags: []string{"my-port-tag"}}).Return([]string{"my-port-tag"}, nil)
 				m.
 					ListSubnet(subnets.ListOpts{
@@ -323,6 +328,7 @@ func Test_GetOrCreatePort(t *testing.T) {
 						},
 					},
 					).Return(&ports.Port{ID: portID1}, nil)
+				m.ListExtensions().Return([]extensions.Extension{}, nil)
 			},
 			&ports.Port{ID: portID1},
 			false,
@@ -352,6 +358,7 @@ func Test_GetOrCreatePort(t *testing.T) {
 						AllowedAddressPairs: []ports.AddressPair{},
 					},
 				}).Return(&ports.Port{ID: portID1}, nil)
+				m.ListExtensions().Return([]extensions.Extension{{Extension: common.Extension{Alias: "standard-attr-tag"}}}, nil)
 				m.ReplaceAllAttributesTags("ports", portID1, attributestags.ReplaceAllOpts{Tags: []string{"my-instance-tag"}}).Return([]string{"my-instance-tag"}, nil)
 			},
 			&ports.Port{ID: portID1},
@@ -383,6 +390,7 @@ func Test_GetOrCreatePort(t *testing.T) {
 						AllowedAddressPairs: []ports.AddressPair{},
 					},
 				}).Return(&ports.Port{ID: portID1}, nil)
+				m.ListExtensions().Return([]extensions.Extension{{Extension: common.Extension{Alias: "standard-attr-tag"}}}, nil)
 				m.
 					ReplaceAllAttributesTags("ports", portID1, attributestags.ReplaceAllOpts{Tags: []string{"my-instance-tag", "my-port-tag"}}).
 					Return([]string{"my-instance-tag", "my-port-tag"}, nil)
@@ -429,11 +437,101 @@ func Test_GetOrCreatePort(t *testing.T) {
 						Description: "Created by cluster-api-provider-openstack cluster test-cluster",
 					}).Return(&trunks.Trunk{ID: trunkID}, nil)
 
+				m.ListExtensions().Return([]extensions.Extension{{Extension: common.Extension{Alias: "standard-attr-tag"}}}, nil)
 				m.ReplaceAllAttributesTags("ports", portID1, attributestags.ReplaceAllOpts{Tags: []string{"my-tag"}}).Return([]string{"my-tag"}, nil)
 				m.ReplaceAllAttributesTags("trunks", trunkID, attributestags.ReplaceAllOpts{Tags: []string{"my-tag"}}).Return([]string{"my-tag"}, nil)
 			},
 			&ports.Port{Name: "foo-port-1", ID: portID1},
 			false,
+		},
+		{
+			"skips instance tags when standard-attr-tag extension is not supported",
+			"foo-port-1",
+			infrav1.PortOpts{
+				Network: &infrav1.NetworkFilter{
+					ID: netID,
+				},
+			},
+			nil,
+			[]string{"my-instance-tag"},
+			func(m *mock.MockNetworkClientMockRecorder) {
+				m.
+					ListPort(ports.ListOpts{
+						Name:      "foo-port-1",
+						NetworkID: netID,
+					}).Return([]ports.Port{}, nil)
+				m.CreatePort(portsbinding.CreateOptsExt{
+					CreateOptsBuilder: ports.CreateOpts{
+						Name:                "foo-port-1",
+						Description:         "Created by cluster-api-provider-openstack cluster test-cluster",
+						NetworkID:           netID,
+						AllowedAddressPairs: []ports.AddressPair{},
+					},
+				}).Return(&ports.Port{ID: portID1}, nil)
+				m.ListExtensions().Return([]extensions.Extension{}, nil)
+			},
+			&ports.Port{ID: portID1},
+			false,
+		},
+		{
+			"errors when port tags are configured but standard-attr-tag extension is not supported",
+			"foo-port-1",
+			infrav1.PortOpts{
+				Network: &infrav1.NetworkFilter{
+					ID: netID,
+				},
+				Tags: []string{"my-port-tag"},
+			},
+			nil,
+			nil,
+			func(m *mock.MockNetworkClientMockRecorder) {
+				m.
+					ListPort(ports.ListOpts{
+						Name:      "foo-port-1",
+						NetworkID: netID,
+					}).Return([]ports.Port{}, nil)
+				m.CreatePort(portsbinding.CreateOptsExt{
+					CreateOptsBuilder: ports.CreateOpts{
+						Name:                "foo-port-1",
+						Description:         "Created by cluster-api-provider-openstack cluster test-cluster",
+						NetworkID:           netID,
+						AllowedAddressPairs: []ports.AddressPair{},
+					},
+				}).Return(&ports.Port{ID: portID1}, nil)
+				m.ListExtensions().Return([]extensions.Extension{}, nil)
+			},
+			nil,
+			true,
+		},
+		{
+			"errors when port tags are configured and ListExtensions fails",
+			"foo-port-1",
+			infrav1.PortOpts{
+				Network: &infrav1.NetworkFilter{
+					ID: netID,
+				},
+				Tags: []string{"my-port-tag"},
+			},
+			nil,
+			nil,
+			func(m *mock.MockNetworkClientMockRecorder) {
+				m.
+					ListPort(ports.ListOpts{
+						Name:      "foo-port-1",
+						NetworkID: netID,
+					}).Return([]ports.Port{}, nil)
+				m.CreatePort(portsbinding.CreateOptsExt{
+					CreateOptsBuilder: ports.CreateOpts{
+						Name:                "foo-port-1",
+						Description:         "Created by cluster-api-provider-openstack cluster test-cluster",
+						NetworkID:           netID,
+						AllowedAddressPairs: []ports.AddressPair{},
+					},
+				}).Return(&ports.Port{ID: portID1}, nil)
+				m.ListExtensions().Return(nil, errors.New("connection refused"))
+			},
+			nil,
+			true,
 		},
 		{
 			"creates port with value_specs",
@@ -469,6 +567,7 @@ func Test_GetOrCreatePort(t *testing.T) {
 							ValueSpecs:          &valueSpecs,
 						},
 					}).Return(&ports.Port{ID: portID1}, nil)
+				m.ListExtensions().Return([]extensions.Extension{}, nil)
 			},
 			&ports.Port{ID: portID1},
 			false,
@@ -502,6 +601,7 @@ func Test_GetOrCreatePort(t *testing.T) {
 							PropagateUplinkStatus: pointerToTrue,
 						},
 					}).Return(&ports.Port{ID: portID1, PropagateUplinkStatus: *pointerToTrue}, nil)
+				m.ListExtensions().Return([]extensions.Extension{}, nil)
 			},
 			&ports.Port{ID: portID1, PropagateUplinkStatus: *pointerToTrue},
 			false,

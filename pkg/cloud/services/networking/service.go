@@ -90,3 +90,18 @@ func (s *Service) replaceAllAttributesTags(eventObject runtime.Object, resourceT
 	record.Eventf(eventObject, "SuccessfulReplaceAllAttributeTags", "Replaced all attributestags for %s with tags %s", resourceID, uniqueTags)
 	return nil
 }
+
+// Checks if neutron supports Standard Attributes Tag Extension
+func (s *Service) getStdAttrTagSupport() (bool, error) {
+	allExts, err := s.client.ListExtensions()
+	if err != nil {
+		return false, err
+	}
+
+	for _, ext := range allExts {
+		if ext.Alias == "standard-attr-tag" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
