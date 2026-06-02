@@ -1215,12 +1215,12 @@ func Test_ReconcileLoadBalancerMember(t *testing.T) {
 			name: "nil LoadBalancerNetwork, return error and wait",
 			clusterSpec: func() *infrav1.OpenStackCluster {
 				c := makeCluster(nil, clusterNetID)
-				c.Status.APIServerLoadBalancer.LoadBalancerNetwork = nil
+				c.Status.APIServerManagedLoadBalancer.LoadBalancerNetwork = nil
 				return c
 			}(),
 			expectNetwork:      func(*mock.MockNetworkClientMockRecorder) {},
 			expectLoadBalancer: func(*mock.MockLbClientMockRecorder) {},
-			wantError:          errors.New("apiServerLoadBalancer.LoadBalancerNetwork is not yet available in openStackCluster.Status"),
+			wantError:          errors.New("apiServerManagedLoadBalancer.LoadBalancerNetwork is not yet available in openStackCluster.Status"),
 		},
 	}
 
