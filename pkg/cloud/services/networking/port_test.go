@@ -152,7 +152,6 @@ func Test_GetOrCreatePort(t *testing.T) {
 							AllowedAddressPairs: []ports.AddressPair{},
 						},
 					}).Return(&ports.Port{ID: portID1}, nil)
-				m.ListExtensions().Return([]extensions.Extension{}, nil)
 			},
 			&ports.Port{ID: portID1},
 			false,
@@ -328,7 +327,6 @@ func Test_GetOrCreatePort(t *testing.T) {
 						},
 					},
 					).Return(&ports.Port{ID: portID1}, nil)
-				m.ListExtensions().Return([]extensions.Extension{}, nil)
 			},
 			&ports.Port{ID: portID1},
 			false,
@@ -567,7 +565,6 @@ func Test_GetOrCreatePort(t *testing.T) {
 							ValueSpecs:          &valueSpecs,
 						},
 					}).Return(&ports.Port{ID: portID1}, nil)
-				m.ListExtensions().Return([]extensions.Extension{}, nil)
 			},
 			&ports.Port{ID: portID1},
 			false,
@@ -601,7 +598,6 @@ func Test_GetOrCreatePort(t *testing.T) {
 							PropagateUplinkStatus: pointerToTrue,
 						},
 					}).Return(&ports.Port{ID: portID1, PropagateUplinkStatus: *pointerToTrue}, nil)
-				m.ListExtensions().Return([]extensions.Extension{}, nil)
 			},
 			&ports.Port{ID: portID1, PropagateUplinkStatus: *pointerToTrue},
 			false,

@@ -170,21 +170,24 @@ func (s *Service) GetOrCreatePort(eventObject runtime.Object, clusterName string
 	tags = append(tags, instanceTags...)
 	tags = append(tags, portOpts.Tags...)
 
-	tagsAreSupported, err := s.getStdAttrTagSupport()
+	tagsAreSupported := false
+	if len(tags) > 0 {
+		tagsAreSupported, err = s.getStdAttrTagSupport()
 
-	if err != nil {
-		record.Warnf(eventObject, "FailedGetTagSupport", "Failed to verify neutron support for the standard-attr-tag extension, skipping tags: %v", err)
-	}
-
-	// Return error if user sets port tags; Skip over but warn for instance tags
-	if !tagsAreSupported {
-		if len(portOpts.Tags) > 0 {
-			err = fmt.Errorf("cannot tag port %s using port tags; tags are configured but neutron does not support the standard-attr-tag extension", portName)
-			record.Warnf(eventObject, "FailedTagPort", "Failed to tag port %s: %v", portName, err)
-			return nil, err
+		if err != nil {
+			record.Warnf(eventObject, "FailedGetTagSupport", "Failed to verify neutron support for the standard-attr-tag extension, skipping tags: %v", err)
 		}
 
-		record.Warnf(eventObject, "FailedTagPort", "Neutron does not support the standard-attr-tag extension, skipping instance tags for port %s", portName)
+		// Return error if user sets port tags; Skip over but warn for instance tags
+		if !tagsAreSupported {
+			if len(portOpts.Tags) > 0 {
+				err = fmt.Errorf("cannot tag port %s using port tags; tags are configured but neutron does not support the standard-attr-tag extension", portName)
+				record.Warnf(eventObject, "FailedTagPort", "Failed to tag port %s: %v", portName, err)
+				return nil, err
+			}
+
+			record.Warnf(eventObject, "FailedTagPort", "Neutron does not support the standard-attr-tag extension, skipping instance tags for port %s", portName)
+		}
 	}
 
 	if len(tags) > 0 && tagsAreSupported {
