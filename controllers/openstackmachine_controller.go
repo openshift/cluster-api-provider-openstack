@@ -554,8 +554,13 @@ func openStackMachineSpecToOpenStackServerSpec(openStackMachineSpec *infrav1.Ope
 
 	// If not ports are provided we create one.
 	// Ports must have a network so if none is provided we use the default network.
-	serverPorts := openStackMachineSpec.Ports
-	if len(openStackMachineSpec.Ports) == 0 {
+	var serverPorts []infrav1.PortOpts
+	if len(openStackMachineSpec.Ports) > 0 {
+		serverPorts = make([]infrav1.PortOpts, len(openStackMachineSpec.Ports))
+		for i := range openStackMachineSpec.Ports {
+			openStackMachineSpec.Ports[i].DeepCopyInto(&serverPorts[i])
+		}
+	} else {
 		serverPorts = make([]infrav1.PortOpts, 1)
 	}
 

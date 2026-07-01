@@ -385,6 +385,10 @@ func TestOpenStackMachineSpecToOpenStackServerSpec(t *testing.T) {
 	for i := range tests {
 		tt := tests[i]
 		t.Run(tt.name, func(t *testing.T) {
+			var specCopy *infrav1.OpenStackMachineSpec
+			if tt.spec != nil {
+				specCopy = tt.spec.DeepCopy()
+			}
 			spec, err := openStackMachineSpecToOpenStackServerSpec(tt.spec, identityRef, tags, "", userData, &openStackCluster.Status.WorkerSecurityGroup.ID, tt.cluster)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("openStackMachineSpecToOpenStackServerSpec() error = %v, wantErr %v", err, tt.wantErr)
@@ -392,6 +396,9 @@ func TestOpenStackMachineSpecToOpenStackServerSpec(t *testing.T) {
 			}
 			if !tt.wantErr && !reflect.DeepEqual(spec, tt.want) {
 				t.Errorf("openStackMachineSpecToOpenStackServerSpec() got = %+v, want %+v", spec, tt.want)
+			}
+			if tt.spec != nil && !reflect.DeepEqual(tt.spec, specCopy) {
+				t.Errorf("openStackMachineSpecToOpenStackServerSpec() mutated the input spec! before: %+v, after: %+v", specCopy, tt.spec)
 			}
 		})
 	}
