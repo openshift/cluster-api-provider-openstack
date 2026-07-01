@@ -14,3 +14,19 @@
 
 **For Next Task:**
 - Changes are fully verified and completed locally. No outstanding blockers or known issues.
+
+## AISOS-2052-qualreview: Qualitative bug review — root cause and test coverage
+
+**Status:** Completed
+
+**Changes Made:**
+- Reviewed changes in `controllers/openstackmachine_controller.go` and `controllers/openstackmachine_controller_test.go`.
+- Conducted bidirectional verification of the TDD assertion by temporarily reverting the fix and confirming that the test catches the mutation and fails.
+- Re-verified that the deep-copy fix allows all unit tests to pass cleanly.
+
+**Key Context:**
+- The in-place mutation bug was successfully isolated, and call site completeness was verified to be 100% since no other similar Spec conversion paths exist in the controller.
+- The new tests robustly prove that the bug is fixed and actively prevent regressions.
+
+**For Next Task:**
+- None. The fix is robustly reviewed and validated as adequate.
