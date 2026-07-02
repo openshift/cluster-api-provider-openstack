@@ -1,0 +1,413 @@
+[36mINFO[0m[2026-07-02T08:19:41Z] ci-operator version v20260701-01b066acf      
+[36mINFO[0m[2026-07-02T08:19:41Z] Loading configuration from https://config.ci.openshift.org for openshift/cluster-api-provider-openstack@main 
+[36mINFO[0m[2026-07-02T08:19:41Z] Resolved source https://github.com/openshift/cluster-api-provider-openstack to main@76198b24, merging: #423 b45d4c2a @forgeSmith-bot 
+[36mINFO[0m[2026-07-02T08:19:41Z] Running the http server at 10.129.11.128:8080 
+[36mINFO[0m[2026-07-02T08:19:41Z] Loading information from https://config.ci.openshift.org for integrated stream ocp/5.0 
+[36mINFO[0m[2026-07-02T08:19:42Z] Loading information from https://config.ci.openshift.org for integrated stream ocp/5.0 
+[36mINFO[0m[2026-07-02T08:19:42Z] Detected base image, will tag into pipeline:ocp_builder_rhel-9-golang-1.26-openshift-5.0  [36malias[0m=ocp_builder_rhel-9-golang-1.26-openshift-5.0 [36mdockerfile[0m=./Dockerfile.rhel [36mimage[0m=openstack-cluster-api-controllers
+[36mINFO[0m[2026-07-02T08:19:42Z] Detected base image, will tag into pipeline:ocp_5.0_base-rhel9  [36malias[0m=ocp_5.0_base-rhel9 [36mdockerfile[0m=./Dockerfile.rhel [36mimage[0m=openstack-cluster-api-controllers
+[36mINFO[0m[2026-07-02T08:19:42Z] Building release latest from a snapshot of ocp/5.0 
+[36mINFO[0m[2026-07-02T08:19:42Z] Building release initial from a snapshot of ocp/5.0 
+[36mINFO[0m[2026-07-02T08:19:42Z] Using namespace https://console.build13.ci.openshift.org/k8s/cluster/projects/ci-op-mff2r4kc 
+[36mINFO[0m[2026-07-02T08:19:42Z] Setting arch for src                          [36march[0m=amd64 [36mreasons[0m=verify
+[36mINFO[0m[2026-07-02T08:19:42Z] Running [input:root], src, verify            
+[36mINFO[0m[2026-07-02T08:19:42Z] Tagging openshift/release:rhel-9-release-golang-1.26-openshift-5.0 into pipeline:root. 
+[36mINFO[0m[2026-07-02T08:19:44Z] Building src                                 
+[36mINFO[0m[2026-07-02T08:19:44Z] Found existing build "src-amd64"             
+[36mINFO[0m[2026-07-02T08:21:50Z] Build src-amd64 succeeded after 2m6s         
+[36mINFO[0m[2026-07-02T08:21:50Z] Retrieving digests of member images          
+[36mINFO[0m[2026-07-02T08:21:51Z] Image ci-op-mff2r4kc/pipeline:src created     [36mdigest[0m=sha256:7a077286c873bb66fb865c09cebea772eb8a17a27c8d977e9f63207751b489b4 [36mfor-build[0m=src
+[36mINFO[0m[2026-07-02T08:21:51Z] Executing test verify                        
+[36mINFO[0m[2026-07-02T08:24:05Z] Logs for container test in pod verify:       
+[36mINFO[0m[2026-07-02T08:24:05Z] go mod tidy
+cd hack/tools; go mod tidy
+go: downloading k8s.io/api v0.34.7
+go: downloading k8s.io/apimachinery v0.34.7
+go: downloading github.com/k-orc/openstack-resource-controller/v2 v2.4.0
+go: downloading k8s.io/component-base v0.34.7
+go: downloading github.com/spf13/pflag v1.0.10
+go: downloading github.com/gophercloud/gophercloud/v2 v2.10.0
+go: downloading k8s.io/apiextensions-apiserver v0.34.7
+go: downloading k8s.io/code-generator v0.34.7
+go: downloading k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
+go: downloading sigs.k8s.io/controller-runtime v0.22.5
+go: downloading k8s.io/client-go v0.34.7
+go: downloading k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
+go: downloading sigs.k8s.io/cluster-api v1.12.7
+go: downloading github.com/go-logr/logr v1.4.3
+go: downloading k8s.io/klog/v2 v2.130.1
+go: downloading sigs.k8s.io/structured-merge-diff/v6 v6.4.0
+go: downloading github.com/google/go-cmp v0.7.0
+go: downloading github.com/onsi/gomega v1.39.1
+go: downloading go.uber.org/mock v0.6.0
+go: downloading github.com/gophercloud/utils/v2 v2.0.0-20241220104409-2e0af06694a1
+go: downloading github.com/google/uuid v1.6.0
+go: downloading github.com/prometheus/client_golang v1.23.2
+go: downloading golang.org/x/text v0.34.0
+go: downloading github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+go: downloading github.com/onsi/ginkgo/v2 v2.28.1
+go: downloading sigs.k8s.io/cluster-api/test v1.12.7
+go: downloading sigs.k8s.io/yaml v1.6.0
+go: downloading github.com/gogo/protobuf v1.3.2
+go: downloading sigs.k8s.io/randfill v1.0.0
+go: downloading gopkg.in/inf.v0 v0.9.1
+go: downloading github.com/evanphx/json-patch/v5 v5.9.11
+go: downloading github.com/fxamacker/cbor/v2 v2.9.0
+go: downloading github.com/emicklei/go-restful/v3 v3.13.0
+go: downloading github.com/spf13/cobra v1.10.1
+go: downloading github.com/go-openapi/jsonreference v0.20.2
+go: downloading github.com/go-openapi/swag v0.23.0
+go: downloading github.com/google/gnostic-models v0.7.0
+go: downloading go.yaml.in/yaml/v3 v3.0.4
+go: downloading google.golang.org/protobuf v1.36.11
+go: downloading github.com/stretchr/testify v1.11.1
+go: downloading sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8
+go: downloading github.com/hashicorp/go-version v1.9.0
+go: downloading golang.org/x/crypto v0.48.0
+go: downloading gopkg.in/ini.v1 v1.67.1
+go: downloading go.yaml.in/yaml/v2 v2.4.2
+go: downloading go.uber.org/goleak v1.3.0
+go: downloading github.com/google/gofuzz v1.2.0
+go: downloading github.com/pkg/errors v0.9.1
+go: downloading github.com/blang/semver/v4 v4.0.0
+go: downloading github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
+go: downloading golang.org/x/net v0.49.0
+go: downloading k8s.io/apiserver v0.34.7
+go: downloading golang.org/x/time v0.11.0
+go: downloading gopkg.in/evanphx/json-patch.v4 v4.12.0
+go: downloading gomodules.xyz/jsonpatch/v2 v2.5.0
+go: downloading github.com/gofrs/uuid/v5 v5.3.0
+go: downloading gopkg.in/yaml.v3 v3.0.1
+go: downloading github.com/beorn7/perks v1.0.1
+go: downloading github.com/cespare/xxhash/v2 v2.3.0
+go: downloading github.com/prometheus/client_model v0.6.2
+go: downloading github.com/prometheus/common v0.66.1
+go: downloading github.com/prometheus/procfs v0.16.1
+go: downloading golang.org/x/sys v0.41.0
+go: downloading github.com/gobuffalo/flect v1.0.3
+go: downloading sigs.k8s.io/kind v0.31.0
+go: downloading github.com/json-iterator/go v1.1.12
+go: downloading github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
+go: downloading go.uber.org/zap v1.27.1
+go: downloading github.com/go-logr/zapr v1.3.0
+go: downloading k8s.io/gengo/v2 v2.0.0-20250604051438-85fd79dbfd9f
+go: downloading github.com/go-openapi/jsonpointer v0.21.0
+go: downloading github.com/x448/float16 v0.8.4
+go: downloading github.com/mailru/easyjson v0.7.7
+go: downloading github.com/inconshreveable/mousetrap v1.1.0
+go: downloading gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
+go: downloading golang.org/x/term v0.40.0
+go: downloading github.com/moby/moby/api v1.54.1
+go: downloading k8s.io/cluster-bootstrap v0.34.2
+go: downloading golang.org/x/oauth2 v0.34.0
+go: downloading github.com/stretchr/objx v0.5.2
+go: downloading github.com/google/btree v1.1.3
+go: downloading golang.org/x/sync v0.19.0
+go: downloading github.com/fsnotify/fsnotify v1.9.0
+go: downloading github.com/evanphx/json-patch v5.7.0+incompatible
+go: downloading github.com/klauspost/compress v1.18.0
+go: downloading github.com/gkampitakis/go-snaps v0.5.15
+go: downloading github.com/joshdk/go-junit v1.0.0
+go: downloading github.com/Masterminds/semver/v3 v3.4.0
+go: downloading go.opentelemetry.io/otel/trace v1.41.0
+go: downloading github.com/kylelemons/godebug v1.1.0
+go: downloading github.com/mfridman/tparse v0.18.0
+go: downloading github.com/fatih/color v1.18.0
+go: downloading go.opentelemetry.io/otel v1.41.0
+go: downloading github.com/google/go-github/v53 v53.2.0
+go: downloading github.com/olekukonko/tablewriter v1.0.9
+go: downloading github.com/distribution/reference v0.6.0
+go: downloading github.com/MakeNowJust/heredoc v1.0.0
+go: downloading github.com/moby/moby/client v0.4.0
+go: downloading golang.org/x/tools v0.41.0
+go: downloading go.uber.org/multierr v1.11.0
+go: downloading github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
+go: downloading github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
+go: downloading github.com/josharian/intern v1.0.0
+go: downloading github.com/kr/pretty v0.3.1
+go: downloading github.com/adrg/xdg v0.5.3
+go: downloading github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
+go: downloading github.com/spf13/viper v1.21.0
+go: downloading github.com/pelletier/go-toml v1.9.5
+go: downloading al.essio.dev/pkg/shellescape v1.5.1
+go: downloading github.com/Masterminds/sprig/v3 v3.3.0
+go: downloading github.com/docker/go-units v0.5.0
+go: downloading github.com/moby/docker-image-spec v1.3.1
+go: downloading github.com/opencontainers/image-spec v1.1.1
+go: downloading gotest.tools/v3 v3.5.2
+go: downloading github.com/go-task/slim-sprig/v3 v3.0.0
+go: downloading github.com/mattn/go-colorable v0.1.14
+go: downloading github.com/mattn/go-isatty v0.0.20
+go: downloading github.com/gkampitakis/ciinfo v0.3.2
+go: downloading github.com/gkampitakis/go-diff v1.3.2
+go: downloading github.com/goccy/go-yaml v1.18.0
+go: downloading github.com/maruel/natural v1.1.1
+go: downloading github.com/tidwall/gjson v1.18.0
+go: downloading github.com/tidwall/pretty v1.2.1
+go: downloading github.com/opencontainers/go-digest v1.0.0
+go: downloading github.com/NYTimes/gziphandler v1.1.1
+go: downloading github.com/mattn/go-runewidth v0.0.16
+go: downloading github.com/olekukonko/errors v1.1.0
+go: downloading github.com/olekukonko/ll v0.1.1
+go: downloading github.com/Microsoft/go-winio v0.6.2
+go: downloading github.com/containerd/errdefs v1.0.0
+go: downloading github.com/containerd/errdefs/pkg v0.3.0
+go: downloading github.com/docker/go-connections v0.6.0
+go: downloading go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.65.0
+go: downloading github.com/kr/text v0.2.0
+go: downloading github.com/rogpeppe/go-internal v1.14.1
+go: downloading github.com/go-viper/mapstructure/v2 v2.4.0
+go: downloading github.com/sagikazarmark/locafero v0.11.0
+go: downloading github.com/spf13/afero v1.15.0
+go: downloading github.com/spf13/cast v1.10.0
+go: downloading github.com/ProtonMail/go-crypto v0.0.0-20230217124315-7d5c6f04bbb8
+go: downloading github.com/google/go-querystring v1.1.0
+go: downloading github.com/coredns/corefile-migration v1.0.31
+go: downloading github.com/google/cel-go v0.26.0
+go: downloading golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated
+go: downloading dario.cat/mergo v1.0.1
+go: downloading github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+go: downloading github.com/Masterminds/goutils v1.1.1
+go: downloading github.com/huandu/xstrings v1.5.0
+go: downloading github.com/mitchellh/copystructure v1.2.0
+go: downloading github.com/shopspring/decimal v1.4.0
+go: downloading github.com/google/pprof v0.0.0-20260115054156-294ebfa9ad83
+go: downloading github.com/tidwall/sjson v1.2.5
+go: downloading github.com/tidwall/match v1.1.1
+go: downloading go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.40.0
+go: downloading go.opentelemetry.io/otel/sdk v1.40.0
+go: downloading github.com/rivo/uniseg v0.4.7
+go: downloading github.com/olekukonko/cat v0.0.0-20250911104152-50322a0618f6
+go: downloading pgregory.net/rapid v1.2.0
+go: downloading go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.40.0
+go: downloading github.com/valyala/fastjson v1.6.4
+go: downloading github.com/felixge/httpsnoop v1.0.4
+go: downloading go.opentelemetry.io/otel/metric v1.41.0
+go: downloading go.opentelemetry.io/otel/sdk/metric v1.40.0
+go: downloading github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8
+go: downloading github.com/frankban/quicktest v1.14.6
+go: downloading github.com/subosito/gotenv v1.6.0
+go: downloading github.com/pelletier/go-toml/v2 v2.2.4
+go: downloading google.golang.org/genproto/googleapis/api v0.0.0-20260128011058-8636f8732409
+go: downloading golang.org/x/tools/go/expect v0.1.0-deprecated
+go: downloading github.com/mitchellh/reflectwalk v1.0.2
+go: downloading cel.dev/expr v0.25.1
+go: downloading go.opentelemetry.io/proto/otlp v1.9.0
+go: downloading google.golang.org/genproto/googleapis/rpc v0.0.0-20260128011058-8636f8732409
+go: downloading google.golang.org/grpc v1.79.3
+go: downloading github.com/BurntSushi/toml v1.4.0
+go: downloading github.com/go-logr/stdr v1.2.2
+go: downloading github.com/coredns/caddy v1.1.1
+go: downloading github.com/stoewer/go-strcase v1.3.0
+go: downloading sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2
+go: downloading github.com/cloudflare/circl v1.6.3
+go: downloading golang.org/x/mod v0.32.0
+go: downloading github.com/antlr4-go/antlr/v4 v4.13.0
+go: downloading github.com/cenkalti/backoff/v5 v5.0.3
+go: downloading github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.7
+go: downloading go.opentelemetry.io/auto/sdk v1.2.1
+go: downloading golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
+go: downloading github.com/golang/protobuf v1.5.4
+go: downloading github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
+go: downloading go.etcd.io/etcd/client/pkg/v3 v3.6.6
+go: downloading go.etcd.io/etcd/client/v3 v3.6.6
+go: downloading go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.65.0
+go: downloading go.etcd.io/etcd/api/v3 v3.6.6
+go: downloading github.com/coreos/go-systemd/v22 v22.5.0
+go: downloading gonum.org/v1/gonum v0.16.0
+go: downloading github.com/coreos/go-semver v0.3.1
+go: downloading github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
+go: downloading sigs.k8s.io/cluster-api/hack/tools v0.0.0-20250805173327-a7b9f27af519
+go: downloading github.com/itchyny/gojq v0.12.19
+go: downloading github.com/a8m/envsubst v1.4.3
+go: downloading github.com/ahmetb/gen-crd-api-reference-docs v0.3.1-0.20220420215017-3f29e6853552
+go: downloading sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20250620151452-b9a9ca01fd37
+go: downloading sigs.k8s.io/controller-tools v0.18.0
+go: downloading sigs.k8s.io/kustomize/kustomize/v5 v5.8.1
+go: downloading k8s.io/klog v0.2.0
+go: downloading github.com/russross/blackfriday/v2 v2.1.0
+go: downloading k8s.io/gengo v0.0.0-20201203183100-97869a43a9d9
+go: downloading github.com/itchyny/go-yaml v0.0.0-20251001235044-fca9a0999f15
+go: downloading github.com/mattn/go-runewidth v0.0.19
+go: downloading sigs.k8s.io/kubebuilder/docs/book/utils v0.0.0-20211028165026-57688c578b5d
+go: downloading k8s.io/release v0.16.9
+go: downloading gopkg.in/evanphx/json-patch.v4 v4.13.0
+go: downloading golang.org/x/time v0.12.0
+go: downloading gopkg.in/yaml.v2 v2.4.0
+go: downloading github.com/onsi/ginkgo v1.16.5
+go: downloading sigs.k8s.io/kustomize/api v0.21.1
+go: downloading sigs.k8s.io/kustomize/cmd/config v0.21.1
+go: downloading sigs.k8s.io/kustomize/kyaml v0.21.1
+go: downloading github.com/itchyny/timefmt-go v0.1.8
+go: downloading github.com/google/go-github v17.0.0+incompatible
+go: downloading github.com/clipperhouse/uax29/v2 v2.3.0
+go: downloading github.com/clipperhouse/stringish v0.1.1
+go: downloading github.com/ProtonMail/go-crypto v1.1.3
+go: downloading github.com/go-errors/errors v1.4.2
+go: downloading github.com/nxadm/tail v1.4.8
+go: downloading github.com/sergi/go-diff v1.4.0
+go: downloading github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00
+go: downloading github.com/xlab/treeprint v1.2.0
+go: downloading gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
+go: downloading github.com/sirupsen/logrus v1.9.3
+go: downloading github.com/cheggaaa/pb/v3 v3.1.5
+go: downloading github.com/nozzle/throttler v0.0.0-20180817012639-2ea982251481
+go: downloading github.com/go-git/go-git/v5 v5.13.0
+go: downloading github.com/google/go-github/v58 v58.0.0
+go: downloading github.com/saschagrunert/go-modiff v1.3.5
+go: downloading sigs.k8s.io/release-sdk v0.11.0
+go: downloading sigs.k8s.io/release-utils v0.8.1
+go: downloading github.com/VividCortex/ewma v1.2.0
+go: downloading github.com/pjbgf/sha1cd v0.3.0
+go: downloading github.com/emirpasic/gods v1.18.1
+go: downloading github.com/go-git/go-billy/v5 v5.6.0
+go: downloading github.com/go-git/go-git-fixtures/v4 v4.3.2-0.20231010084843-55a94097c399
+go: downloading github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99
+go: downloading github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376
+go: downloading github.com/elazarl/goproxy v1.2.1
+go: downloading github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da
+go: downloading github.com/kevinburke/ssh_config v1.2.0
+go: downloading github.com/skeema/knownhosts v1.3.0
+go: downloading github.com/xanzy/ssh-agent v0.3.3
+go: downloading github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5
+go: downloading github.com/gliderlabs/ssh v0.3.8
+go: downloading github.com/cyphar/filepath-securejoin v0.2.5
+go: downloading gopkg.in/warnings.v0 v0.1.2
+go: downloading github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be
+make -C hack/tools bin/kustomize
+make[1]: Entering directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+mkdir -p bin
+CGO_ENABLED=0 go build -tags=tools -o bin/kustomize sigs.k8s.io/kustomize/kustomize/v5
+make[1]: Leaving directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+hack/tools/bin/kustomize build "kustomize/v1beta1/default" > "templates/cluster-template.yaml"
+hack/tools/bin/kustomize build "kustomize/v1beta1/without-lb" > "templates/cluster-template-without-lb.yaml"
+hack/tools/bin/kustomize build "kustomize/v1beta1/flatcar" > "templates/cluster-template-flatcar.yaml"
+hack/tools/bin/kustomize build "kustomize/v1beta1/flatcar-sysext" > "templates/cluster-template-flatcar-sysext.yaml"
+hack/tools/bin/kustomize build "kustomize/v1beta1/capi-v1beta1" > "templates/cluster-template-capi-v1beta1.yaml"
+make -C hack/tools bin/controller-gen
+make[1]: Entering directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+go build -tags=tools -o bin/controller-gen sigs.k8s.io/controller-tools/cmd/controller-gen
+make[1]: Leaving directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+hack/tools/bin/controller-gen \
+	paths=./api/... \
+	object:headerFile=./hack/boilerplate/boilerplate.generatego.txt
+make -C hack/tools bin/openapi-gen
+make[1]: Entering directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+go build -tags=tools -o bin/openapi-gen k8s.io/kube-openapi/cmd/openapi-gen
+make[1]: Leaving directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+make -C hack/tools bin/applyconfiguration-gen
+make[1]: Entering directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+go build -tags=tools -o bin/applyconfiguration-gen k8s.io/code-generator/cmd/applyconfiguration-gen
+make[1]: Leaving directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+make -C hack/tools bin/client-gen
+make[1]: Entering directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+go build -tags=tools -o bin/client-gen k8s.io/code-generator/cmd/client-gen
+make[1]: Leaving directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+make -C hack/tools bin/lister-gen
+make[1]: Entering directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+go build -tags=tools -o bin/lister-gen k8s.io/code-generator/cmd/lister-gen
+make[1]: Leaving directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+make -C hack/tools bin/informer-gen
+make[1]: Entering directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+go build -tags=tools -o bin/informer-gen k8s.io/code-generator/cmd/informer-gen
+make[1]: Leaving directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+** Generating OpenAPI definitions **
+** Generating openapi.json **
+** Generating applyconfiguration code **
+** Generating clientset code **
+** Generating lister code **
+** Generating informer code **
+make -C hack/tools bin/mockgen
+make[1]: Entering directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+go build -tags=tools -o bin/mockgen go.uber.org/mock/mockgen
+make[1]: Leaving directory '/go/src/sigs.k8s.io/cluster-api-provider-openstack/hack/tools'
+go generate ./...
+hack/tools/bin/controller-gen \
+	paths=./api/... \
+	crd:crdVersions=v1 \
+	output:crd:dir=config/crd/bases
+hack/tools/bin/controller-gen \
+	paths=./pkg/webhooks/... \
+	output:webhook:dir=config/webhook \
+	webhook
+# We also need to extract rbac from ORC while we're running its controllers
+hack/tools/bin/controller-gen \
+	paths=./ \
+	paths=./controllers/... \
+	output:rbac:dir=config/rbac \
+	rbac:roleName=manager-role
+go mod vendor
+cd hack/tools; go mod vendor
+diff --git a/hack/tools/vendor/sigs.k8s.io/cluster-api-provider-openstack/controllers/openstackmachine_controller.go b/hack/tools/vendor/sigs.k8s.io/cluster-api-provider-openstack/controllers/openstackmachine_controller.go
+index 3ed0e9f84..f2ce1a24a 100644
+--- a/hack/tools/vendor/sigs.k8s.io/cluster-api-provider-openstack/controllers/openstackmachine_controller.go
++++ b/hack/tools/vendor/sigs.k8s.io/cluster-api-provider-openstack/controllers/openstackmachine_controller.go
+@@ -554,8 +554,13 @@ func openStackMachineSpecToOpenStackServerSpec(openStackMachineSpec *infrav1.Ope
+ 
+ 	// If not ports are provided we create one.
+ 	// Ports must have a network so if none is provided we use the default network.
+-	serverPorts := openStackMachineSpec.Ports
+-	if len(openStackMachineSpec.Ports) == 0 {
++	var serverPorts []infrav1.PortOpts
++	if len(openStackMachineSpec.Ports) > 0 {
++		serverPorts = make([]infrav1.PortOpts, len(openStackMachineSpec.Ports))
++		for i := range openStackMachineSpec.Ports {
++			openStackMachineSpec.Ports[i].DeepCopyInto(&serverPorts[i])
++		}
++	} else {
+ 		serverPorts = make([]infrav1.PortOpts, 1)
+ 	}
+ 
+vendored files are out of date, run go mod vendor
+make: *** [Makefile:715: verify-vendoring] Error 1
+{"component":"entrypoint","error":"wrapped process failed: exit status 2","file":"sigs.k8s.io/prow/pkg/entrypoint/run.go:84","func":"sigs.k8s.io/prow/pkg/entrypoint.Options.internalRun","level":"error","msg":"Error executing test process","severity":"error","time":"2026-07-02T08:24:04Z"} 
+[36mINFO[0m[2026-07-02T08:24:05Z] Ran for 4m23s                                
+[31mERRO[0m[2026-07-02T08:24:05Z] Some steps failed:                           
+[31mERRO[0m[2026-07-02T08:24:05Z] 
+  * could not run steps: step verify failed: test "verify" failed: could not watch pod: the pod ci-op-mff2r4kc/verify failed after 2m9s (failed containers: test): ContainerFailed one or more containers exited
+
+Container test exited with code 2, reason Error
+---
+8s.io/cluster-api-provider-openstack/hack/tools'
+go generate ./...
+hack/tools/bin/controller-gen \
+	paths=./api/... \
+	crd:crdVersions=v1 \
+	output:crd:dir=config/crd/bases
+hack/tools/bin/controller-gen \
+	paths=./pkg/webhooks/... \
+	output:webhook:dir=config/webhook \
+	webhook
+# We also need to extract rbac from ORC while we're running its controllers
+hack/tools/bin/controller-gen \
+	paths=./ \
+	paths=./controllers/... \
+	output:rbac:dir=config/rbac \
+	rbac:roleName=manager-role
+go mod vendor
+cd hack/tools; go mod vendor
+diff --git a/hack/tools/vendor/sigs.k8s.io/cluster-api-provider-openstack/controllers/openstackmachine_controller.go b/hack/tools/vendor/sigs.k8s.io/cluster-api-provider-openstack/controllers/openstackmachine_controller.go
+index 3ed0e9f84..f2ce1a24a 100644
+--- a/hack/tools/vendor/sigs.k8s.io/cluster-api-provider-openstack/controllers/openstackmachine_controller.go
++++ b/hack/tools/vendor/sigs.k8s.io/cluster-api-provider-openstack/controllers/openstackmachine_controller.go
+@@ -554,8 +554,13 @@ func openStackMachineSpecToOpenStackServerSpec(openStackMachineSpec *infrav1.Ope
+ 
+ 	// If not ports are provided we create one.
+ 	// Ports must have a network so if none is provided we use the default network.
+-	serverPorts := openStackMachineSpec.Ports
+-	if len(openStackMachineSpec.Ports) == 0 {
++	var serverPorts []infrav1.PortOpts
++	if len(openStackMachineSpec.Ports) > 0 {
++		serverPorts = make([]infrav1.PortOpts, len(openStackMachineSpec.Ports))
++		for i := range openStackMachineSpec.Ports {
++			openStackMachineSpec.Ports[i].DeepCopyInto(&serverPorts[i])
++		}
++	} else {
+ 		serverPorts = make([]infrav1.PortOpts, 1)
+ 	}
+ 
+vendored files are out of date, run go mod vendor
+make: *** [Makefile:715: verify-vendoring] Error 1
+{"component":"entrypoint","error":"wrapped process failed: exit status 2","file":"sigs.k8s.io/prow/pkg/entrypoint/run.go:84","func":"sigs.k8s.io/prow/pkg/entrypoint.Options.internalRun","level":"error","msg":"Error executing test process","severity":"error","time":"2026-07-02T08:24:04Z"}
+--- 
+[36mINFO[0m[2026-07-02T08:24:05Z] Reporting job state 'failed' with reason 'executing_graph:step_failed:running_pod' 
