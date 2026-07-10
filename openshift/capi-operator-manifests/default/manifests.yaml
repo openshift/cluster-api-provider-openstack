@@ -9131,7 +9131,7 @@ spec:
         command:
         - /manager
         image: registry.ci.openshift.org/openshift:openstack-cluster-api-controllers
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         livenessProbe:
           httpGet:
             path: /healthz
