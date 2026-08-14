@@ -308,6 +308,7 @@ merge-bot: full-vendoring generate generate-openshift ## Runs targets that help 
 
 .PHONY: full-vendoring
 full-vendoring: ## Runs commands that complete vendoring tasks for downstream CAPO.
+	rm -rf openshift/vendor openshift/go.mod openshift/e2e openshift/pkg
 	go mod tidy && go mod vendor
 	cd $(TOOLS_DIR); go mod tidy; go mod vendor
 
