@@ -15,7 +15,8 @@ fi
 # Rebase replays old downstream commits that predate cluster-capi-operator.
 # Conflict resolution can leave stale openshift/ artifacts, removed API version
 # directories, and main.go/suite_test.go scheme registrations.
-"$(dirname "$0")/cleanup-stale-rebase-artifacts.sh"
+repo_root="$(git rev-parse --show-toplevel)"
+"${repo_root}/hack/rebasebot-helpers/cleanup-stale-rebase-artifacts.sh"
 
 make merge-bot
 
