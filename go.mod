@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
-	github.com/go-logr/logr v1.4.3
+	github.com/go-logr/logr v1.4.4
 	github.com/google/go-cmp v0.7.0
 	github.com/google/gofuzz v1.2.0
 	github.com/google/uuid v1.6.0
@@ -12,27 +12,27 @@ require (
 	github.com/gophercloud/utils/v2 v2.0.0-20241220104409-2e0af06694a1
 	github.com/hashicorp/go-version v1.9.0
 	github.com/k-orc/openstack-resource-controller/v2 v2.4.0
-	github.com/onsi/ginkgo/v2 v2.28.1
-	github.com/onsi/gomega v1.39.1
+	github.com/onsi/ginkgo/v2 v2.28.2
+	github.com/onsi/gomega v1.42.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/pflag v1.0.10
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/text v0.34.0
-	gopkg.in/ini.v1 v1.67.1
-	k8s.io/api v0.34.7
-	k8s.io/apiextensions-apiserver v0.34.7
-	k8s.io/apimachinery v0.34.7
-	k8s.io/client-go v0.34.7
-	k8s.io/code-generator v0.34.7
-	k8s.io/component-base v0.34.7
+	gopkg.in/ini.v1 v1.67.3
+	k8s.io/api v0.34.10
+	k8s.io/apiextensions-apiserver v0.34.10
+	k8s.io/apimachinery v0.34.10
+	k8s.io/client-go v0.34.10
+	k8s.io/code-generator v0.34.10
+	k8s.io/component-base v0.34.10
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
-	sigs.k8s.io/cluster-api v1.12.7
-	sigs.k8s.io/cluster-api/test v1.12.7
+	sigs.k8s.io/cluster-api v1.12.10
+	sigs.k8s.io/cluster-api/test v1.12.10
 	sigs.k8s.io/controller-runtime v0.22.5
-	sigs.k8s.io/structured-merge-diff/v6 v6.4.0
+	sigs.k8s.io/structured-merge-diff/v6 v6.4.2
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -153,11 +153,11 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260128011058-8636f8732409 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260128011058-8636f8732409 // indirect
 	google.golang.org/grpc v1.79.3 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiserver v0.34.7 // indirect
+	k8s.io/apiserver v0.34.10 // indirect
 	k8s.io/cluster-bootstrap v0.34.2 // indirect
 	k8s.io/gengo/v2 v2.0.0-20250604051438-85fd79dbfd9f // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2 // indirect
