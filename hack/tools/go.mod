@@ -172,3 +172,5 @@ require (
 )
 
 replace sigs.k8s.io/cluster-api-provider-openstack => ../..
+
+replace golang.org/x/net => github.com/openshift-sustaining/net v0.50.0-sec.4
