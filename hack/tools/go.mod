@@ -153,3 +153,5 @@ replace (
 	k8s.io/gengo/v2 => k8s.io/gengo/v2 v2.0.0-20240228010128-51d4e06bde70
 	sigs.k8s.io/cluster-api-provider-openstack => ../..
 )
+
+replace golang.org/x/net => github.com/openshift-sustaining/net v0.35.0-sec.4
