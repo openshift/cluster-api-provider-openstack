@@ -25,7 +25,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	infrav1alpha1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha1"
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
 )
 
 var _ = Describe("OpenStackServer API validations", func() {
@@ -146,7 +146,7 @@ var _ = Describe("OpenStackServer API validations", func() {
 			server := defaultServer()
 			server.Spec.RootVolume = &infrav1.RootVolume{SizeGiB: 50, BlockDeviceVolume: infrav1.BlockDeviceVolume{}}
 			server.Spec.AdditionalBlockDevices = []infrav1.AdditionalBlockDevice{
-				{Name: "user", SizeGiB: 30, Storage: infrav1.BlockDeviceStorage{}},
+				{Name: "user", SizeGiB: 30, Storage: infrav1.BlockDeviceStorage{Type: infrav1.LocalBlockDevice}},
 			}
 
 			By("Creating a server with spec.RootVolume and non-root device name in spec.AdditionalBlockDevices")
@@ -157,14 +157,14 @@ var _ = Describe("OpenStackServer API validations", func() {
 			server := defaultServer()
 			server.Spec.RootVolume = &infrav1.RootVolume{SizeGiB: 50, BlockDeviceVolume: infrav1.BlockDeviceVolume{}}
 			server.Spec.AdditionalBlockDevices = []infrav1.AdditionalBlockDevice{
-				{Name: "root", SizeGiB: 30, Storage: infrav1.BlockDeviceStorage{}},
+				{Name: "root", SizeGiB: 30, Storage: infrav1.BlockDeviceStorage{Type: infrav1.LocalBlockDevice}},
 			}
 
 			By("Creating a server with spec.RootVolume and root device name in spec.AdditionalBlockDevices")
 			Expect(k8sClient.Create(ctx, server)).NotTo(Succeed(), "OpenStackserver creation with root device name in spec.AdditionalBlockDevices should not succeed")
 		})
 
-		It("should not allow to create server with both SecurityGroups and DisablePortSecurity", func() {
+		It("should not allow to create server with both SecurityGroups and EnablePortSecurity set to false", func() {
 			server := defaultServer()
 			server.Spec.Ports = []infrav1.PortOpts{
 				{
@@ -172,13 +172,13 @@ var _ = Describe("OpenStackServer API validations", func() {
 						Filter: &infrav1.SecurityGroupFilter{Name: "test-security-group"},
 					}},
 					ResolvedPortSpecFields: infrav1.ResolvedPortSpecFields{
-						DisablePortSecurity: ptr.To(true),
+						EnablePortSecurity: ptr.To(false),
 					},
 				},
 			}
 
-			By("Creating a server with both SecurityGroups and DisablePortSecurity")
-			Expect(k8sClient.Create(ctx, server)).NotTo(Succeed(), "OpenStackServer creation with both SecurityGroups and DisablePortSecurity should not succeed")
+			By("Creating a server with both SecurityGroups and EnablePortSecurity set to false")
+			Expect(k8sClient.Create(ctx, server)).NotTo(Succeed(), "OpenStackServer creation with both SecurityGroups and EnablePortSecurity set to false should not succeed")
 		})
 
 		/* FIXME: These tests are failing

@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/testr"
 	"github.com/gophercloud/gophercloud/v2"
 	"github.com/gophercloud/gophercloud/v2/openstack/blockstorage/v3/volumes"
@@ -30,20 +31,23 @@ import (
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/portsbinding"
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/extensions/trunks"
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/ports"
-	. "github.com/onsi/gomega" //nolint:revive
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	"sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/cluster-api/test/framework"
+	conditions "sigs.k8s.io/cluster-api/util/conditions"
+	"sigs.k8s.io/cluster-api/util/patch"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	infrav1alpha1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha1"
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients/mock"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/cloud/services/compute"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/scope"
@@ -104,6 +108,17 @@ var createDefaultPort = func(r *recorders) {
 	r.network.CreatePort(portsBuilder).Return(&ports.Port{
 		ID: portUUID,
 	}, nil)
+}
+
+var createDefaultPortFails = func(r *recorders) {
+	createOpts := ports.CreateOpts{
+		Name:      openStackServerName + "-0",
+		NetworkID: networkUUID,
+	}
+	portsBuilder := portsbinding.CreateOptsExt{
+		CreateOptsBuilder: createOpts,
+	}
+	r.network.CreatePort(portsBuilder).Return(nil, fmt.Errorf("Error creating port"))
 }
 
 var createDefaultServer = func(r *recorders) {
@@ -222,7 +237,7 @@ func TestOpenStackServerReconciler_requeueOpenStackServersForCluster(t *testing.
 						Name:      "server-1",
 						Namespace: "test-ns",
 						Labels: map[string]string{
-							clusterv1beta1.ClusterNameLabel: "test-cluster",
+							clusterv1.ClusterNameLabel: "test-cluster",
 						},
 					},
 					Spec: infrav1alpha1.OpenStackServerSpec{
@@ -237,7 +252,7 @@ func TestOpenStackServerReconciler_requeueOpenStackServersForCluster(t *testing.
 						Name:      "server-2",
 						Namespace: "test-ns",
 						Labels: map[string]string{
-							clusterv1beta1.ClusterNameLabel: "test-cluster",
+							clusterv1.ClusterNameLabel: "test-cluster",
 						},
 					},
 					Spec: infrav1alpha1.OpenStackServerSpec{
@@ -265,7 +280,7 @@ func TestOpenStackServerReconciler_requeueOpenStackServersForCluster(t *testing.
 						Name:      "server-1",
 						Namespace: "test-ns",
 						Labels: map[string]string{
-							clusterv1beta1.ClusterNameLabel: "test-cluster",
+							clusterv1.ClusterNameLabel: "test-cluster",
 						},
 					},
 					Spec: infrav1alpha1.OpenStackServerSpec{
@@ -304,7 +319,7 @@ func TestOpenStackServerReconciler_requeueOpenStackServersForCluster(t *testing.
 						Name:      "server-1",
 						Namespace: "test-ns",
 						Labels: map[string]string{
-							clusterv1beta1.ClusterNameLabel: "test-cluster",
+							clusterv1.ClusterNameLabel: "test-cluster",
 						},
 					},
 					Spec: infrav1alpha1.OpenStackServerSpec{
@@ -319,7 +334,7 @@ func TestOpenStackServerReconciler_requeueOpenStackServersForCluster(t *testing.
 						Name:      "server-2",
 						Namespace: "test-ns",
 						Labels: map[string]string{
-							clusterv1beta1.ClusterNameLabel: "other-cluster",
+							clusterv1.ClusterNameLabel: "other-cluster",
 						},
 					},
 					Spec: infrav1alpha1.OpenStackServerSpec{
@@ -353,7 +368,8 @@ func TestOpenStackServerReconciler_requeueOpenStackServersForCluster(t *testing.
 			g.Expect(clusterv1.AddToScheme(scheme)).To(Succeed())
 			g.Expect(infrav1alpha1.AddToScheme(scheme)).To(Succeed())
 
-			objs := []client.Object{tt.cluster}
+			objs := make([]client.Object, 0, 1+len(tt.servers))
+			objs = append(objs, tt.cluster)
 			for _, server := range tt.servers {
 				objs = append(objs, server)
 			}
@@ -658,9 +674,13 @@ func Test_OpenStackServerReconcileDelete(t *testing.T) {
 
 func Test_OpenStackServerReconcileCreate(t *testing.T) {
 	tests := []struct {
-		name     string
-		osServer infrav1alpha1.OpenStackServer
-		expect   func(r *recorders)
+		name          string
+		osServer      infrav1alpha1.OpenStackServer
+		expect        func(r *recorders)
+		wantErr       error
+		wantResult    *reconcile.Result
+		wantReady     *bool
+		wantCondition *metav1.Condition
 	}{
 		{
 			name: "Minimal server spec creating port and server",
@@ -708,6 +728,110 @@ func Test_OpenStackServerReconcileCreate(t *testing.T) {
 				listDefaultServerFound(r)
 			},
 		},
+		{
+			name: "Port created with error",
+			osServer: infrav1alpha1.OpenStackServer{
+				Spec: infrav1alpha1.OpenStackServerSpec{
+					Flavor: ptr.To(defaultFlavor),
+					Image:  defaultImage,
+					Ports:  defaultPortOpts,
+				},
+				Status: infrav1alpha1.OpenStackServerStatus{
+					Resolved: &infrav1alpha1.ResolvedServerSpec{
+						ImageID:  imageUUID,
+						FlavorID: flavorUUID,
+						Ports:    defaultResolvedPorts,
+					},
+				},
+			},
+			expect: func(r *recorders) {
+				listDefaultPortsNotFound(r)
+				listDefaultPortsNotFound(r)
+				createDefaultPortFails(r)
+			},
+			wantErr: fmt.Errorf("creating ports: %w", fmt.Errorf("Error creating port")),
+			wantCondition: &metav1.Condition{
+				Type:    infrav1.InstanceReadyCondition,
+				Status:  metav1.ConditionFalse,
+				Reason:  infrav1.PortCreateFailedReason,
+				Message: "Error creating port",
+			},
+		},
+		{
+			name: "Server in ERROR state keeps reconciling and recovers when Nova returns ACTIVE",
+			osServer: infrav1alpha1.OpenStackServer{
+				Spec: infrav1alpha1.OpenStackServerSpec{
+					Flavor: ptr.To(defaultFlavor),
+					Image:  defaultImage,
+					Ports:  defaultPortOpts,
+				},
+				Status: infrav1alpha1.OpenStackServerStatus{
+					Ready:         false,
+					InstanceID:    ptr.To(instanceUUID),
+					InstanceState: ptr.To(infrav1.InstanceStateError),
+					Resolved: &infrav1alpha1.ResolvedServerSpec{
+						ImageID:  imageUUID,
+						FlavorID: flavorUUID,
+						Ports:    defaultResolvedPorts,
+					},
+					Resources: &infrav1alpha1.ServerResources{
+						Ports: defaultPortsStatus,
+					},
+				},
+			},
+			expect: func(r *recorders) {
+				listDefaultPortsWithID(r)
+				r.compute.GetServer(instanceUUID).Return(&servers.Server{
+					ID:     instanceUUID,
+					Name:   openStackServerName,
+					Status: "ACTIVE",
+				}, nil)
+			},
+			wantReady: ptr.To(true),
+			wantCondition: &metav1.Condition{
+				Type:   infrav1.InstanceReadyCondition,
+				Status: metav1.ConditionTrue,
+				Reason: infrav1.ReadyConditionReason,
+			},
+		},
+		{
+			name: "Server in ERROR state requeues while Nova still reports ERROR",
+			osServer: infrav1alpha1.OpenStackServer{
+				Spec: infrav1alpha1.OpenStackServerSpec{
+					Flavor: ptr.To(defaultFlavor),
+					Image:  defaultImage,
+					Ports:  defaultPortOpts,
+				},
+				Status: infrav1alpha1.OpenStackServerStatus{
+					Ready:         true, // stale Ready from before ERROR
+					InstanceID:    ptr.To(instanceUUID),
+					InstanceState: ptr.To(infrav1.InstanceStateError),
+					Resolved: &infrav1alpha1.ResolvedServerSpec{
+						ImageID:  imageUUID,
+						FlavorID: flavorUUID,
+						Ports:    defaultResolvedPorts,
+					},
+					Resources: &infrav1alpha1.ServerResources{
+						Ports: defaultPortsStatus,
+					},
+				},
+			},
+			expect: func(r *recorders) {
+				listDefaultPortsWithID(r)
+				r.compute.GetServer(instanceUUID).Return(&servers.Server{
+					ID:     instanceUUID,
+					Name:   openStackServerName,
+					Status: "ERROR",
+				}, nil)
+			},
+			wantResult: &reconcile.Result{RequeueAfter: waitForInstanceBecomeActiveToReconcile},
+			wantReady:  ptr.To(false),
+			wantCondition: &metav1.Condition{
+				Type:   infrav1.InstanceReadyCondition,
+				Status: metav1.ConditionFalse,
+				Reason: infrav1.InstanceStateErrorReason,
+			},
+		},
 	}
 	for i := range tests {
 		tt := &tests[i]
@@ -734,8 +858,38 @@ func Test_OpenStackServerReconcileCreate(t *testing.T) {
 			osServer.Name = openStackServerName
 			osServer.Finalizers = []string{infrav1alpha1.OpenStackServerFinalizer}
 
-			_, err := reconciler.reconcileNormal(ctx, scopeWithLogger, &tt.osServer)
-			g.Expect(err).ToNot(HaveOccurred())
+			result, err := reconciler.reconcileNormal(ctx, scopeWithLogger, &tt.osServer)
+
+			// Check error result
+			if tt.wantErr != nil {
+				g.Expect(err).To(Equal(tt.wantErr))
+			} else {
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+
+			if tt.wantResult != nil {
+				g.Expect(result).To(Equal(*tt.wantResult))
+			}
+
+			if tt.wantReady != nil {
+				g.Expect(tt.osServer.Status.Ready).To(Equal(*tt.wantReady))
+			}
+
+			// Check the condition is set correctly
+			if tt.wantCondition != nil {
+				// print openstackServer conditions
+				for _, condition := range tt.osServer.Status.Conditions {
+					t.Logf("Condition: %s, Status: %s, Reason: %s", condition.Type, condition.Status, condition.Reason)
+				}
+				unstructuredServer, err := tt.osServer.ToUnstructured()
+				g.Expect(err).ToNot(HaveOccurred())
+				conditionType, err := conditions.UnstructuredGet(unstructuredServer, tt.wantCondition.Type)
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(conditionType).ToNot(BeNil())
+				g.Expect(string(conditionType.Status)).To(Equal(string(tt.wantCondition.Status)))
+				g.Expect(conditionType.Reason).To(Equal(tt.wantCondition.Reason))
+				g.Expect(conditionType.Message).To(Equal(tt.wantCondition.Message))
+			}
 		})
 	}
 }
@@ -747,7 +901,7 @@ func TestOpenStackServerReconciler_getOrCreateServer(t *testing.T) {
 		setupMocks      func(r *recorders)
 		wantServer      *servers.Server
 		wantErr         bool
-		wantCondition   *clusterv1beta1.Condition
+		wantCondition   *metav1.Condition
 	}{
 		{
 			name: "instanceID set in status but server not found",
@@ -760,9 +914,9 @@ func TestOpenStackServerReconciler_getOrCreateServer(t *testing.T) {
 				r.compute.GetServer(instanceUUID).Return(nil, gophercloud.ErrUnexpectedResponseCode{Actual: 404})
 			},
 			wantErr: false,
-			wantCondition: &clusterv1beta1.Condition{
+			wantCondition: &metav1.Condition{
 				Type:    infrav1.InstanceReadyCondition,
-				Status:  corev1.ConditionFalse,
+				Status:  metav1.ConditionFalse,
 				Reason:  infrav1.InstanceNotFoundReason,
 				Message: infrav1.ServerUnexpectedDeletedMessage,
 			},
@@ -778,9 +932,9 @@ func TestOpenStackServerReconciler_getOrCreateServer(t *testing.T) {
 				r.compute.GetServer(instanceUUID).Return(nil, fmt.Errorf("error"))
 			},
 			wantErr: true,
-			wantCondition: &clusterv1beta1.Condition{
+			wantCondition: &metav1.Condition{
 				Type:    infrav1.InstanceReadyCondition,
-				Status:  corev1.ConditionFalse,
+				Status:  metav1.ConditionFalse,
 				Reason:  infrav1.OpenStackErrorReason,
 				Message: "get server \"" + instanceUUID + "\" detail failed: error",
 			},
@@ -851,9 +1005,9 @@ func TestOpenStackServerReconciler_getOrCreateServer(t *testing.T) {
 				r.compute.CreateServer(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("error"))
 			},
 			wantErr: true,
-			wantCondition: &clusterv1beta1.Condition{
+			wantCondition: &metav1.Condition{
 				Type:    infrav1.InstanceReadyCondition,
-				Status:  corev1.ConditionFalse,
+				Status:  metav1.ConditionFalse,
 				Reason:  infrav1.InstanceCreateFailedReason,
 				Message: "error creating Openstack instance: " + "error",
 			},
@@ -913,7 +1067,7 @@ func TestOpenStackServerReconciler_getOrCreateServer(t *testing.T) {
 				}
 				unstructuredServer, err := tt.openStackServer.ToUnstructured()
 				g.Expect(err).ToNot(HaveOccurred())
-				conditionType, err := conditions.UnstructuredGet(unstructuredServer, string(tt.wantCondition.Type))
+				conditionType, err := conditions.UnstructuredGet(unstructuredServer, tt.wantCondition.Type)
 				g.Expect(err).ToNot(HaveOccurred())
 				g.Expect(conditionType).ToNot(BeNil())
 				g.Expect(string(conditionType.Status)).To(Equal(string(tt.wantCondition.Status)))
@@ -923,3 +1077,216 @@ func TestOpenStackServerReconciler_getOrCreateServer(t *testing.T) {
 		})
 	}
 }
+
+func TestOpenStackServerStatusReportable(t *testing.T) {
+	g := NewGomegaWithT(t)
+	pred := OpenStackServerStatusReportable(logr.Discard())
+
+	building := &infrav1alpha1.OpenStackServer{
+		Status: infrav1alpha1.OpenStackServerStatus{
+			InstanceState: ptr.To(infrav1.InstanceStateBuild),
+		},
+	}
+	errorServer := &infrav1alpha1.OpenStackServer{
+		Status: infrav1alpha1.OpenStackServerStatus{
+			InstanceState: ptr.To(infrav1.InstanceStateError),
+		},
+	}
+	readyServer := &infrav1alpha1.OpenStackServer{
+		Status: infrav1alpha1.OpenStackServerStatus{
+			Ready:         true,
+			InstanceState: ptr.To(infrav1.InstanceStateActive),
+		},
+	}
+	shutoffServer := &infrav1alpha1.OpenStackServer{
+		Status: infrav1alpha1.OpenStackServerStatus{
+			InstanceState: ptr.To(infrav1.InstanceStateShutoff),
+		},
+	}
+	migratingServer := &infrav1alpha1.OpenStackServer{
+		Status: infrav1alpha1.OpenStackServerStatus{
+			InstanceState: ptr.To(infrav1.InstanceState("MIGRATING")),
+		},
+	}
+
+	t.Run("CreateFunc allows Ready and ERROR servers", func(_ *testing.T) {
+		g.Expect(pred.Create(event.CreateEvent{Object: readyServer})).To(BeTrue())
+		g.Expect(pred.Create(event.CreateEvent{Object: errorServer})).To(BeTrue())
+		g.Expect(pred.Create(event.CreateEvent{Object: building})).To(BeFalse())
+	})
+
+	t.Run("UpdateFunc allows becoming Ready", func(_ *testing.T) {
+		g.Expect(pred.Update(event.UpdateEvent{ObjectOld: building, ObjectNew: readyServer})).To(BeTrue())
+	})
+
+	t.Run("UpdateFunc allows becoming ERROR", func(_ *testing.T) {
+		g.Expect(pred.Update(event.UpdateEvent{ObjectOld: building, ObjectNew: errorServer})).To(BeTrue())
+	})
+
+	t.Run("UpdateFunc allows ERROR to Ready recovery", func(_ *testing.T) {
+		g.Expect(pred.Update(event.UpdateEvent{ObjectOld: errorServer, ObjectNew: readyServer})).To(BeTrue())
+	})
+
+	t.Run("UpdateFunc allows Ready to ERROR", func(_ *testing.T) {
+		g.Expect(pred.Update(event.UpdateEvent{ObjectOld: readyServer, ObjectNew: errorServer})).To(BeTrue())
+	})
+
+	t.Run("UpdateFunc blocks unrelated status updates while building", func(_ *testing.T) {
+		buildingUpdated := building.DeepCopy()
+		buildingUpdated.Status.Resolved = &infrav1alpha1.ResolvedServerSpec{ImageID: imageUUID}
+		g.Expect(pred.Update(event.UpdateEvent{ObjectOld: building, ObjectNew: buildingUpdated})).To(BeFalse())
+	})
+
+	t.Run("UpdateFunc blocks transitions between non-reportable InstanceStates", func(_ *testing.T) {
+		g.Expect(pred.Update(event.UpdateEvent{ObjectOld: shutoffServer, ObjectNew: migratingServer})).To(BeFalse())
+	})
+}
+
+var _ = Describe("OpenStackServer controller", func() {
+	var (
+		testServer        *infrav1alpha1.OpenStackServer
+		testNamespace     string
+		serverReconciler  *OpenStackServerReconciler
+		serverMockCtrl    *gomock.Controller
+		serverMockFactory *scope.MockScopeFactory
+		testNum           int
+	)
+
+	BeforeEach(func() {
+		testNum++
+		testNamespace = fmt.Sprintf("server-test-%d", testNum)
+
+		testServer = &infrav1alpha1.OpenStackServer{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: infrav1alpha1.SchemeGroupVersion.Group + "/" + infrav1alpha1.SchemeGroupVersion.Version,
+				Kind:       "OpenStackServer",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-server",
+				Namespace: testNamespace,
+			},
+			Spec: infrav1alpha1.OpenStackServerSpec{
+				IdentityRef: infrav1.OpenStackIdentityReference{
+					Name:      "test-creds",
+					CloudName: "openstack",
+				},
+				Flavor:     ptr.To(defaultFlavor),
+				Image:      defaultImage,
+				SSHKeyName: "test-ssh-key",
+				Ports: []infrav1.PortOpts{
+					{
+						Network: &infrav1.NetworkParam{
+							ID: ptr.To(networkUUID),
+						},
+					},
+				},
+			},
+		}
+
+		input := framework.CreateNamespaceInput{
+			Creator: k8sClient,
+			Name:    testNamespace,
+		}
+		framework.CreateNamespace(ctx, input)
+
+		serverMockCtrl = gomock.NewController(GinkgoT())
+		serverMockFactory = scope.NewMockScopeFactory(serverMockCtrl, "")
+		serverReconciler = &OpenStackServerReconciler{
+			Client:       k8sClient,
+			ScopeFactory: serverMockFactory,
+		}
+	})
+
+	AfterEach(func() {
+		orphan := metav1.DeletePropagationOrphan
+		deleteOptions := client.DeleteOptions{
+			PropagationPolicy: &orphan,
+		}
+
+		// Remove finalizers and delete openstackserver
+		patchHelper, err := patch.NewHelper(testServer, k8sClient)
+		Expect(err).To(BeNil())
+		testServer.SetFinalizers([]string{})
+		err = patchHelper.Patch(ctx, testServer)
+		Expect(err).To(BeNil())
+		err = k8sClient.Delete(ctx, testServer, &deleteOptions)
+		Expect(err).To(BeNil())
+	})
+
+	It("should set OpenStackAuthenticationSucceededCondition to False when credentials secret is missing", func() {
+		testServer.SetName("missing-server-credentials")
+		testServer.Spec.IdentityRef = infrav1.OpenStackIdentityReference{
+			Type:      "Secret",
+			Name:      "non-existent-secret",
+			CloudName: "openstack",
+		}
+
+		err := k8sClient.Create(ctx, testServer)
+		Expect(err).To(BeNil())
+
+		credentialsErr := fmt.Errorf("secret not found: non-existent-secret")
+		serverMockFactory.SetClientScopeCreateError(credentialsErr)
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      testServer.Name,
+				Namespace: testServer.Namespace,
+			},
+		}
+		result, err := serverReconciler.Reconcile(ctx, req)
+
+		Expect(err).To(MatchError(credentialsErr))
+		Expect(result).To(Equal(reconcile.Result{}))
+
+		// Fetch the updated OpenStackServer to verify the condition was set
+		updatedServer := &infrav1alpha1.OpenStackServer{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: testServer.Name, Namespace: testServer.Namespace}, updatedServer)).To(Succeed())
+
+		// Verify OpenStackAuthenticationSucceededCondition is set to False
+		Expect(conditions.IsFalse(updatedServer, infrav1.OpenStackAuthenticationSucceeded)).To(BeTrue())
+		condition := conditions.Get(updatedServer, infrav1.OpenStackAuthenticationSucceeded)
+		Expect(condition).ToNot(BeNil())
+		Expect(condition.Reason).To(Equal(infrav1.OpenStackAuthenticationFailedReason))
+		Expect(condition.Message).To(ContainSubstring("Failed to create OpenStack client scope"))
+	})
+
+	It("should set OpenStackAuthenticationSucceededCondition to False when namespace is denied access to ClusterIdentity", func() {
+		testServer.SetName("identity-access-denied-server")
+		testServer.Spec.IdentityRef = infrav1.OpenStackIdentityReference{
+			Type:      "ClusterIdentity",
+			Name:      "test-cluster-identity",
+			CloudName: "openstack",
+		}
+
+		err := k8sClient.Create(ctx, testServer)
+		Expect(err).To(BeNil())
+
+		identityAccessErr := &scope.IdentityAccessDeniedError{
+			IdentityName:       "test-cluster-identity",
+			RequesterNamespace: testNamespace,
+		}
+		serverMockFactory.SetClientScopeCreateError(identityAccessErr)
+
+		req := reconcile.Request{
+			NamespacedName: client.ObjectKey{
+				Name:      testServer.Name,
+				Namespace: testServer.Namespace,
+			},
+		}
+		result, err := serverReconciler.Reconcile(ctx, req)
+
+		Expect(err).To(MatchError(identityAccessErr))
+		Expect(result).To(Equal(reconcile.Result{}))
+
+		// Fetch the updated OpenStackServer to verify the condition was set
+		updatedServer := &infrav1alpha1.OpenStackServer{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: testServer.Name, Namespace: testServer.Namespace}, updatedServer)).To(Succeed())
+
+		// Verify OpenStackAuthenticationSucceededCondition is set to False
+		Expect(conditions.IsFalse(updatedServer, infrav1.OpenStackAuthenticationSucceeded)).To(BeTrue())
+		condition := conditions.Get(updatedServer, infrav1.OpenStackAuthenticationSucceeded)
+		Expect(condition).ToNot(BeNil())
+		Expect(condition.Reason).To(Equal(infrav1.OpenStackAuthenticationFailedReason))
+		Expect(condition.Message).To(ContainSubstring("Failed to create OpenStack client scope"))
+	})
+})
