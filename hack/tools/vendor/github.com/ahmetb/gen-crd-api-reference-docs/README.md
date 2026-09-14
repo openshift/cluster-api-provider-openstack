@@ -1,9 +1,32 @@
 # Kubernetes Custom Resource API Reference Docs generator
 
-If you have a project that is Custom Resource Definitions and wanted to generate
+If you have a project that is providing Custom Resource Definitions and wanted to generate
 API Reference Docs [like this][ar] this tool is for you.
 
-[ar]: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.13/
+[ar]: https://knative.dev/docs/reference/api/serving-api/
+
+
+> [!WARNING]
+> **This project is not super actively maintained.**
+> Consider using the [**crd-ref-docs** by Elastic](https://github.com/elastic/crd-ref-docs) project
+  instead.
+
+## Alternatives
+
+This project has inspired creation of the following projects:
+
+- [**Kubernetes reference-docs generator**](https://github.com/kubernetes-sigs/reference-docs):
+  used in [official Kubernetes component reference docs](https://kubernetes.io/docs/reference/config-api/kubelet-config.v1beta1/)
+
+- [**crd-ref-docs** by Elastic](https://github.com/elastic/crd-ref-docs): A fresh implementation
+  of this project.
+
+- If you're an open source project, consider exposing your
+  CRD API Reference via https://doc.crds.dev/ without much effort.
+
+
+
+
 
 ## Current Users
 
@@ -20,7 +43,14 @@ API Reference Docs [like this][ar] this tool is for you.
 - [**New Relic Alert Manager** API reference docs](https://github.com/fpetkovski/newrelic-alert-manager/tree/master/docs)
 - [**Antrea** API reference docs](https://antrea.io/docs/v1.3.0/docs/api-reference/)
 - [**kube-green** API reference docs](https://kube-green.dev/docs/apireference_v1alpha1/)
+- [**Azure Service Operator** supported resources](https://azure.github.io/azure-service-operator/reference/)
+- [**NGINX Gateway Fabric** API reference docs](https://docs.nginx.com/nginx-gateway-fabric/reference/api/)
 - _[[ADD YOUR PROJECT HERE]]_
+
+Also some **forks**:
+
+- [**elastic/crd-ref-docs**](https://github.com/elastic/crd-ref-docs): A fresh re-implementation inspired
+  by this project that supports AsciiDoc. Used by Elastic Cloud on Kubernetes API reference docs.
 
 ## Why
 
