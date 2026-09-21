@@ -97,17 +97,13 @@ func (*openStackMachineWebhook) ValidateUpdate(_ context.Context, oldObjRaw, new
 	newOpenStackMachineSpec := newOpenStackMachine["spec"].(map[string]interface{})
 	oldOpenStackMachineSpec := oldOpenStackMachine["spec"].(map[string]interface{})
 
-	// allow changes to providerID once
-	if oldOpenStackMachineSpec["providerID"] == nil {
-		delete(oldOpenStackMachineSpec, "providerID")
-		delete(newOpenStackMachineSpec, "providerID")
-	}
+	// allow changes to providerID (matches AWS, GCP, VSphere providers)
+	delete(oldOpenStackMachineSpec, "providerID")
+	delete(newOpenStackMachineSpec, "providerID")
 
-	// allow changes to instanceID once
-	if oldOpenStackMachineSpec["instanceID"] == nil {
-		delete(oldOpenStackMachineSpec, "instanceID")
-		delete(newOpenStackMachineSpec, "instanceID")
-	}
+	// allow changes to instanceID (matches AWS, GCP, VSphere providers)
+	delete(oldOpenStackMachineSpec, "instanceID")
+	delete(newOpenStackMachineSpec, "instanceID")
 
 	// allow changes to identifyRef
 	delete(oldOpenStackMachineSpec, "identityRef")
