@@ -1,6 +1,6 @@
 attributes:
   type: infrastructure
-  version: v0.14.0
+  version: release-0.14
 installOrder: 20
 name: cluster-api-provider-openstack
 ocpPlatform: OpenStack
