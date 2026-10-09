@@ -5,10 +5,10 @@ options:
   machineType: 'N1_HIGHCPU_8'
 steps:
 # To check if the image can handle the build, you can try it like this:
-# docker run --rm -it -v $(pwd):/workspace gcr.io/k8s-staging-test-infra/gcb-docker-gcloud:${TAG}
+# docker run --rm -it -v $(pwd):/workspace registry.k8s.io/releng/gcb-docker-gcloud:${TAG}
 # make clean # make sure we have something to build
 # make staging-manifests
-- name: 'gcr.io/k8s-staging-test-infra/gcb-docker-gcloud@sha256:8d6a3a5b895e6776dbe9115b75db1412fbe57299b8db329d45cb54680e462b0b' # v20251211-4c812d4cd8
+- name: 'registry.k8s.io/releng/gcb-docker-gcloud@sha256:b2651f57b579d925a243e308c41546d4fd895f705de091a5a8a39060e6192604' # v20260806
   entrypoint: make
   env:
   - DOCKER_CLI_EXPERIMENTAL=enabled
