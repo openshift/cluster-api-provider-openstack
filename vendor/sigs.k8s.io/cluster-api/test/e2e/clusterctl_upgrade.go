@@ -17,6 +17,7 @@ limitations under the License.
 package e2e
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -28,7 +29,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/blang/semver/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	coordinationv1 "k8s.io/api/coordination/v1"
@@ -55,7 +55,6 @@ import (
 	"sigs.k8s.io/cluster-api/test/framework/bootstrap"
 	"sigs.k8s.io/cluster-api/test/framework/clusterctl"
 	"sigs.k8s.io/cluster-api/util"
-	"sigs.k8s.io/cluster-api/util/version"
 )
 
 // ClusterctlUpgradeSpecInput is the input for ClusterctlUpgradeSpec.
@@ -124,9 +123,12 @@ type ClusterctlUpgradeSpecInput struct {
 	// PreCleanupManagementCluster hook can be used for extra steps that might be required from providers, for example, remove conflicting service (such as DHCP) running on
 	// the target management cluster and run it on bootstrap (before the latter resumes LCM) if both clusters share the same LAN
 	PreCleanupManagementCluster func(managementClusterProxy framework.ClusterProxy)
-	MgmtFlavor                  string
-	CNIManifestPath             string
-	WorkloadFlavor              string
+	// PreCleanupManagementClusterProviders hook can be used to run code before the providers on the management cluster are cleaned up.
+	// This is for example used in core Cluster API to dump secrets, which might not be safe in general.
+	PreCleanupManagementClusterProviders func(managementClusterProxy framework.ClusterProxy)
+	MgmtFlavor                           string
+	CNIManifestPath                      string
+	WorkloadFlavor                       string
 	// WorkloadKubernetesVersion is Kubernetes version used to create the workload cluster, e.g. `v1.25.0`
 	WorkloadKubernetesVersion string
 
@@ -137,6 +139,13 @@ type ClusterctlUpgradeSpecInput struct {
 
 	// ControlPlaneMachineCount specifies the number of control plane machines to create in the workload cluster.
 	ControlPlaneMachineCount *int64
+
+	// ManagementClusterControlPlaneMachineCount specifies the number of control plane machines to create for the
+	// self-hosted management cluster (the workload cluster that is pivoted into and used as the new management
+	// cluster). Defaults to 1 if not set. Setting this higher (e.g. 3) makes the management cluster's control
+	// plane highly available, which can reduce flakiness when the management cluster's API server is fronted by a
+	// load balancer. This has no effect when UseKindForManagementCluster is true.
+	ManagementClusterControlPlaneMachineCount *int64
 }
 
 // ClusterctlUpgradeSpecInputUpgrade defines an upgrade.
@@ -231,7 +240,6 @@ func ClusterctlUpgradeSpec(ctx context.Context, inputGetter func() ClusterctlUpg
 		initClusterctlBinaryURL = clusterctlBinaryURLReplacer.Replace(clusterctlBinaryURLTemplate)
 
 		// NOTE: by default we are considering all the providers, no matter of the contract.
-		// However, given that we want to test both v1alpha3 --> v1beta1, v1alpha4 --> v1beta1, v1beta1 --> v1beta2,
 		// InitWithProvidersContract can be used to select versions with a specific contract.
 		initContract = "*"
 		if input.InitWithProvidersContract != "" {
@@ -239,6 +247,10 @@ func ClusterctlUpgradeSpec(ctx context.Context, inputGetter func() ClusterctlUpg
 		}
 
 		initKubernetesVersion = input.InitWithKubernetesVersion
+
+		if input.ManagementClusterControlPlaneMachineCount == nil {
+			input.ManagementClusterControlPlaneMachineCount = ptr.To[int64](1)
+		}
 
 		if len(input.Upgrades) == 0 {
 			// Upgrade once to latest contract version if no upgrades are specified.
@@ -279,6 +291,10 @@ func ClusterctlUpgradeSpec(ctx context.Context, inputGetter func() ClusterctlUpg
 				Images:    input.E2EConfig.Images,
 				IPFamily:  input.E2EConfig.MustGetVariable(IPFamily),
 				LogFolder: filepath.Join(managementClusterLogFolder, "logs-kind"),
+				// Note: Older releases might not have sufficient RBAC to satisfy the OwnerReferencesPermissionEnforcement admission controller.
+				// So for now, we disable it to avoid failing upgrade tests.
+				// TODO: Remove this option to enable OwnerReferencesPermissionEnforcement admission controller in all e2e-tests.
+				DisableOwnerReferencesPermissionEnforcement: true,
 			})
 			Expect(managementClusterProvider).ToNot(BeNil(), "Failed to create a kind cluster")
 
@@ -307,7 +323,7 @@ func ClusterctlUpgradeSpec(ctx context.Context, inputGetter func() ClusterctlUpg
 					Namespace:                managementClusterNamespace.Name,
 					ClusterName:              managementClusterName,
 					KubernetesVersion:        initKubernetesVersion,
-					ControlPlaneMachineCount: ptr.To[int64](1),
+					ControlPlaneMachineCount: input.ManagementClusterControlPlaneMachineCount,
 					WorkerMachineCount:       ptr.To[int64](1),
 				},
 				PreWaitForCluster: func() {
@@ -322,13 +338,13 @@ func ClusterctlUpgradeSpec(ctx context.Context, inputGetter func() ClusterctlUpg
 				WaitForMachineDeployments:    input.E2EConfig.GetIntervals(specName, "wait-worker-nodes"),
 			}, managementClusterResources)
 
-			// If the cluster is a DockerCluster, we should load controller images into the nodes.
-			// Nb. this can be achieved also by changing the DockerMachine spec, but for the time being we are using
+			// If the cluster is a DevCluster with Docker backend, we should load controller images into the nodes.
+			// Nb. this can be achieved also by changing the DevMachine spec, but for the time being we are using
 			// this approach because this allows to have a single source of truth for images, the e2e config
 			// Nb. the images for official version of the providers will be pulled from internet, but the latest images must be
 			// built locally and loaded into kind
 			cluster := managementClusterResources.Cluster
-			if cluster.Spec.InfrastructureRef.Kind == "DockerCluster" {
+			if cluster.Spec.InfrastructureRef.Kind == "DevCluster" {
 				Expect(bootstrap.LoadImagesToKindCluster(ctx, bootstrap.LoadImagesToKindClusterInput{
 					Name:   cluster.Name,
 					Images: input.E2EConfig.Images,
@@ -432,7 +448,7 @@ func ClusterctlUpgradeSpec(ctx context.Context, inputGetter func() ClusterctlUpg
 		workerMachineCount := ptr.To[int64](1)
 
 		log.Logf("Creating the workload cluster with name %q using the %q template (Kubernetes %s, %d control-plane machines, %d worker machines)",
-			workloadClusterName, "(default)", kubernetesVersion, *controlPlaneMachineCount, *workerMachineCount)
+			workloadClusterName, cmp.Or(input.WorkloadFlavor, "(default)"), kubernetesVersion, *controlPlaneMachineCount, *workerMachineCount)
 
 		log.Logf("Getting the cluster template yaml")
 		workloadClusterTemplate := clusterctl.ConfigClusterWithBinary(ctx, clusterctlBinaryPath, clusterctl.ConfigClusterInput{
@@ -458,7 +474,7 @@ func ClusterctlUpgradeSpec(ctx context.Context, inputGetter func() ClusterctlUpg
 		log.Logf("Applying the cluster template yaml to the cluster in dry-run")
 		Eventually(func() error {
 			return managementClusterProxy.CreateOrUpdate(ctx, workloadClusterTemplate, framework.WithCreateOpts([]client.CreateOption{client.DryRunAll}...), framework.WithUpdateOpts([]client.UpdateOption{client.DryRunAll}...))
-		}, "1m", "10s").ShouldNot(HaveOccurred())
+		}, "2m", "10s").ShouldNot(HaveOccurred())
 
 		log.Logf("Applying the cluster template yaml to the cluster")
 		Expect(managementClusterProxy.CreateOrUpdate(ctx, workloadClusterTemplate)).To(Succeed())
@@ -620,11 +636,11 @@ func ClusterctlUpgradeSpec(ctx context.Context, inputGetter func() ClusterctlUpg
 
 			Byf("[%d] THE MANAGEMENT CLUSTER WAS SUCCESSFULLY UPGRADED!", i)
 
-			// We have to get the core CAPI storage version again as the upgrade might have stopped serving v1alpha3/v1alpha4.
+			// We have to get the core CAPI storage version again as the upgrade might have stopped serving an old apiVersion.
 			coreCAPIStorageVersion = getCoreCAPIStorageVersion(ctx, managementClusterProxy.GetClient())
 
 			// Note: Currently we only support upgrades that (still) serve the v1beta1 core CAPI apiVersion after upgrade.
-			// This seems a reasonable simplification as we don't want to test upgrades to v1alpha3 / v1alpha4.
+			// This seems a reasonable simplification as we don't want to test upgrades to older apiVersions.
 			// This will also work with CAPI versions that have v1beta2 as storage version as long as v1beta1 is still served.
 			// Note: We can't simply use unstructured here because we would have to refactor a lot of code below.
 			// Note: We can migrate to only use v1beta2 once we only support upgrades from CAPI versions that already have v1beta2.
@@ -755,29 +771,15 @@ func ClusterctlUpgradeSpec(ctx context.Context, inputGetter func() ClusterctlUpg
 				}
 			}
 
-			// Note: It is a known issue on Kubernetes < v1.29 that SSA sometimes fail:
-			// https://github.com/kubernetes/kubernetes/issues/117356
-			tries := 1
-			initKubernetesVersionParsed, err := semver.ParseTolerant(initKubernetesVersion)
-			Expect(err).ToNot(HaveOccurred())
-			if version.Compare(initKubernetesVersionParsed, semver.MustParse("1.29.0"), version.WithoutPreReleases()) < 0 {
-				tries = 10
-			}
-			for range tries {
-				Byf("[%d] Verify client-side SSA still works", i)
-				clusterUpdate := &unstructured.Unstructured{}
-				clusterUpdate.SetGroupVersionKind(clusterv1beta1.GroupVersion.WithKind("Cluster"))
-				clusterUpdate.SetNamespace(workloadCluster.Namespace)
-				clusterUpdate.SetName(workloadCluster.Name)
-				clusterUpdate.SetLabels(map[string]string{
-					fmt.Sprintf("test-label-upgrade-%d", i): "test-label-value",
-				})
-				err = managementClusterProxy.GetClient().Patch(ctx, clusterUpdate, client.Apply, client.FieldOwner("e2e-test-client"))
-				if err == nil {
-					break
-				}
-			}
-			Expect(err).ToNot(HaveOccurred())
+			Byf("[%d] Verify client-side SSA still works", i)
+			clusterUpdate := &unstructured.Unstructured{}
+			clusterUpdate.SetGroupVersionKind(clusterv1beta1.GroupVersion.WithKind("Cluster"))
+			clusterUpdate.SetNamespace(workloadCluster.Namespace)
+			clusterUpdate.SetName(workloadCluster.Name)
+			clusterUpdate.SetLabels(map[string]string{
+				fmt.Sprintf("test-label-upgrade-%d", i): "test-label-value",
+			})
+			Expect(managementClusterProxy.GetClient().Apply(ctx, client.ApplyConfigurationFromUnstructured(clusterUpdate), client.FieldOwner("e2e-test-client"))).To(Succeed())
 
 			Byf("[%d] THE UPGRADED MANAGEMENT CLUSTER WORKS!", i)
 		}
@@ -787,6 +789,10 @@ func ClusterctlUpgradeSpec(ctx context.Context, inputGetter func() ClusterctlUpg
 
 	AfterEach(func() {
 		if testNamespace != nil {
+			if input.PreCleanupManagementClusterProviders != nil {
+				By("Running PreCleanupManagementClusterProviders steps against the management cluster")
+				input.PreCleanupManagementClusterProviders(managementClusterProxy)
+			}
 			// Dump all the logs from the workload cluster before deleting them.
 			framework.DumpAllResourcesAndLogs(ctx, managementClusterProxy, input.ClusterctlConfigPath, input.ArtifactFolder, testNamespace, &clusterv1.Cluster{
 				// DumpAllResourcesAndLogs only uses Namespace + Name from the Cluster object.
@@ -843,9 +849,6 @@ func setupClusterctl(ctx context.Context, clusterctlBinaryURL, clusterctlConfigP
 
 	err := os.Chmod(clusterctlBinaryPath, 0744) //nolint:gosec
 	Expect(err).ToNot(HaveOccurred(), "failed to chmod temporary file")
-
-	// Adjusts the clusterctlConfigPath in case the clusterctl version <= v1.3 (thus using a config file with only the providers supported in those versions)
-	clusterctlConfigPath = clusterctl.AdjustConfigPathForBinary(clusterctlBinaryPath, clusterctlConfigPath)
 
 	return clusterctlBinaryPath, clusterctlConfigPath
 }
@@ -1090,12 +1093,8 @@ func calculateExpectedMachinePoolNodeCount(ctx context.Context, c client.Client,
 	}
 
 	machinePoolList := &unstructured.UnstructuredList{}
-	machinePoolGroup := clusterv1.GroupVersion.Group
-	if coreCAPIStorageVersion == "v1alpha3" {
-		machinePoolGroup = "exp.cluster.x-k8s.io"
-	}
 	machinePoolList.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   machinePoolGroup,
+		Group:   clusterv1.GroupVersion.Group,
 		Version: coreCAPIStorageVersion,
 		Kind:    "MachinePoolList",
 	})

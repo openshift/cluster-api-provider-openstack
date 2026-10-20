@@ -1,5 +1,5 @@
 /*
-Copyright 2024 The Kubernetes Authors.
+Copyright 2026 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,13 +20,23 @@ package v1beta1
 
 import (
 	v1 "k8s.io/api/core/v1"
+	corev1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 )
 
 // OpenStackMachineTemplateStatusApplyConfiguration represents a declarative configuration of the OpenStackMachineTemplateStatus type for use
 // with apply.
+//
+// OpenStackMachineTemplateStatus defines the observed state of OpenStackMachineTemplate.
 type OpenStackMachineTemplateStatusApplyConfiguration struct {
+	// Capacity defines the resource capacity for this machine.
+	// This value is used for autoscaling from zero operations as defined in:
+	// https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20210310-opt-in-autoscaling-from-zero.md
 	Capacity *v1.ResourceList            `json:"capacity,omitempty"`
 	NodeInfo *NodeInfoApplyConfiguration `json:"nodeInfo,omitempty"`
+	// Conditions defines current service state of the OpenStackMachineTemplate.
+	// The Ready condition must surface issues during the entire lifecycle of the OpenStackMachineTemplate.
+	// (both during initial provisioning and after the initial provisioning is completed).
+	Conditions *corev1beta1.Conditions `json:"conditions,omitempty"`
 }
 
 // OpenStackMachineTemplateStatusApplyConfiguration constructs a declarative configuration of the OpenStackMachineTemplateStatus type for use with
@@ -48,5 +58,13 @@ func (b *OpenStackMachineTemplateStatusApplyConfiguration) WithCapacity(value v1
 // If called multiple times, the NodeInfo field is set to the value of the last call.
 func (b *OpenStackMachineTemplateStatusApplyConfiguration) WithNodeInfo(value *NodeInfoApplyConfiguration) *OpenStackMachineTemplateStatusApplyConfiguration {
 	b.NodeInfo = value
+	return b
+}
+
+// WithConditions sets the Conditions field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the Conditions field is set to the value of the last call.
+func (b *OpenStackMachineTemplateStatusApplyConfiguration) WithConditions(value corev1beta1.Conditions) *OpenStackMachineTemplateStatusApplyConfiguration {
+	b.Conditions = &value
 	return b
 }
