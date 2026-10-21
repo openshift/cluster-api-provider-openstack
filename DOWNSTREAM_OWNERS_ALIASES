@@ -1,12 +1,16 @@
 # See the OWNERS_ALIASES docs: https://git.k8s.io/community/contributors/guide/owners.md#OWNERS_ALIASES
 
 aliases:
-  shiftstack-team:
+  shiftstack-approvers:
     - gryf
     - mandre
     - stephenfin
-    - eshulman2
-
+  shiftstack-reviewers:
+    - chenwng
+    - danchild
+    - dlaw4608
+    - IlanZuckerman
+    - tusharjadhav3302
   cloud-team:
     - JoelSpeed
     - RadekManak
