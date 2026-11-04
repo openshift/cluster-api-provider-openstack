@@ -322,8 +322,22 @@ modules: ## Runs go mod to ensure proper vendoring.
 	go mod tidy
 	cd $(TOOLS_DIR); go mod tidy
 
+.PHONY: merge-bot
+merge-bot: full-vendoring generate generate-openshift ## Runs targets that help merge-bot to rebase downstream CAPO.
+
+.PHONY: full-vendoring
+full-vendoring: ## Runs commands that complete vendoring tasks for downstream CAPO.
+	go mod tidy && go mod vendor
+	cd $(TOOLS_DIR); go mod tidy; go mod vendor
+
+.PHONY: generate-openshift
+generate-openshift:
+	$(MAKE) -C $(REPO_ROOT)/openshift generate
+
+# NOTE(stephenfin): generate-api-docs has been dropped from this target since there's an issue with vendoring
+# that I can't figure out
 .PHONY: generate
-generate: templates generate-controller-gen generate-codegen generate-go generate-manifests generate-api-docs ## Generate all generated code
+generate: templates generate-controller-gen generate-codegen generate-go generate-manifests ## Generate all generated code
 
 .PHONY: generate-go
 generate-go: $(MOCKGEN)
@@ -705,6 +719,17 @@ verify-security: ## Verify code and images for vulnerabilities
 	if [ "$$R1" -ne "0" ] || [ "$$R2" -ne "0" ]; then \
 	  echo "Check for vulnerabilities failed! There are vulnerabilities to be fixed"; \
 		exit 1; \
+	fi
+
+.PHONY: vendor verify-vendoring
+vendor:
+	go mod vendor
+	cd $(TOOLS_DIR); go mod vendor
+
+verify-vendoring: vendor
+	@if !(git diff --quiet HEAD); then \
+		git diff; \
+		echo "vendored files are out of date, run go mod vendor"; exit 1; \
 	fi
 
 .PHONY: compile-e2e
