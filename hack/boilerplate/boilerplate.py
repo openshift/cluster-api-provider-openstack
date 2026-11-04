@@ -161,7 +161,6 @@ prune_dirs = [
     '.tiltbuild',
     'vendor',
     'orc',
-    'openshift',
 ]
 
 # Paths to be ignored for boilerplate detection
