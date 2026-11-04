@@ -1,0 +1,7 @@
+attributes:
+  type: infrastructure
+  version: v0.14.0
+installOrder: 20
+name: cluster-api-provider-openstack
+ocpPlatform: OpenStack
+selfImageRef: registry.ci.openshift.org/openshift:openstack-cluster-api-controllers
