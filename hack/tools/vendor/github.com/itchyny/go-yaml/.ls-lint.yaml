@@ -1,7 +1,4 @@
-# Copyright 2025 The go-yaml Project Contributors
-# SPDX-License-Identifier: Apache-2.0
-
-# The ls-lint configuration file.
+# ls-lint configuration file.
 # More information on the file format can be found on https://ls-lint.org/
 ls:
   # root directory
