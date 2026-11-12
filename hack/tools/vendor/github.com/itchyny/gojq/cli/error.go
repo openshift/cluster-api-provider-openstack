@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -106,6 +107,8 @@ func (err *jsonParseError) Error() string {
 		offset = len(err.contents) + 1
 	} else if e, ok := err.err.(*json.SyntaxError); ok {
 		offset = int(e.Offset)
+	} else if e, ok := err.err.(*jsonTrailingValueError); ok {
+		offset = e.offset
 	}
 	linestr, line, column := getLineByOffset(err.contents, offset)
 	if line += err.line; line > 1 {
@@ -116,6 +119,15 @@ func (err *jsonParseError) Error() string {
 		err.fname, linestr, column+1, '^', err.err)
 }
 
+type jsonTrailingValueError struct {
+	char   rune
+	offset int
+}
+
+func (err *jsonTrailingValueError) Error() string {
+	return "invalid character " + strconv.QuoteRune(err.char) + " after top-level value"
+}
+
 type yamlParseError struct {
 	fname, contents string
 	err             error
@@ -124,35 +136,40 @@ type yamlParseError struct {
 func (err *yamlParseError) Error() string {
 	var index int
 	var message string
-	var pe *yaml.ParserError
-	var te *yaml.TypeError
-	if errors.As(err.err, &pe) {
-		index, message = pe.Index, pe.Message
-	} else if errors.As(err.err, &te) {
-		var ue *yaml.UnmarshalError
-		for _, e := range te.Errors {
-			if errors.As(e, &ue) {
-				index, message = ue.Index, ue.Err.Error()
-				break
-			}
+	var le *yaml.LoadError
+	if errors.As(err.err, &le) {
+		mark := le.Mark
+		if le.ContextMark.Line > 0 {
+			mark = le.ContextMark
 		}
+		index, message = markIndex(err.contents, mark), le.Message
 	}
 	linestr, line, column := getLineByOffset(err.contents, index+1)
 	return fmt.Sprintf("invalid yaml: %s:%d\n%s  %s",
 		err.fname, line, formatLineInfo(linestr, line, column), message)
 }
 
-func getLineByOffset(str string, offset int) (linestr string, line, column int) {
-	ss := &stringScanner{str, 0}
-	for {
-		str, start, ok := ss.next()
-		if !ok {
-			offset -= start
-			break
+func markIndex(contents string, mark yaml.Mark) int {
+	var i int
+	for l := 1; l < mark.Line; l++ {
+		j := strings.IndexByte(contents[i:], '\n')
+		if j < 0 {
+			return mark.Index
 		}
+		i += j + 1
+	}
+	for c := 1; c < mark.Column && i < len(contents); c++ {
+		_, size := utf8.DecodeRuneInString(contents[i:])
+		i += size
+	}
+	return i
+}
+
+func getLineByOffset(str string, offset int) (linestr string, line, column int) {
+	for str, start := range stringLines(str) {
 		line++
 		linestr = str
-		if ss.offset >= offset {
+		if offset <= start+len(str)+1 {
 			offset -= start
 			break
 		}
@@ -173,6 +190,32 @@ func getLineByOffset(str string, offset int) (linestr string, line, column int) 
 	return
 }
 
+func stringLines(str string) iter.Seq2[string, int] {
+	return func(yield func(string, int) bool) {
+		var offset int
+		for str != "" {
+			var line string
+			i := indexNewline(str)
+			if i >= 0 {
+				line, str = str[:i], str[i:]
+				var ok bool
+				if str, ok = strings.CutPrefix(str, "\r\n"); ok {
+					i += 2
+				} else {
+					str = str[1:]
+					i++
+				}
+			} else {
+				line, str = str, ""
+			}
+			if !yield(line, offset) {
+				return
+			}
+			offset += i
+		}
+	}
+}
+
 func trimLastInvalidRune(s string) string {
 	for i := len(s) - 1; i >= 0 && i > len(s)-utf8.UTFMax; i-- {
 		if b := s[i]; b < utf8.RuneSelf {
@@ -190,30 +233,6 @@ func trimLastInvalidRune(s string) string {
 func formatLineInfo(linestr string, line, column int) string {
 	l := strconv.Itoa(line)
 	return fmt.Sprintf("    %s | %s\n    %*c", l, linestr, column+len(l)+4, '^')
-}
-
-type stringScanner struct {
-	str    string
-	offset int
-}
-
-func (ss *stringScanner) next() (line string, start int, ok bool) {
-	if ss.offset == len(ss.str) {
-		return
-	}
-	start, ok = ss.offset, true
-	line = ss.str[start:]
-	i := indexNewline(line)
-	if i < 0 {
-		ss.offset = len(ss.str)
-		return
-	}
-	line = line[:i]
-	if strings.HasPrefix(ss.str[start+i:], "\r\n") {
-		i++
-	}
-	ss.offset += i + 1
-	return
 }
 
 // Faster than strings.ContainsAny(str, "\r\n").
