@@ -1,7 +1,57 @@
 # Requires a go version bump to fix (golang.org/x/net >= v0.55.0).
 # These vulnerabilities require a compromised OpenStack or Kubernetes API
 # server to exploit, which is not something we defend against.
-# https://pkg.go.dev/vuln/GO-2026-5026
+# https://pkg.go.dev/vuln/GO-2026-5026 (alias CVE-2026-39821, see .trivyignore)
 GO-2026-5026
-# https://pkg.go.dev/vuln/GO-2026-4918
+# https://pkg.go.dev/vuln/GO-2026-4918 (alias CVE-2026-33814, see .trivyignore)
 GO-2026-4918
+
+# golang.org/x/text infinite loop on invalid input. Fixed in x/text v0.39.0,
+# which requires go 1.25.0.
+# Reachable via gophercloud microversion negotiation (openstack API responses)
+# and record.Warnf (object names) - both effectively require a compromised or
+# malicious OpenStack API to exploit.
+# https://pkg.go.dev/vuln/GO-2026-5970 (alias CVE-2026-56852, see .trivyignore)
+GO-2026-5970
+
+# google.golang.org/grpc xDS RBAC and HTTP/2 transport vulnerabilities. Fixed
+# in grpc v1.82.1, which requires go 1.25.0.
+# Reachable only via the optional OTLP-over-gRPC trace exporter
+# (go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc), which is
+# not used unless OTLP tracing is explicitly configured.
+# https://pkg.go.dev/vuln/GO-2026-6061 (alias GHSA-hrxh-6v49-42gf, see .trivyignore)
+GO-2026-6061
+
+# google.golang.org/grpc HTTP/2 DATA frame fragmentation heap exhaustion.
+# Fixed in grpc v1.83.1 (no backport), which requires go 1.25.0.
+# CAPO does not run a grpc server; grpc is only pulled in transitively via
+# k8s.io/component-base/tracing -> otlptracegrpc (client only, used only when
+# OTLP tracing is explicitly configured).
+# https://pkg.go.dev/vuln/GO-2026-6348 (alias CVE-2026-84304, GHSA-vp52-pcj8-j9qc, see .trivyignore)
+GO-2026-6348
+
+# golang.org/x/net/http2 vulnerabilities. All fixed in x/net v0.60.0, which
+# requires go 1.26.0 (this branch is on go 1.24.0).
+# CAPO does not run an x/net/http2 server; govulncheck only reaches the
+# client side (http2.ConfigureTransports via client-go's rest.HTTPClientFor
+# and http2.Transport.RoundTrip via gophercloud) plus error stringers. The
+# server-side issues are therefore not exploitable.
+# The client-side issue requires a compromised or malicious OpenStack/Kubernetes API server.
+# https://pkg.go.dev/vuln/GO-2026-6617 (alias CVE-2026-97032, see .trivyignore)
+GO-2026-6617
+# https://pkg.go.dev/vuln/GO-2026-6612 (alias CVE-2026-78663, see .trivyignore)
+GO-2026-6612
+# https://pkg.go.dev/vuln/GO-2026-6611 (alias CVE-2026-78669, see .trivyignore)
+GO-2026-6611
+# https://pkg.go.dev/vuln/GO-2026-6610 (alias CVE-2026-78660, see .trivyignore)
+GO-2026-6610
+# https://pkg.go.dev/vuln/GO-2026-6603 (alias CVE-2026-78659, see .trivyignore)
+GO-2026-6603
+
+# OpenTelemetry-Go: OTLP exporter config logging may leak endpoint URLs in
+# info logs (otlptrace, otlptracegrpc, sdk). Fixed in otel v1.45.0, which
+# requires go 1.25.0. Only reachable via package init of the optional OTLP
+# trace exporter, which is not used unless OTLP tracing is explicitly
+# configured; impact is limited to logging the endpoint URL.
+# https://pkg.go.dev/vuln/GO-2026-6505 (alias CVE-2026-81870, GHSA-8wmf-6v46-5gfg)
+GO-2026-6505

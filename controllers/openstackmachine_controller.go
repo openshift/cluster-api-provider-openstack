@@ -464,8 +464,17 @@ func (r *OpenStackMachineReconciler) reconcileMachineState(scope *scope.WithLogg
 			err := fmt.Errorf("instance state %v is unexpected", openStackServer.Status.InstanceState)
 			openStackMachine.SetFailure(capoerrors.DeprecatedCAPIUpdateMachineError, err)
 		}
-		v1beta1conditions.MarkFalse(openStackMachine, infrav1.InstanceReadyCondition, infrav1.InstanceStateErrorReason, clusterv1beta1.ConditionSeverityError, "")
-		v1beta1conditions.MarkFalse(openStackMachine, clusterv1beta1.ReadyCondition, infrav1.InstanceStateErrorReason, clusterv1beta1.ConditionSeverityError, "Instance is in ERROR state")
+		// Surface the error reported by the OpenStackServer, e.g. the Nova fault message.
+		instanceErrorMessage := ""
+		if serverCondition := v1beta1conditions.Get(openStackServer, infrav1.InstanceReadyCondition); serverCondition != nil {
+			instanceErrorMessage = serverCondition.Message
+		}
+		v1beta1conditions.MarkFalse(openStackMachine, infrav1.InstanceReadyCondition, infrav1.InstanceStateErrorReason, clusterv1beta1.ConditionSeverityError, "%s", instanceErrorMessage)
+		readyMessage := "Instance is in ERROR state"
+		if instanceErrorMessage != "" {
+			readyMessage = instanceErrorMessage
+		}
+		v1beta1conditions.MarkFalse(openStackMachine, clusterv1beta1.ReadyCondition, infrav1.InstanceStateErrorReason, clusterv1beta1.ConditionSeverityError, "%s", readyMessage)
 		return &ctrl.Result{}
 	case infrav1.InstanceStateDeleted:
 		// we should avoid further actions for DELETED VM
@@ -554,9 +563,16 @@ func openStackMachineSpecToOpenStackServerSpec(openStackMachineSpec *infrav1.Ope
 
 	// If not ports are provided we create one.
 	// Ports must have a network so if none is provided we use the default network.
-	serverPorts := openStackMachineSpec.Ports
+	// Deep-copy the ports so in-place mutations below (Network injection, SecurityGroups
+	// merge) do not modify the original OpenStackMachineSpec.
+	var serverPorts []infrav1.PortOpts
 	if len(openStackMachineSpec.Ports) == 0 {
 		serverPorts = make([]infrav1.PortOpts, 1)
+	} else {
+		serverPorts = make([]infrav1.PortOpts, len(openStackMachineSpec.Ports))
+		for i, p := range openStackMachineSpec.Ports {
+			serverPorts[i] = *p.DeepCopy()
+		}
 	}
 
 	var clusterSubnets []infrav1.FixedIP
