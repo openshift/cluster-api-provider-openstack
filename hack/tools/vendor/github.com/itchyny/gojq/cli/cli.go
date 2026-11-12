@@ -8,7 +8,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/mattn/go-isatty"
 
@@ -17,7 +16,7 @@ import (
 
 const name = "gojq"
 
-const version = "0.12.20"
+const version = "0.12.19"
 
 var revision = "HEAD"
 
@@ -160,8 +159,8 @@ Usage:
 		cli.argvalues = append(cli.argvalues, v)
 	}
 	for k, v := range opts.ArgJSON {
-		val, err := parseJSONArg(v, "$"+k)
-		if err != nil {
+		val, _ := newJSONInputIter(strings.NewReader(v), "$"+k).Next()
+		if err, ok := val.(error); ok {
 			return err
 		}
 		cli.argnames = append(cli.argnames, "$"+k)
@@ -190,8 +189,8 @@ Usage:
 	positional := opts.Args
 	for i, v := range opts.JSONArgs {
 		if v != nil {
-			val, err := parseJSONArg(v.(string), "--jsonargs")
-			if err != nil {
+			val, _ := newJSONInputIter(strings.NewReader(v.(string)), "--jsonargs").Next()
+			if err, ok := val.(error); ok {
 				return err
 			}
 			if i < len(positional) {
@@ -278,26 +277,6 @@ Usage:
 	return cli.process(iter, code)
 }
 
-func parseJSONArg(value, name string) (any, error) {
-	iter := newJSONInputIter(strings.NewReader(value), name).(*jsonInputIter)
-	defer iter.Close()
-	v, ok := iter.Next()
-	if !ok {
-		return nil, &jsonParseError{name, value, 0, io.ErrUnexpectedEOF}
-	}
-	if err, ok := v.(error); ok {
-		return nil, err
-	}
-	offset := iter.dec.InputOffset()
-	if _, err := iter.dec.Token(); err != io.EOF {
-		rest := strings.TrimLeft(value[offset:], " \t\n\r")
-		char, _ := utf8.DecodeRuneInString(rest)
-		return nil, &jsonParseError{name, value, 0,
-			&jsonTrailingValueError{char, len(value) - len(rest) + 1}}
-	}
-	return v, nil
-}
-
 func slurpFile(name string) (any, error) {
 	iter := newSlurpInputIter(
 		newFilesInputIter(newJSONInputIter, []string{name}, nil),
@@ -356,7 +335,13 @@ func (cli *cli) process(iter inputIter, code *gojq.Code) error {
 		if e := cli.printValues(code.Run(v, cli.argvalues...)); e != nil {
 			if e, ok := e.(*gojq.HaltError); ok {
 				if v := e.Value(); v != nil {
-					_ = (&rawMarshaler{m: newEncoder(false, -1)}).marshal(v, cli.errStream)
+					if str, ok := v.(string); ok {
+						cli.errStream.Write([]byte(str))
+					} else {
+						bs, _ := gojq.Marshal(v)
+						cli.errStream.Write(bs)
+						cli.errStream.Write([]byte{'\n'})
+					}
 				}
 				err = e
 				break
