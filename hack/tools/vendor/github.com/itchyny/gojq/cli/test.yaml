@@ -564,6 +564,33 @@
     [[0],[0,1]]
     [[0],[0,1],[0,1,2],[],[1],[1,2],[],[],[2]]
 
+- name: array slicing by negative floating-point number
+  args:
+    - -c
+    - '.[-1.5:], .[-0.5:], .[-2.5:-1.5], (.[-1.5:] = ["x"]), del(.[-1.5:]), .[1:-0.5], (.[:-0.5] = ["x"]), del(.[:-0.5]), .[:-1.0], .[:0.0]'
+  input: '[0, 1, 2]'
+  expected: |
+    [1,2]
+    [2]
+    [0,1]
+    [0,"x"]
+    [0]
+    [1,2]
+    ["x"]
+    []
+    [0,1]
+    []
+
+- name: array slicing by floating-point number from input
+  args:
+    - -c
+    - '.[0] as $a | .[1][] as $i | [$a[:$i], $a[$i:]]'
+  input: '[[0, 1, 2], [1.5, -0.5, -1.5]]'
+  expected: |
+    [[0,1],[1,2]]
+    [[0,1,2],[2]]
+    [[0,1],[1,2]]
+
 - name: array indexing and slicing by large number
   args:
     - -c
@@ -609,6 +636,30 @@
     [0,1,2]
     [0,1,2]
     []
+
+- name: array slicing by nan
+  args:
+    - -c
+    - '.[nan:], .[:nan], .[1:nan], .[nan:nan], (.[1:nan] = ["x"]), del(.[1:nan])'
+  input: '[0, 1, 2]'
+  expected: |
+    [0,1,2]
+    [0,1,2]
+    [1,2]
+    [0,1,2]
+    [0,"x"]
+    [0]
+
+- name: string slicing by nan
+  args:
+    - -c
+    - '.[nan:], .[:nan], .[1:nan], .[nan:nan]'
+  input: '"abc"'
+  expected: |
+    "abc"
+    "abc"
+    "bc"
+    "abc"
 
 - name: array and string slicing by object
   args:
@@ -710,6 +761,27 @@
   error: |
     expected a number for indexing an array but got: boolean (true)
 
+- name: indexing number literal error
+  args:
+    - '-1[0]'
+  input: 'null'
+  error: |
+    expected an array but got: number (1)
+
+- name: slicing number literal error
+  args:
+    - '1 - -1[1:]'
+  input: 'null'
+  error: |
+    expected an array but got: number (1)
+
+- name: indexing by indexed number literal error
+  args:
+    - '.[1[0]]'
+  input: '[0, 1]'
+  error: |
+    expected an array but got: number (1)
+
 - name: array slicing start error
   args:
     - '.[[]:0]'
@@ -746,6 +818,16 @@
     "３４"
     "２３"
     "２３４"
+
+- name: string slicing by negative floating-point number
+  args:
+    - '.[-1.5:], .[-0.5:], .[-2.5:-1.5], .[1:-0.5]'
+  input: '"１２３４５"'
+  expected: |
+    "４５"
+    "５"
+    "３４"
+    "２３４５"
 
 - name: string indexing not number error
   args:
@@ -1324,6 +1406,33 @@
   input: 'null'
   expected: |
     9223372036854775808
+
+- name: abs function against non-numbers
+  args:
+    - -c
+    - 'abs'
+  input: |
+    ""
+    "-42"
+    []
+    [1,-2]
+    {}
+    {"a":-1}
+  expected: |
+    ""
+    "-42"
+    []
+    [1,-2]
+    {}
+    {"a":-1}
+
+- name: abs function error
+  args:
+    - 'abs'
+  input: 'null true'
+  error: |
+    cannot negate: null
+    cannot negate: boolean (true)
 
 - name: length function
   args:
@@ -2407,6 +2516,40 @@
     "/a,b/c/d/e,f/"
     ",/ /a/,/b/,/ /c/,/ /d/,/ /e/,/f/,/ "
 
+- name: split/1 function against empty string
+  args:
+    - -c
+    - '.[] as $t | .[] as $s | $s | split($t)'
+  input: '["abc", "a", "b", ""]'
+  expected: |
+    ["",""]
+    ["a"]
+    ["b"]
+    []
+    ["","bc"]
+    ["",""]
+    ["b"]
+    []
+    ["a","c"]
+    ["a"]
+    ["",""]
+    []
+    ["a","b","c"]
+    ["a"]
+    ["b"]
+    []
+
+- name: split/1 function error
+  args:
+    - -c
+    - 'try split(",") catch ., try split(1) catch .'
+  input: '1 "a"'
+  expected: |
+    "split(\",\") cannot be applied to: number (1)"
+    "split(1) cannot be applied to: number (1)"
+    ["a"]
+    "split(1) cannot be applied to: string (\"a\")"
+
 - name: join function
   args:
     - 'join(",")'
@@ -3326,6 +3469,13 @@
   expected: |
     [5,5,false,3,3,[null,false],null,false]
 
+- name: optional operator with alternative operator
+  args:
+    - '.a ?// 1'
+  input: 'null'
+  expected: |
+    1
+
 - name: condition
   args:
     - 'if . then . else [.] end'
@@ -3541,6 +3691,29 @@
   expected: |
     5
 
+- name: reduce with destructuring alternative operator
+  args:
+    - 'reduce .[] as [$i,$j] ?// {$i,$j} (0; . + $i * $j)'
+  input: '[[1,2], {"i":3,"j":4}, [5,6]]'
+  expected: |
+    44
+
+- name: reduce with destructuring alternative operator resetting variables
+  args:
+    - -c
+    - 'reduce .[] as [$a] ?// {$b} ?// $c ([]; . + [[$a, $b, $c]])'
+  input: '[{"b":1}, [2], 3, [4]]'
+  expected: |
+    [[null,1,null],[2,null,null],[null,null,3],[4,null,null]]
+
+- name: reduce with destructuring alternative operator and error backtrack
+  args:
+    - -c
+    - 'reduce .[] as [$a] ?// $a ([]; . + [if $a == 2 then error else $a end])'
+  input: '[[1], [2], [3]]'
+  expected: |
+    [1,[2],3]
+
 - name: reduce null
   args:
     - 'reduce . as $n (.; .)'
@@ -3584,6 +3757,16 @@
   input: 'null'
   expected: |
     8
+
+- name: reduce with assignment of multiple paths in update
+  args:
+    - -c
+    - 'reduce (1,2) as $i (.; (.[0], .[.[0]]) = $i),
+       reduce (1,2) as $i (.; (.[0], .[.[0]]) |= $i)'
+  input: '[0,0,0]'
+  expected: |
+    [2,2,0]
+    [2,2,0]
 
 - name: reduce with query in start
   args:
@@ -3637,6 +3820,37 @@
     -1
     -1
     -4
+
+- name: foreach with destructuring alternative operator
+  args:
+    - 'foreach .[] as [$i,$j] ?// {$i,$j} (0; . + $i * $j)'
+  input: '[[1,2], {"i":3,"j":4}, [5,6]]'
+  expected: |
+    2
+    14
+    44
+
+- name: foreach with destructuring alternative operator resetting variables
+  args:
+    - -c
+    - 'foreach .[] as [$a] ?// {$b} ?// $c (null; [$a, $b, $c])'
+  input: '[{"b":1}, [2], 3, [4]]'
+  expected: |
+    [null,1,null]
+    [2,null,null]
+    [null,null,3]
+    [4,null,null]
+
+- name: foreach with destructuring alternative operator and error backtrack in extract
+  args:
+    - -c
+    - 'foreach .[] as {$a} ?// [$a] ?// $a (null; $a; if 1 < . and . < 4 then error else . end)'
+  input: '[[1], [2], {"a":3}, 4]'
+  expected: |
+    1
+    [2]
+    {"a":3}
+    4
 
 - name: foreach with iterator in update
   args:
@@ -4462,6 +4676,17 @@
     [-3,-3,-2,-1,-1,-0,-0,0,0,0,0,1,1,2,3,3]
     [3.7,3.3,2.5,1.7,1,0.7,0.3,0,0.3,0.5,0.7,1,1.7,2.5,3.3,3.7]
 
+- name: math functions against large number literals
+  args:
+    - -c
+    - '[floor, ceil, sqrt, exp10]'
+  input: |
+    1e1000
+    -1e1000
+  expected: |
+    [1.7976931348623157e+308,1.7976931348623157e+308,1.7976931348623157e+308,1.7976931348623157e+308]
+    [-1.7976931348623157e+308,-1.7976931348623157e+308,null,0]
+
 - name: round, nearbyint, rint functions
   args:
     - -c
@@ -4623,6 +4848,41 @@
     [1,1,1,0,0.707106781,1.414213562,1.7976931348623157e+308,4,0.25,0,0.125,8,0,0.000976562,1024]
     [-0.444518734,-0.444518734,-5.441370838,null,null,null,0.37685001,0.37685001,-0.160400394,0.055671167,0.055671167,-0.005868083]
 
+- name: jn/2 function with large orders
+  args:
+    - -c
+    - '[jn(1e19,-1e19; 1)], [jn(1e9,100000001,-100000001; 1,-1)]'
+  input: 'null'
+  expected: |
+    [0,0]
+    [0,0,-0,0,-0,0]
+
+- name: jn/2 function around the underflow threshold
+  args:
+    - -c
+    - '[jn(155,156,157,-156,-157; 1,-1)], [jn(253,254; 10)], [jn(156; 0.99,-0.99), jn(157; 1.03,-1.03), jn(101; 0.048), jn(142; 0.563)]'
+  input: 'null'
+  expected: |
+    [4.565e-321,1.5e-323,0,1.5e-323,-0,-4.565e-321,1.5e-323,-0,1.5e-323,0]
+    [1e-323,0]
+    [5e-324,5e-324,5e-324,-5e-324,5e-324,5e-324]
+
+- name: yn/2 function with large orders
+  args:
+    - -c
+    - '[yn(1e19,-1e19; 1), yn(2147483647; 1e9), yn(-2147483647,-2147483646; 1)]'
+  input: 'null'
+  expected: |
+    [-1.7976931348623157e+308,-1.7976931348623157e+308,-1.7976931348623157e+308,1.7976931348623157e+308,-1.7976931348623157e+308]
+
+- name: yn/2 function around the overflow threshold
+  args:
+    - -c
+    - '[yn(151,152,-151,-152,-153; 1), yn(246,247; 10), yn(119; 0.22), yn(134; 0.484)] | map(if isinfinite then . elif . < 0 then "-finite" else "+finite" end)'
+  input: 'null'
+  expected: |
+    ["-finite",-1.7976931348623157e+308,"+finite",-1.7976931348623157e+308,1.7976931348623157e+308,"-finite",-1.7976931348623157e+308,"-finite","-finite"]
+
 - name: fma/3 function
   args:
     - -c
@@ -4706,6 +4966,14 @@
     [null,null,true]
     [0,1,false]
     [null,1,false]
+
+- name: isnan function on non-numbers
+  args:
+    - -c
+    - '[null, true, false, "", [], {} | isnan]'
+  input: 'null'
+  expected: |
+    [false,false,false,false,false,false]
 
 - name: nan and comparison
   args:
@@ -4941,6 +5209,30 @@
     {"x":[]}
     {}
 
+- name: delpaths function with descendant paths before ancestor paths
+  args:
+    - -c
+    - 'delpaths([["a","b"],["a"]]), delpaths([["a","b","c"],["a","b"],["a","d"]]),
+       delpaths([["c",0,"x"],["c",0.0]]), delpaths([["c",{"start":0,"end":1},0,"x"],["c",{"start":0,"end":1}]]),
+       delpaths([["a","b"],["c"],[]]), .'
+  input: '{"a":{"b":1},"c":[2]}'
+  expected: |
+    {"c":[2]}
+    {"a":{},"c":[2]}
+    {"a":{"b":1},"c":[]}
+    {"a":{"b":1},"c":[]}
+    null
+    {"a":{"b":1},"c":[2]}
+
+- name: delpaths function with negative indices, fractional indices, and slices
+  args:
+    - -c
+    - 'delpaths([[-1,0],[0,0],[0,2]]), delpaths([[0,-3],[0.5,0],[-1,{"start":1,"end":null},1]])'
+  input: '[[1,2,3]]'
+  expected: |
+    [[2]]
+    [[2]]
+
 - name: delpaths function against null
   args:
     - 'delpaths([["a"]]), delpaths([["a","b"]]), delpaths([[0]]), delpaths([[-1]]), delpaths([[{start:1,end:2}]])'
@@ -4973,6 +5265,20 @@
   error: |
     delpaths([[{"end":{},"start":1}]]) cannot be applied to [1,2,3]: expected a number for indexing an array but got: object ({})
 
+- name: delpaths function error with descendant paths before sibling paths
+  args:
+    - 'delpaths([["a","b"],["c"]])'
+  input: '{"a":1,"c":2}'
+  error: |
+    delpaths([["a","b"],["c"]]) cannot be applied to {"a":1,"c":2}: expected an object but got: number (1)
+
+- name: delpaths function error with descendant paths before ancestor paths of negative index
+  args:
+    - 'delpaths([[0],[-1,"x"]])'
+  input: '[1]'
+  error: |
+    delpaths([[0],[-1,"x"]]) cannot be applied to [1]: expected an object but got: number (1)
+
 - name: getpath function
   args:
     - -c
@@ -4988,6 +5294,46 @@
   input: '{"a":[{},{"b":[1,2,3]}]}'
   expected: |
     {"a":[{},{"b":[1,2,3]}]}
+
+- name: getpath function against string
+  args:
+    - -c
+    - '[getpath([{"start":1,"end":3}]), getpath([{"start":-2,"end":null}]), getpath([1]), getpath([])]'
+  input: '"abcde"'
+  expected: |
+    ["bc","de","b","abcde"]
+
+- name: getpath function against string in a container
+  args:
+    - -c
+    - 'getpath(["a",{"start":0,"end":2}]), getpath(["a",1])'
+  input: '{"a":"abc"}'
+  expected: |
+    "ab"
+    "b"
+
+- name: getpath function against string round trip with path function
+  args:
+    - -c
+    - '[getpath(path(.[1:3])), getpath(path(.[1]))]'
+  input: '"abcde"'
+  expected: |
+    ["bc","b"]
+
+- name: getpath function against string round trip in a container
+  args:
+    - -c
+    - '. as $d | [path(.a[0:2]), path(.b[1])] | map(. as $p | $d | getpath($p))'
+  input: '{"a":"abc","b":"xyz"}'
+  expected: |
+    ["ab","y"]
+
+- name: getpath function against string with object key
+  args:
+    - 'getpath(["k"])'
+  input: '"abc"'
+  error: |
+    getpath(["k"]) cannot be applied to "abc": expected an object but got: string ("abc")
 
 - name: getpath function error
   args:
@@ -5021,9 +5367,9 @@
   expected: |
     {"a":[{"b":5}]}
     {"a":[{"b":5}],"b":0}
-    "getpath([\"a\",0,\"b\"]) cannot be applied to: object ({\"a\":0})"
+    "getpath([\"a\",0,\"b\"]) cannot be applied to {\"a\":0}: expected an array but got: number (0)"
     {"a":[{"b":5}]}
-    "getpath([\"a\",0,\"b\"]) cannot be applied to: object ({\"a\":[0,1]})"
+    "getpath([\"a\",0,\"b\"]) cannot be applied to {\"a\":[0,1]}: expected an object but got: number (0)"
     "getpath([\"a\",0,\"b\"]) cannot be applied to {\"a\":{\"b\":1}}: expected an array but got: object ({\"b\":1})"
     {"a":[{"b":5}]}
     {"a":[{"b":5,"c":3}]}
@@ -5429,6 +5775,22 @@
   expected: |
     [1,3,6,5,5]
 
+- name: update-assignment operator against object with overlapping paths
+  args:
+    - -c
+    - '(.a.b,.a,.a.p.z) |= {p: ., q: .}'
+  input: '{"a":{"b":1}}'
+  expected: |
+    {"a":{"p":{"b":{"p":1,"q":1},"z":{"p":null,"q":null}},"q":{"b":{"p":1,"q":1}}}}
+
+- name: update-assignment operator against nested object with overlapping paths
+  args:
+    - -c
+    - '(.a.b.c,.a,.a.p.b.z) |= {p: ., q: .}'
+  input: '{"a":{"b":{"c":1}}}'
+  expected: |
+    {"a":{"p":{"b":{"c":{"p":1,"q":1},"z":{"p":null,"q":null}}},"q":{"b":{"c":{"p":1,"q":1}}}}}
+
 - name: update-assignment operator with optional operator
   args:
     - -c
@@ -5786,7 +6148,7 @@
   args:
     - -c
     - 'gmtime, localtime | map(. * 1000000 | floor / 1000000)'
-  input: '1500000000 1567890123.456 1600000000.111'
+  input: '1500000000 1567890123.456 1600000000.111 -1 -0.5 0.5'
   expected: | # UTC-7 (TZ=Etc/GMT+7)
     [2017,6,14,2,40,0,5,194]
     [2017,6,13,19,40,0,4,193]
@@ -5794,6 +6156,12 @@
     [2019,8,7,14,2,3.456,6,249]
     [2020,8,13,12,26,40.111,0,256]
     [2020,8,13,5,26,40.111,0,256]
+    [1969,11,31,23,59,59,3,364]
+    [1969,11,31,16,59,59,3,364]
+    [1969,11,31,23,59,59.5,3,364]
+    [1969,11,31,16,59,59.5,3,364]
+    [1970,0,1,0,0,0.5,4,0]
+    [1969,11,31,17,0,0.5,3,364]
 
 - name: mktime, strftime, strflocaltime, todate functions
   args:
@@ -5805,6 +6173,7 @@
     [2020,8,13,12,26,40.111,0,256]
     [2024,7,20]
     [2025]
+    [1969,11,31,23,59,59.5,3,364]
   expected: |
     [2017,6,14,2,40,0,5,194]
     2017-07-14T02:40:00Z
@@ -5841,15 +6210,105 @@
     2024-12-31T00:00:00Z
     2024-12-30T17:00:00-0700
     2024-12-31T00:00:00Z
+    [1969,11,31,23,59,59.5,3,364]
+    1969-12-31T23:59:59Z
+    1969-12-31T23:59:59-0700
+    -0.5
+    1969-12-31T23:59:59Z
+    1969-12-31T16:59:59-0700
+    1969-12-31T23:59:59Z
+
+- name: date functions with fractional seconds
+  args:
+    - -r
+    - 'mktime, strftime("%Y-%m-%dT%H:%M:%S.%fZ"), strflocaltime("%Y-%m-%dT%H:%M:%S.%f%z")'
+  input: |
+    [1970,0,1,0,0,-0.5]
+    [1970,0,1,0,0,-1.25]
+    [1970,0,1,0,0,-60.25]
+    [1970,0,1,0,0,-1]
+    [1970,0,1,0,0,0]
+    [1970,0,1,0,0,0.5]
+    [1970,0,1,0,0,60.25]
+  expected: | # UTC-7 (TZ=Etc/GMT+7)
+    -0.5
+    1969-12-31T23:59:59.500000Z
+    1969-12-31T23:59:59.500000-0700
+    -1.25
+    1969-12-31T23:59:58.750000Z
+    1969-12-31T23:59:58.750000-0700
+    -60.25
+    1969-12-31T23:58:59.750000Z
+    1969-12-31T23:58:59.750000-0700
+    -1
+    1969-12-31T23:59:59.000000Z
+    1969-12-31T23:59:59.000000-0700
+    0
+    1970-01-01T00:00:00.000000Z
+    1970-01-01T00:00:00.000000-0700
+    0.5
+    1970-01-01T00:00:00.500000Z
+    1970-01-01T00:00:00.500000-0700
+    60.25
+    1970-01-01T00:01:00.250000Z
+    1970-01-01T00:01:00.250000-0700
+
+- name: mktime after subtracting fractional seconds
+  args:
+    - 'gmtime | .[5] -= 0.5 | mktime'
+  input: '0 60 86400 -60'
+  expected: |
+    -0.5
+    59.5
+    86399.5
+    -60.5
+
+- name: date functions with non-finite or out of range epoch timestamps
+  args:
+    - -n
+    - '[infinite, -infinite, nan, 1e19, -1e19, 9223372036854775807, -9223372036854775808] | .[] | try gmtime catch .'
+  expected: |
+    "gmtime cannot be applied to 1.7976931348623157e+308: number of seconds is out of range"
+    "gmtime cannot be applied to -1.7976931348623157e+308: number of seconds is out of range"
+    "gmtime cannot be applied to null: number of seconds is out of range"
+    "gmtime cannot be applied to 10000000000000000000: number of seconds is out of range"
+    "gmtime cannot be applied to -10000000000000000000: number of seconds is out of range"
+    "gmtime cannot be applied to 9223372036854775807: number of seconds is out of range"
+    "gmtime cannot be applied to -9223372036854775808: number of seconds is out of range"
+
+- name: date functions with out of range numbers in the array
+  args:
+    - -n
+    - '[[infinite,0,1], [nan,0,1], [1e19,0,1], [0,1e19,1], [2001,0,1,0,0,infinite], [2001,0,1,0,0,nan], [2001,0,1,0,0,1e19], [9223372036854775807,0,1], ["x",0,1]] | .[] | try mktime catch .'
+  expected: |
+    "mktime cannot be applied to [1.7976931348623157e+308,0,1]: number is out of range"
+    "mktime cannot be applied to [null,0,1]: number is out of range"
+    "mktime cannot be applied to [10000000000000000000,0,1]: number is out of range"
+    "mktime cannot be applied to [0,10000000000000000000,1]: number is out of range"
+    "mktime cannot be applied to [2001,0,1,0,0,1.797693134 ...]: number is out of range"
+    "mktime cannot be applied to [2001,0,1,0,0,null]: number is out of range"
+    "mktime cannot be applied to [2001,0,1,0,0,10000000000 ...]: number is out of range"
+    "mktime cannot be applied to [9223372036854775807,0,1]: number is out of range"
+    "mktime cannot be applied to [\"x\",0,1]: expected an array of 8 numbers"
+
+- name: strftime function with out of range datetime
+  args:
+    - -n
+    - 'try (infinite | todate) catch ., try ([1e19,0,1] | strftime("%Y")) catch .'
+  expected: |
+    "strftime(\"%Y-%m-%dT%H:%M:%SZ\") cannot be applied to 1.7976931348623157e+308: number of seconds is out of range"
+    "strftime(\"%Y\") cannot be applied to [10000000000000000000,0,1]: number is out of range"
 
 - name: strptime, fromdate functions
   args:
     - -c
-    - 'strptime("%Y-%m-%dT%H:%M:%S%z"), fromdate'
+    - 'strptime("%Y-%m-%dT%H:%M:%S%z")? // strptime("%Y-%m-%dT%H:%M:%S.%f%z"), fromdate?'
   input: |
     "2017-07-14T02:40:00Z"
     "2019-09-08T06:02:03+0900"
     "2020-09-13T07:26:40-05:00"
+    "1969-12-31T23:59:59.5+0000"
+    "2345-01-02T03:04:05.678901+0000"
   expected: |
     [2017,6,14,2,40,0,5,194]
     1500000000
@@ -5857,6 +6316,21 @@
     1567890123
     [2020,8,13,12,26,40,0,256]
     1600000000
+    [1969,11,31,23,59,59.5,3,364]
+    [2345,0,2,3,4,5.678901,2,1]
+
+- name: strptime with the zero time instant
+  args:
+    - -c
+    - 'strptime("%Y-%m-%dT%H:%M:%S%z")'
+  input: |
+    "0001-01-01T00:00:00Z"
+    "0001-01-01T01:00:00+0100"
+    "0001-01-01T00:00:01Z"
+  expected: |
+    [1,0,1,0,0,0,1,0]
+    [1,0,1,0,0,0,1,0]
+    [1,0,1,0,0,1,1,0]
 
 - name: strftime, strptime functions
   args:
@@ -6097,16 +6571,14 @@
   args:
     - 'halt_error'
   input: '1'
-  error: |
-    1
+  error: '1'
   exit_code: 5
 
 - name: halt_error/0 function on nan
   args:
     - 'nan | halt_error'
   input: 'null'
-  error: |
-    null
+  error: 'null'
   exit_code: 5
 
 - name: halt_error/0 function on string
@@ -6123,8 +6595,7 @@
   args:
     - 'range(5) | try halt_error catch .'
   input: 'null'
-  error: |
-    0
+  error: '0'
   exit_code: 5
 
 - name: halt_error/0 function with null input and try catch
@@ -6140,8 +6611,7 @@
     1
     2
     3
-  error: |
-    1
+  error: '1'
   exit_code: 5
 
 - name: halt_error/0 function and raw string input option
@@ -6178,8 +6648,7 @@
     1
     2
     3
-  error: |
-    1
+  error: '1'
   exit_code: 1
 
 - name: builtins function
@@ -6503,6 +6972,18 @@
     {"bar":"deA","foo":"cdeA"}
     [{"a":"bcdeA","bar":"deA","foo":"c"},{"a":"BCDEa","bar":"DEa","foo":"C"}]
 
+- name: match, test, and capture functions with an array argument
+  args:
+    - -c
+    - '[match(["bcd"])], [match(["bcd", "gi"])], [test(["bcD"]), test(["bcD", "i"]), test(["bcD", null])], capture(["b(?<foo>c)"]), [capture(["(?<foo>b)c", "gi"])]'
+  input: '"abcdeABCDE"'
+  expected: |
+    [{"captures":[],"length":3,"offset":1,"string":"bcd"}]
+    [{"captures":[],"length":3,"offset":1,"string":"bcd"},{"captures":[],"length":3,"offset":6,"string":"BCD"}]
+    [false,true,false]
+    {"foo":"c"}
+    [{"foo":"b"},{"foo":"B"}]
+
 - name: scan function
   args:
     - -c
@@ -6571,6 +7052,49 @@
     "abcABC☆★☆★☆ABCabc"
     "aabcABC☆★☆ABCabc"
     "abcABC☆★☆ABCabc"
+
+- name: match function with empty matches
+  args:
+    - -c
+    - '[match("a*"; "g").offset], [scan("[a-z]*")], gsub("[0-9]*"; "#"), split("-*"; ""), [splits("\\s*")]'
+  input: '"a1b-c d"'
+  expected: |
+    [0,1,2,3,4,5,6,7]
+    ["a","","b","","c","","d",""]
+    "#a##b#-#c# #d#"
+    ["","a","1","b","","c"," ","d",""]
+    ["","a","1","b","-","c","","d",""]
+
+- name: match function with empty matches and assertions
+  args:
+    - -c
+    - 'gsub("(?m)^a*"; "#"), gsub("\\ba*"; "#"), gsub("(^|-)a*"; "#"), gsub("[a-z]*\\b"; "#")'
+  input: '"a-a b"'
+  expected: |
+    "#-a b"
+    "##-## #b#"
+    "## b"
+    "##-## ##"
+
+- name: match function with empty matches and captures
+  args:
+    - -c
+    - '[scan("(x)?a*")], [match("(a|)"; "g") | [.offset, .captures[0].offset]], [scan("[^a]*"; "i")]'
+  input: '"1a-A"'
+  expected: |
+    [[null],[null],[null],[null],[null]]
+    [[0,0],[1,1],[2,2],[3,3],[4,4]]
+    ["1","","-","",""]
+
+- name: match function with empty matches against multibyte characters
+  args:
+    - -c
+    - '[scan("[☆★]*")], [match("[☆★]*"; "g").offset], gsub("[☆★]*"; "#")'
+  input: '"☆★1☆★"'
+  expected: |
+    ["☆★","","☆★",""]
+    [0,2,3,5]
+    "##1##"
 
 - name: INDEX function
   args:
@@ -6857,6 +7381,67 @@
     [2]
     {"a":3}
     4
+
+- name: destructuring alternative operator with break
+  args:
+    - -c
+    - 'label $out | . as {$a} ?// [$a] ?// $a | {$a}, break $out'
+  input: '[1] [2] {"a":3} 4'
+  expected: |
+    {"a":1}
+    {"a":2}
+    {"a":3}
+    {"a":4}
+
+- name: destructuring alternative operator with break in try
+  args:
+    - -c
+    - 'first((. as {$a} ?// [$a] ?// $a | {$a})?)'
+  input: '[1] [2] {"a":3} 4'
+  expected: |
+    {"a":1}
+    {"a":2}
+    {"a":3}
+    {"a":4}
+
+- name: destructuring alternative operator with halt
+  args:
+    - -c
+    - 'label $out | . as {$a} ?// [$a] ?// $a | {$a}, halt'
+  input: '[1] [2] {"a":3} 4'
+  expected: |
+    {"a":1}
+
+- name: destructuring alternative operator with halt_error
+  args:
+    - -c
+    - '. as {$a} ?// [$a] ?// $a | {$a}, halt_error'
+  input: '[1]'
+  expected: |
+    {"a":1}
+  error: '[1]'
+  exit_code: 5
+
+- name: destructuring alternative operator with halt_error in try
+  args:
+    - -c
+    - 'try (. as {$a} ?// [$a] ?// $a | {$a}, halt_error)'
+  input: '[1]'
+  expected: |
+    {"a":1}
+  error: '[1]'
+  exit_code: 5
+
+- name: destructuring alternative operator resets variables of later alternatives
+  args:
+    - -c
+    - '.[] as [$a] ?// {$b} ?// $c | [$a, $b, $c]'
+  input: '[{"b":1}, [2], 3, [4]]'
+  expected: |
+    [null,1,null]
+    [2,null,null]
+    [null,null,3]
+    [4,null,null]
 
 - name: destructuring alternative operator with multiple variables
   args:
@@ -7521,7 +8106,7 @@
     [["c"],3]
     [["c"]]
 
-- name: stream option with unterminated input
+- name: stream option with unterminated input after a comma
   args:
     - -c
     - --stream
@@ -7532,6 +8117,21 @@
   error: |
     invalid json: <stdin>
         {"a":1,
+               ^  unexpected EOF
+
+- name: stream option with unterminated input after a value
+  args:
+    - -c
+    - --stream
+    - '.'
+  input: '[1,[2,3'
+  expected: |
+    [[0],1]
+    [[1,0],2]
+    [[1,1],3]
+  error: |
+    invalid json: <stdin>
+        [1,[2,3
                ^  unexpected EOF
 
 - name: yaml input option
@@ -7702,6 +8302,17 @@
     invalid yaml: <stdin>:2
         2 | bar: ]
                  ^  did not find expected node content
+
+- name: yaml input option error with multibyte characters
+  args:
+    - --yaml-input
+    - '.'
+  input: |
+    {１２３: 4, １２３: 5}
+  error: |
+    invalid yaml: <stdin>:1
+        1 | {１２３: 4, １２３: 5}
+                        ^  mapping key "１２３" already defined at line 1
 
 - name: yaml input option multiple errors
   args:
@@ -8511,6 +9122,47 @@
         { foo }
           ^  invalid character 'f' looking for beginning of object key string
 
+- name: argjson option with multiple values
+  args:
+    - --argjson
+    - 'foo'
+    - '1 2'
+    - '.'
+  error: |
+    invalid json: $foo
+        1 2
+          ^  invalid character '2' after top-level value
+
+- name: argjson option with adjacent values
+  args:
+    - --argjson
+    - 'foo'
+    - '{}[]'
+    - '.'
+  error: |
+    invalid json: $foo
+        {}[]
+          ^  invalid character '[' after top-level value
+
+- name: argjson option with trailing parse error
+  args:
+    - --argjson
+    - 'foo'
+    - '{} {'
+    - '.'
+  error: |
+    invalid json: $foo
+        {} {
+           ^  invalid character '{' after top-level value
+
+- name: argjson option with empty value
+  args:
+    - --argjson
+    - 'foo'
+    - ''
+    - '.'
+  error: "invalid json: $foo\n    \n    ^  unexpected EOF\n"
+
 - name: slurpfile option
   args:
     - --slurpfile
@@ -8721,6 +9373,37 @@
     invalid json: --jsonargs
         {"x":}
              ^  invalid character '}' looking for beginning of value
+
+- name: jsonargs option with multiple values
+  args:
+    - '$ARGS'
+    - --jsonargs
+    - '1'
+    - '"bar" "baz"'
+  input: '0'
+  error: |
+    invalid json: --jsonargs
+        "bar" "baz"
+              ^  invalid character '"' after top-level value
+
+- name: jsonargs option with empty value
+  args:
+    - '$ARGS'
+    - --jsonargs
+    - '1'
+    - ''
+  input: '0'
+  error: "invalid json: --jsonargs\n    \n    ^  unexpected EOF\n"
+
+- name: jsonargs option with big integer
+  args:
+    - -c
+    - '$ARGS.positional | .[0] * 2'
+    - --jsonargs
+    - '10000000000000000000000000000000'
+  input: '0'
+  expected: |
+    20000000000000000000000000000000
 
 - name: args with jsonargs option
   args:
