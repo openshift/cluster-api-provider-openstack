@@ -1,99 +1,305 @@
+# Copyright 2025 The go-yaml Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
 # Auto-install https://github.com/makeplus/makes at specific commit:
 MAKES := .cache/makes
 MAKES-LOCAL := .cache/local
-MAKES-COMMIT ?= 74a4d03223cdaf39140613d48d3f1d8c0a0840e5
+MAKES-COMMIT ?= a5085e7f78210be125307728e8cd5665f383c9ad
 $(shell [ -d $(MAKES) ] || ( \
   git clone -q https://github.com/makeplus/makes $(MAKES) && \
   git -C $(MAKES) reset -q --hard $(MAKES-COMMIT)))
 ifneq ($(shell git -C $(MAKES) rev-parse HEAD), \
        $(shell git -C $(MAKES) rev-parse $(MAKES-COMMIT)))
-$(error $(MAKES) is not at the correct commit: $(MAKES-COMMIT))
+$(error $(MAKES) is not at the correct commit: $(MAKES-COMMIT). \
+	Remove $(MAKES) and try again.)
 endif
-include $(MAKES)/init.mk
 
-# Only auto-install go if no go exists or GO-VERSION specified:
-ifeq (,$(shell which go))
-GO-VERSION ?= 1.24.0
+include $(MAKES)/init.mk
+include $(MAKES)/shellcheck.mk
+include $(MAKES)/perl.mk
+
+# Auto-install go unless GO_YAML_PATH is set:
+ifdef GO_YAML_PATH
+override export PATH := $(GO_YAML_PATH):$(PATH)
+else
+GO-VERSION ?= 1.27.2
 endif
 GO-VERSION-NEEDED := $(GO-VERSION)
 
 # yaml-test-suite info:
-YTS-TAG := data-2022-01-17
+YTS-URL ?= https://github.com/yaml/yaml-test-suite
+YTS-TAG ?= data-2022-01-17
 YTS-DIR := yts/testdata/$(YTS-TAG)
-YTS-URL := https://github.com/yaml/yaml-test-suite
-TEST-DEPS := $(YTS-DIR)
+
+CLI-BINARY := go-yaml
+
+# README recording tools are installed only when explicitly requested.
+YAMLCAST-COMMIT := 0dfec58fc184e97b21239d0b54dc222bd8311cf1
+YAMLCAST-YS-VERSION := 0.2.32
+YAMLCAST-URL := https://codeload.github.com/ingydotnet/yamlcast
+
+# Pager for viewing documentation:
+PAGER ?= less -FRX
 
 # Setup and include go.mk and shell.mk:
-GO-CMDS-SKIP := test fmt
+
+# We need to limit `find` to avoid dirs like `.cache/` and any git worktrees,
+# as this makes `make` operations very slow:
+REPO-DIRS := $(shell find * -maxdepth 0 -type d ! -name repos \
+	       ! -exec test -f {}/.git \; -print)
+GO-FILES := $(wildcard *.go) $(shell find $(REPO-DIRS) -name '*.go')
+
 ifndef GO-VERSION-NEEDED
 GO-NO-DEP-GO := true
 endif
+
 include $(MAKES)/go.mk
+
+YAMLCAST-ROOT := $(LOCAL-ROOT)/yamlcast-$(YAMLCAST-COMMIT)
+YAMLCAST := $(YAMLCAST-ROOT)/bin/yamlcast
+YAMLCAST-ARCHIVE := $(LOCAL-CACHE)/yamlcast-$(YAMLCAST-COMMIT).tar.gz
+YAMLCAST-READY := $(YAMLCAST-ROOT)/.cache/ready-$(YAMLCAST-YS-VERSION)
+
+# Set this from the `make` command to override:
+GOLANGCI-LINT-VERSION ?= v2.14.0
+GOLANGCI-LINT-INSTALLER := \
+  https://github.com/golangci/golangci-lint/raw/main/install.sh
+GOLANGCI-LINT := $(LOCAL-BIN)/golangci-lint
+GOLANGCI-LINT-VERSIONED := $(GOLANGCI-LINT)-$(GOLANGCI-LINT-VERSION)
+
+SHELL-DEPS += $(GOLANGCI-LINT-VERSIONED)
+
 ifdef GO-VERSION-NEEDED
-TEST-DEPS += $(GO)
+GO-DEPS += $(GO)
 else
 SHELL-DEPS := $(filter-out $(GO),$(SHELL-DEPS))
 endif
+
 SHELL-NAME := makes go-yaml
+include $(MAKES)/clean.mk
 include $(MAKES)/shell.mk
 
-v ?=
-count ?= 1
+MAKES-CLEAN := $(CLI-BINARY) $(GOLANGCI-LINT)
+MAKES-REALCLEAN := $(dir $(YTS-DIR))
 
-fmt:
-	golangci-lint fmt ./...
+SHELL-SCRIPTS = \
+  util/common.bash \
+  $(shell grep -rl '^.!/usr/bin/env bash' util | \
+          grep -v '\.sw')
+
+COVER-TESTS := \
+ . \
+ ./cmd/... \
+ ./internal/... \
+
+# v=1 for verbose
+MAKE := $(MAKE) --no-print-directory
+
+v ?=
+cover ?=
+fuzz ?=
+time ?= 60s
+opts ?=
+
+TEST-OPTS := \
+$(if $v, -v)\
+$(if $(cover), --cover)\
+$(if $(fuzz), --fuzz=FuzzEncodeFromJSON --fuzztime=$(time))\
+$(if $(opts), $(opts))\
 
 # Test rules:
-test: $(TEST-DEPS)
-	go test$(if $v, -v)
+test: test-main test-internal test-cmd test-cli-build test-limit \
+  test-yts-all test-shell
+	@echo 'ALL TESTS PASS'
 
-test-data: $(YTS-DIR)
+check:
+	$(MAKE) fmt
+	$(MAKE) tidy
+	$(MAKE) lint
+	$(MAKE) test
 
-test-all: test test-yts-all
+test-main: $(GO-DEPS)
+	go test .$(TEST-OPTS)
+	@echo 'ALL MAIN FILES PASS'
 
-test-yts: $(TEST-DEPS)
-	go test$(if $v, -v) ./yts -count=$(count)
+test-cmd: $(GO-DEPS)
+	go test ./cmd/...$(TEST-OPTS)
+	@echo 'ALL CMD FILES PASS'
 
-test-yts-all: $(TEST-DEPS)
+test-internal: $(GO-DEPS)
+	go test ./internal/...$(TEST-OPTS)
+	@echo 'ALL INTERNAL FILES PASS'
+
+test-cover: $(GO-DEPS)
+	go test . $(COVER-TESTS) -vet=off --cover$(TEST-OPTS)
+
+test-yts: $(GO-DEPS) $(YTS-DIR)
+	go test ./yts$(TEST-OPTS)
+
+test-yts-all: $(GO-DEPS) $(YTS-DIR)
 	@echo 'Testing yaml-test-suite'
-	@export RUNALL=1; $(call yts-pass-fail)
+	util/yaml-test-suite all
 
-test-yts-fail: $(TEST-DEPS)
+test-yts-fail: $(GO-DEPS) $(YTS-DIR)
 	@echo 'Testing yaml-test-suite failures'
-	@export RUNFAILING=1; $(call yts-pass-fail)
+	util/yaml-test-suite fail
 
+test-shell: $(SHELLCHECK)
+	shellcheck $(SHELL-SCRIPTS)
+	@echo 'ALL SHELL FILES PASS'
 
-# Clean rules:
-realclean:
-	$(RM) -r $(dir $(YTS-DIR))
+test-count: $(GO-DEPS)
+	util/test-count
 
-distclean: realclean
-	$(RM) -r $(ROOT)/.cache
+yts-dir: $(YTS-DIR)
 
+get-test-data: $(YTS-DIR)
+
+# Install golangci-lint for GitHub Actions:
+golangci-lint-install: $(GOLANGCI-LINT)
+
+# Keep related checkouts and their fixtures outside core checks.
+GO-PACKAGES := . ./cmd/... ./internal/... ./plugin/... ./yts/... ./example/... \
+  ./util/build-cli/...
+export GOLANGCI_LINT_CACHE := $(CURDIR)/.cache/golangci-lint
+
+fmt: $(GOLANGCI-LINT-VERSIONED)
+	$< fmt $(GO-FILES)
+
+lint: $(GOLANGCI-LINT-VERSIONED)
+	$< run $(GO-PACKAGES)
+
+tidy: $(GO-DEPS)
+	go mod tidy
+
+# Pass configuration paths as environment values, not shell source.
+export GO_YAML_BUILD_CONFIG = $(CONFIG)
+export GO_YAML_BUILD_PLUGIN = $(PLUGIN)
+export GO_YAML_BUILD_GO = $(GO)
+export GO_YAML_BUILD_PERL = $(PERL)
+JSON-COMMENTS-LOCAL ?= 0
+export GO_YAML_JSON_COMMENTS_LOCAL = $(JSON-COMMENTS-LOCAL)
+REFERENCE-PARSER-LOCAL ?= 0
+export GO_YAML_REFERENCE_PARSER_LOCAL = $(REFERENCE-PARSER-LOCAL)
+
+cli: $(GO)
+ifneq ($(strip $(CONFIG)$(PLUGIN)),)
+cli: $(PERL)
+	go run ./util/build-cli
+else
+	go build -o $(CLI-BINARY) ./cmd/go-yaml
+endif
+
+$(CLI-BINARY): $(GO)
+	go build -o $@ ./cmd/$@
+
+# Render the README image with the current CLI and demo sources.
+# Chrome's Unix socket path is too long under the project-local TMPDIR.
+update: cli yamlcast
+	@TMPDIR=/tmp YAMLCAST_ROOT=$(YAMLCAST-ROOT) \
+	PATH=$(YAMLCAST-ROOT)/.cache/local/bin:$(PATH) \
+	  $(YAMLCAST) docs/demo/cli.yaml
+
+yamlcast: $(YAMLCAST-READY)
+
+$(YAMLCAST-READY): $(YAMLCAST)
+	$(MAKE) -C $(YAMLCAST-ROOT) \
+	  YAMLSCRIPT-VERSION=$(YAMLCAST-YS-VERSION) shell CMD=true
+	touch $@
+
+$(YAMLCAST): $(YAMLCAST-ARCHIVE)
+	mkdir -p $(YAMLCAST-ROOT)/.cache
+	tar -xzf $< -C $(YAMLCAST-ROOT) --strip-components=1
+	ln -sfn $(MAKES) $(YAMLCAST-ROOT)/.cache/makes
+	touch $@
+
+$(YAMLCAST-ARCHIVE):
+	curl+ $(YAMLCAST-URL)/tar.gz/$(YAMLCAST-COMMIT) > $@.tmp
+	mv $@.tmp $@
+
+run-examples: $(GO)
+	@for dir in example/*/; do \
+	  if test -f "$${dir}go.mod"; then \
+	    (set -x; go -C "$$dir" run .) || \
+	    { echo "$$dir failed"; break; }; \
+	  else \
+	    (set -x; go run "$${dir}main.go") || \
+	    { echo "$$dir failed"; break; }; \
+	  fi; \
+	done
+
+# CLI documentation (go doc) - view in terminal:
+doc: $(GO-DEPS)
+	@go doc -all . | $(PAGER)
+
+# HTTP documentation server - opens browser:
+doc-http: $(GO-DEPS)
+	go doc -http -all
 
 # Setup rules:
 $(YTS-DIR):
 	git clone -q $(YTS-URL) $@
 	git -C $@ checkout -q $(YTS-TAG)
 
-define yts-pass-fail
-( \
-  result=.cache/local/tmp/yts-test-results; \
-  go test ./yts -count=1 -v | \
-    awk '/     --- (PASS|FAIL): / {print $$2, $$3}' > $$result; \
-  known_count=$$(grep -c '' yts/known-failing-tests); \
-  pass_count=$$(grep -c '^PASS:' $$result); \
-  fail_count=$$(grep -c '^FAIL:' $$result); \
-  echo "PASS: $$pass_count"; \
-  echo "FAIL: $$fail_count (known: $$known_count)"; \
-  if [[ $$RUNFAILING ]] && [[ $$pass_count -gt 0 ]]; then \
-    echo "ERROR: Found passing tests among expected failures:"; \
-    grep '^PASS:' $$result; \
-    exit 1; \
-  fi; \
-  if [[ $$fail_count != "$$known_count" ]]; then \
-    echo "ERROR: FAIL count differs from expected value of $$known_count"; \
-    exit 1; \
-  fi \
-)
-endef
+# Downloads golangci-lint binary and moves to versioned path
+# (.cache/local/bin/golangci-lint-<version>).
+$(GOLANGCI-LINT-VERSIONED): $(GO-DEPS)
+	curl -sSfL $(GOLANGCI-LINT-INSTALLER) | \
+	  bash -s -- -b $(LOCAL-BIN) $(GOLANGCI-LINT-VERSION)
+	mv $(GOLANGCI-LINT) $@
+
+# Moves golangci-lint-<version> to golangci-lint for CI requirement
+$(GOLANGCI-LINT): $(GOLANGCI-LINT-VERSIONED)
+	cp $< $@
+
+# Optional plugin dependencies stay outside the core module.
+PLUGIN-WORK = $(CURDIR)/.cache/plugin-work/go.work
+
+prepare-json-comments: $(PERL) $(GO-DEPS)
+	GO_YAML_BUILD_JSON_COMMENTS=true \
+	GO_YAML_JSON_COMMENTS_LOCAL=1 \
+	GO_YAML_JSON_COMMENTS_VERSION=v0.1.9 \
+	$(PERL) util/prepare-plugins
+
+prepare-reference-parser: $(PERL) $(GO-DEPS)
+	GO_YAML_BUILD_REFERENCE_PARSER=true \
+	GO_YAML_REFERENCE_PARSER_LOCAL=1 \
+	GO_YAML_REFERENCE_PARSER_VERSION=v0.2.5 \
+	$(PERL) util/prepare-plugins
+
+test-json-comments: prepare-json-comments
+	GOWORK=$(PLUGIN-WORK) CGO_ENABLED=0 \
+	  go test ./plugin/jsoncomments/... ./.cache/cli-plugins/...$(TEST-OPTS)
+	GO_YAML_TEST_JSON_COMMENTS=1 \
+	GO_YAML_JSON_COMMENTS_LOCAL=1 \
+	go test ./util/build-cli \
+	  -run TestConfiguredJSONCLI$(TEST-OPTS)
+
+lint-json-comments: prepare-json-comments $(GOLANGCI-LINT-VERSIONED)
+	GOWORK=$(PLUGIN-WORK) $(GOLANGCI-LINT-VERSIONED) run \
+	  ./plugin/jsoncomments/...
+
+# The generated parser shares state; exercise concurrent Go and EDN callers.
+test-json-comments-race: prepare-json-comments
+	GOWORK=$(PLUGIN-WORK) go test -race -count=3 \
+	  ./plugin/jsoncomments/... \
+	  github.com/yamlstar/yamlstar-plugin-json-comments/parser
+
+test-reference-parser: prepare-reference-parser
+	GOWORK=$(PLUGIN-WORK) CGO_ENABLED=0 \
+	  go test ./plugin/yamlparser/reference/... \
+	  ./.cache/cli-plugins/...$(TEST-OPTS)
+	GO_YAML_TEST_REFERENCE_PARSER=1 \
+	GO_YAML_REFERENCE_PARSER_LOCAL=1 \
+	go test ./util/build-cli \
+	  -run TestConfiguredReferenceCLI$(TEST-OPTS)
+
+test-cli-build: $(GO-DEPS)
+	go test ./util/build-cli$(TEST-OPTS)
+
+test-limit: $(PERL) $(GO-DEPS)
+	cd plugin/limit && GOWORK=off go test ./...$(TEST-OPTS)
+	cd plugin/limit && GOWORK=off go mod edit -json | \
+	  $(PERL) -0777 -ne \
+	  'exit 1 unless /"Deprecated":\s*"use .*loaderlimits instead\."/'
+	@echo 'LIMIT MODULE DEPRECATION PASS'
