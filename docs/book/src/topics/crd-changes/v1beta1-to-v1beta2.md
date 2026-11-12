@@ -1,0 +1,310 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [v1beta1 compared to v1beta2](#v1beta1-compared-to-v1beta2)
+  - [Migration](#migration)
+  - [API additions](#api-additions)
+    - [OpenStackClusterTemplate template metadata](#openstackclustertemplate-template-metadata)
+  - [API Changes](#api-changes)
+    - [API server fields restructure](#api-server-fields-restructure)
+    - [DisableExternalNetwork renamed to EnableExternalNetwork](#disableexternalnetwork-renamed-to-enableexternalnetwork)
+    - [Flavor field restructure](#flavor-field-restructure)
+    - [Port security field rename](#port-security-field-rename)
+    - [Network management fields restructure](#network-management-fields-restructure)
+    - [External router IPs restructure](#external-router-ips-restructure)
+    - [Managed security group rules rename](#managed-security-group-rules-rename)
+    - [Conditions format change](#conditions-format-change)
+    - [Removal of deprecated status fields](#removal-of-deprecated-status-fields)
+    - [FailureDomains representation change](#failuredomains-representation-change)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
+# v1beta1 compared to v1beta2
+
+## Migration
+
+All users are encouraged to migrate their usage of the CAPO CRDs from `v1beta1` to `v1beta2`. This includes yaml files and source code. As CAPO implements automatic conversion webhooks between the CRD versions, this migration can happen after installing the new CAPO release.
+
+**For most users, no action is required.** The conversion webhooks handle all translation between v1beta1 and v1beta2 automatically. The changes below are relevant primarily for developers writing controllers or tooling that reads CAPO objects directly.
+
+The v1beta2 API introduces **no removals** to spec fields. All existing spec fields from v1beta1 are preserved, though some have been renamed or restructured for consistency. Status fields have additional breaking changes beyond renaming.
+
+## API additions
+
+### OpenStackClusterTemplate template metadata
+
+`OpenStackClusterTemplate` now supports standard object metadata on the embedded template via
+`spec.template.metadata`, aligning with the Cluster API v1beta2 provider contract for
+InfraClusterTemplate resources. Labels and annotations set here are applied to the top-level
+metadata of `OpenStackCluster` objects generated from this template by the Cluster API topology
+controller when using ClusterClass. The field has no effect outside of ClusterClass-managed
+clusters.
+
+```diff
+ spec:
+   template:
++    metadata:
++      labels:
++        environment: production
++      annotations:
++        example.com/owner: platform-team
+     spec:
+       identityRef:
+         name: cloud-config
+         cloudName: openstack
+```
+
+The field is preserved via the conversion data annotation when converting to v1beta1
+and back. Only labels and annotations are supported.
+
+## API Changes
+
+This only documents backwards incompatible changes. Fields that were added to v1beta2 are not listed here.
+
+### API server fields restructure
+
+`spec.apiServerFloatingIP`, `spec.apiServerFixedIP`, `spec.apiServerPort`,
+`spec.disableAPIServerFloatingIP`, and `spec.apiServerLoadBalancer` have been consolidated
+into a single structured `spec.apiServer` object. Note that `disableAPIServerFloatingIP` has
+been renamed to `apiServer.enableFloatingIP` with inverted polarity — set it to `false` to
+disable the floating IP instead of `true`. Defaults to `true`. This applies to `OpenStackCluster`
+and `OpenStackClusterTemplate`.
+
+```diff
+ spec:
+-  apiServerFloatingIP: 1.2.3.4
+-  apiServerFixedIP: 10.0.0.1
+-  apiServerPort: 6443
+-  disableAPIServerFloatingIP: true
+-  apiServerLoadBalancer:
+-    enabled: true
+-    allowedCIDRs:
+-    - 0.0.0.0/0
++  apiServer:
++    floatingIP: 1.2.3.4
++    fixedIP: 10.0.0.1
++    port: 6443
++    enableFloatingIP: false
++    managedLoadBalancer:
++      enabled: true
++      allowedCIDRs:
++      - 0.0.0.0/0
+```
+
+For `OpenStackClusterTemplate` the same change applies under `spec.template.spec.apiServer`.
+
+Additionally, the corresponding status field has been renamed for consistency with the spec-side naming:
+
+```diff
+ status:
+-  apiServerLoadBalancer:
++  apiServerManagedLoadBalancer:
+     name: my-lb
+     id: lb-id-123
+```
+
+### DisableExternalNetwork renamed to EnableExternalNetwork
+
+`spec.disableExternalNetwork` has been renamed to `spec.enableExternalNetwork` with inverted
+polarity — set it to `false` to disable external network connectivity instead of `true`.
+This applies to `OpenStackCluster` and `OpenStackClusterTemplate`.
+
+```diff
+ spec:
+-  disableExternalNetwork: true
++  enableExternalNetwork: false
+```
+
+For `OpenStackClusterTemplate` the same change applies under `spec.template.spec.enableExternalNetwork`.
+
+### Flavor field restructure
+
+`spec.flavor` (string) and `spec.flavorID` have been replaced by a structured `spec.flavor` object,
+following the ID/Filter pattern used by other fields. This applies to `OpenStackMachine` and to
+`OpenStackCluster`.
+
+```diff
+ spec:
+-  flavor: 
+-  flavorID: 
++  flavor:
++    id: 
++    filter:
++      name: 
+```
+
+For `OpenStackCluster` the same change applies under `spec.bastion.spec.flavor`.
+
+### Port security field rename
+
+`spec.ports[*].disablePortSecurity` has been renamed to `spec.ports[*].enablePortSecurity`
+with inverted polarity — set it to `false` to disable port security instead of `true`.
+This applies to `OpenStackMachine` and `OpenStackMachineTemplate`.
+
+```diff
+ spec:
+   ports:
+-  - disablePortSecurity: true
++  - enablePortSecurity: false
+```
+
+For `OpenStackMachineTemplate` the same change applies under `spec.template.spec.ports[*].enablePortSecurity`.
+For `OpenStackCluster` and `OpenStackClusterTemplate` the same change applies under `spec.bastion.spec.ports[*].enablePortSecurity`.
+
+### Network management fields restructure
+
+`spec.networkMTU` and `spec.disablePortSecurity` have been replaced by a structured
+`spec.managedNetwork` object. The field is optional, but must not be empty if set.
+Note that `disablePortSecurity` has been renamed to `enablePortSecurity` with inverted
+polarity — set it to `false` to disable port security instead of `true`.
+This applies to `OpenStackCluster` and `OpenStackClusterTemplate`.
+
+```diff
+ spec:
+-  networkMTU: 1500
+-  disablePortSecurity: true
++  managedNetwork:
++    mtu: 1500
++    enablePortSecurity: false
+```
+
+For `OpenStackClusterTemplate` the same change applies under `spec.template.spec.managedNetwork`.
+
+### External router IPs restructure
+
+`spec.externalRouterIPs` has been replaced by a structured `spec.managedRouter` object.
+The field is optional, but must not be empty if set, and `externalIPs` must contain at
+least one entry. This applies to `OpenStackCluster` and `OpenStackClusterTemplate`.
+
+```diff
+ spec:
+-  externalRouterIPs:
+-  - fixedIP: 
+-    subnet:
+-      filter:
+-        name: 
++  managedRouter:
++    externalIPs:
++    - fixedIP: 
++      subnet:
++        filter:
++          name: 
+```
+
+For `OpenStackClusterTemplate` the same change applies under `spec.template.spec.managedRouter`.
+
+### Managed security group rules rename
+
+`spec.managedSecurityGroups.allNodesSecurityGroupRules` has been renamed to
+`spec.managedSecurityGroups.clusterNodesSecurityGroupRules` to clarify that these
+rules apply only to cluster nodes (control plane and workers), and not to other
+managed resources such as the bastion host.
+
+```diff
+ spec:
+   managedSecurityGroups:
+-    allNodesSecurityGroupRules:
++    clusterNodesSecurityGroupRules:
+     - name: 
+       direction: 
+```
+
+For `OpenStackClusterTemplate` the same change applies under
+`spec.template.spec.managedSecurityGroups.clusterNodesSecurityGroupRules`.
+
+### Conditions format change
+
+Conditions have changed from CAPI v1beta1 `Conditions` type to standard Kubernetes `[]metav1.Condition`.
+
+In v1beta1:
+```yaml
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+    severity: Info
+    lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: AllComponentsReady
+    message: "All components are ready"
+```
+
+In v1beta2:
+```yaml
+status:
+  conditions:
+  - type: Ready
+    status: "True"
+    observedGeneration: 3
+    lastTransitionTime: "2024-01-01T00:00:00Z"
+    reason: AllComponentsReady
+    message: "All components are ready"
+```
+
+Key differences:
+- The `severity` field is removed (not present in `metav1.Condition`).
+- The `observedGeneration` field is added.
+- The `status` field uses `metav1.ConditionStatus` (`"True"`, `"False"`, `"Unknown"`) instead of `corev1.ConditionStatus`. The string values are identical, but the Go types differ.
+
+This affects `OpenStackCluster`, `OpenStackMachine`, `OpenStackServer`, and `OpenStackFloatingIPPool`.
+
+### Removal of deprecated status fields
+
+The following deprecated status fields have been removed from v1beta2:
+
+**`OpenStackCluster`:**
+- `status.ready` — now derived from the `Ready` condition.
+- `status.failureReason` — replaced by condition `Reason` fields.
+- `status.failureMessage` — replaced by condition `Message` fields.
+
+**`OpenStackMachine`:**
+- `status.ready` — now derived from the `Ready` condition.
+- `status.failureReason` — replaced by condition `Reason` fields.
+- `status.failureMessage` — replaced by condition `Message` fields.
+
+If your code reads `status.ready`, use the `Ready` condition instead:
+
+```go
+// v1beta1
+if cluster.Status.Ready {
+    // ...
+}
+
+// v1beta2
+import "k8s.io/apimachinery/pkg/api/meta"
+
+readyCondition := meta.FindStatusCondition(cluster.Status.Conditions, "Ready")
+if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
+    // ...
+}
+```
+
+### FailureDomains representation change
+
+`FailureDomains` in `OpenStackCluster` status changed from a map to a slice.
+
+In v1beta1:
+```yaml
+status:
+  failureDomains:
+    az-1:
+      controlPlane: true
+      attributes:
+        region: us-east-1
+    az-2:
+      controlPlane: false
+```
+
+In v1beta2:
+```yaml
+status:
+  failureDomains:
+  - name: az-1
+    controlPlane: true
+    attributes:
+      region: us-east-1
+  - name: az-2
+    controlPlane: false
+```
+
+The conversion webhook handles this automatically. The slice is sorted by name for deterministic ordering.

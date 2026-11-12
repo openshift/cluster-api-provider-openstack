@@ -31,7 +31,7 @@ import (
 	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/keypairs"
 	"github.com/gophercloud/gophercloud/v2/openstack/compute/v2/servers"
 	"github.com/gophercloud/gophercloud/v2/openstack/image/v2/images"
-	. "github.com/onsi/gomega" //nolint:revive
+	. "github.com/onsi/gomega"
 	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,7 +40,7 @@ import (
 
 	orcv1alpha1 "github.com/k-orc/openstack-resource-controller/v2/api/v1alpha1"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients/mock"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/scope"
@@ -940,7 +940,7 @@ func TestService_ReconcileInstance(t *testing.T) {
 						Name: "custom_hint",
 						Value: infrav1.SchedulerHintAdditionalValue{
 							Type:   infrav1.SchedulerHintTypeNumber,
-							Number: ptr.To(1),
+							Number: ptr.To[int32](1),
 						},
 					},
 				}
@@ -951,7 +951,7 @@ func TestService_ReconcileInstance(t *testing.T) {
 				schedulerHintOpts := servers.SchedulerHintOpts{
 					Group: serverGroupUUID,
 					AdditionalProperties: map[string]any{
-						"custom_hint": 1,
+						"custom_hint": int32(1),
 					},
 				}
 				expectCreateServer(g, r.compute, withSSHKey(createOpts), schedulerHintOpts, factory.ComputeClient, false)
