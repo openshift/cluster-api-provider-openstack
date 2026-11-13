@@ -1,7 +1,8 @@
 approvers:
-  - shiftstack-team
   - cloud-team
+  - shiftstack-approvers
 reviewers:
-  - shiftstack-team
+  - shiftstack-approvers
+  - shiftstack-reviewers
 component: "Cloud Compute"
 subcomponent: "OpenStack Provider"
