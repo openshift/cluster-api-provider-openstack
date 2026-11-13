@@ -27,9 +27,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
 )
 
 var _ = Describe("OpenStackCluster API validations", func() {
@@ -63,7 +63,7 @@ var _ = Describe("OpenStackCluster API validations", func() {
 			Expect(createObj(cluster)).To(Succeed(), "OpenStackCluster creation should succeed")
 
 			By("Setting the control plane endpoint")
-			cluster.Spec.ControlPlaneEndpoint = &clusterv1beta1.APIEndpoint{
+			cluster.Spec.ControlPlaneEndpoint = &clusterv1.APIEndpoint{
 				Host: "foo",
 				Port: 1234,
 			}
@@ -74,39 +74,85 @@ var _ = Describe("OpenStackCluster API validations", func() {
 			Expect(k8sClient.Update(ctx, cluster)).NotTo(Succeed(), "Updating control plane endpoint should fail")
 		})
 
+		It("should allow a status with unnamed network resources and a load balancer without a floating IP", func() {
+			By("Creating a bare cluster")
+			Expect(createObj(cluster)).To(Succeed(), "OpenStackCluster creation should succeed")
+
+			By("Setting a status without resource names or a load balancer floating IP")
+			cluster.Status = infrav1.OpenStackClusterStatus{
+				Initialization: &infrav1.ClusterInitialization{Provisioned: true},
+				Network: &infrav1.NetworkStatusWithSubnets{
+					NetworkStatus: infrav1.NetworkStatus{ID: "6c90b532-7ba0-418a-a276-5ae55060b5b0"},
+					Subnets: []infrav1.Subnet{
+						{ID: "cad5a91a-36de-4388-823b-b0cc82cadfdc", CIDR: "192.168.0.0/24"},
+					},
+				},
+				ExternalNetwork: &infrav1.NetworkStatus{ID: "a9e8f7d6-c5b4-4a3b-9c2d-1e0f9a8b7c6d"},
+				Router:          &infrav1.Router{ID: "e2407c18-c4e7-4d3d-befa-8eec5d8756f2"},
+				APIServerManagedLoadBalancer: &infrav1.LoadBalancer{
+					Name:       "k8s-clusterapi-cluster-test-kubeapi",
+					ID:         "0f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f0",
+					InternalIP: "192.168.0.10",
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed(), "OpenStackCluster status update should succeed")
+
+			fetchedCluster := &infrav1.OpenStackCluster{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, fetchedCluster)).To(Succeed(), "OpenStackCluster fetch should succeed")
+			Expect(fetchedCluster.Status.Initialization).NotTo(BeNil(), "status.initialization should have been persisted")
+			Expect(fetchedCluster.Status.Initialization.Provisioned).To(BeTrue(), "status.initialization.provisioned should have been persisted")
+		})
+
+		It("should not allow a status subnet without an id", func() {
+			By("Creating a bare cluster")
+			Expect(createObj(cluster)).To(Succeed(), "OpenStackCluster creation should succeed")
+
+			cluster.Status.Network = &infrav1.NetworkStatusWithSubnets{
+				NetworkStatus: infrav1.NetworkStatus{ID: "6c90b532-7ba0-418a-a276-5ae55060b5b0"},
+				Subnets:       []infrav1.Subnet{{CIDR: "192.168.0.0/24"}},
+			}
+			Expect(k8sClient.Status().Update(ctx, cluster)).NotTo(Succeed(), "OpenStackCluster status update should fail")
+		})
+
 		It("should allow an empty managed security groups definition", func() {
 			cluster.Spec.ManagedSecurityGroups = &infrav1.ManagedSecurityGroups{}
 			Expect(createObj(cluster)).To(Succeed(), "OpenStackCluster creation should succeed")
 		})
 
-		It("should default enabled to true if APIServerLoadBalancer is specified without enabled=true", func() {
-			cluster.Spec.APIServerLoadBalancer = &infrav1.APIServerLoadBalancer{}
+		It("should default enabled to true if APIServer.ManagedLoadBalancer is specified without enabled=true", func() {
+			cluster.Spec.APIServer = &infrav1.APIServer{
+				ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{},
+			}
 			Expect(createObj(cluster)).To(Succeed(), "OpenStackCluster creation should succeed")
 
 			// Fetch the cluster and check the defaulting
 			fetchedCluster := &infrav1.OpenStackCluster{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, fetchedCluster)).To(Succeed(), "OpenStackCluster fetch should succeed")
 
-			Expect(fetchedCluster.Spec.APIServerLoadBalancer.Enabled).ToNot(BeNil(), "APIServerLoadBalancer.Enabled should have been defaulted")
-			Expect(*fetchedCluster.Spec.APIServerLoadBalancer.Enabled).To(BeTrue(), "APIServerLoadBalancer.Enabled should default to true")
+			Expect(fetchedCluster.Spec.APIServer.ManagedLoadBalancer.Enabled).ToNot(BeNil(), "APIServer.ManagedLoadBalancer.Enabled should have been defaulted")
+			Expect(*fetchedCluster.Spec.APIServer.ManagedLoadBalancer.Enabled).To(BeTrue(), "APIServer.ManagedLoadBalancer.Enabled should default to true")
 		})
 
-		It("should not default APIServerLoadBalancer if it is not specifid", func() {
+		It("should not default APIServer.ManagedLoadBalancer if it is not specified", func() {
 			Expect(createObj(cluster)).To(Succeed(), "OpenStackCluster creation should succeed")
 
 			// Fetch the cluster and check the defaulting
 			fetchedCluster := &infrav1.OpenStackCluster{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: cluster.Name, Namespace: cluster.Namespace}, fetchedCluster)).To(Succeed(), "OpenStackCluster fetch should succeed")
 
-			Expect(fetchedCluster.Spec.APIServerLoadBalancer).To(BeNil(), "APIServerLoadBalancer should not have been defaulted")
-			Expect(fetchedCluster.Spec.APIServerLoadBalancer.IsEnabled()).To(BeFalse(), "APIServerLoadBalancer.Enabled should not have been defaulted")
+			Expect(fetchedCluster.Spec.APIServer).To(BeNil(), "APIServer should not have been defaulted")
+			Expect(fetchedCluster.Spec.APIServer.GetManagedLoadBalancer().IsEnabled()).To(BeFalse(), "APIServer.ManagedLoadBalancer.Enabled should not have been defaulted")
 		})
 
 		It("should allow bastion.enabled=true with a spec", func() {
 			cluster.Spec.Bastion = &infrav1.Bastion{
 				Enabled: ptr.To(true),
 				Spec: &infrav1.OpenStackMachineSpec{
-					Flavor: ptr.To("flavor-name"),
+					Flavor: infrav1.FlavorParam{
+						Filter: &infrav1.FlavorFilter{
+							Name: ptr.To("flavor-name"),
+						},
+					},
 					Image: infrav1.ImageParam{
 						Filter: &infrav1.ImageFilter{
 							Name: ptr.To("fake-image"),
@@ -132,7 +178,11 @@ var _ = Describe("OpenStackCluster API validations", func() {
 		It("should default bastion.enabled=true", func() {
 			cluster.Spec.Bastion = &infrav1.Bastion{
 				Spec: &infrav1.OpenStackMachineSpec{
-					Flavor: ptr.To("flavor-name"),
+					Flavor: infrav1.FlavorParam{
+						Filter: &infrav1.FlavorFilter{
+							Name: ptr.To("flavor-name"),
+						},
+					},
 					Image: infrav1.ImageParam{
 						Filter: &infrav1.ImageFilter{
 							Name: ptr.To("fake-image"),
@@ -153,7 +203,11 @@ var _ = Describe("OpenStackCluster API validations", func() {
 			cluster.Spec.Bastion = &infrav1.Bastion{
 				Enabled: ptr.To(true),
 				Spec: &infrav1.OpenStackMachineSpec{
-					Flavor: ptr.To("flavor-name"),
+					Flavor: infrav1.FlavorParam{
+						Filter: &infrav1.FlavorFilter{
+							Name: ptr.To("flavor-name"),
+						},
+					},
 					Image: infrav1.ImageParam{
 						Filter: &infrav1.ImageFilter{
 							Name: ptr.To("fake-image"),
@@ -168,7 +222,11 @@ var _ = Describe("OpenStackCluster API validations", func() {
 		It("should not allow non-IPv4 as bastion floating IP", func() {
 			cluster.Spec.Bastion = &infrav1.Bastion{
 				Spec: &infrav1.OpenStackMachineSpec{
-					Flavor: ptr.To("flavor-name"),
+					Flavor: infrav1.FlavorParam{
+						Filter: &infrav1.FlavorFilter{
+							Name: ptr.To("flavor-name"),
+						},
+					},
 					Image: infrav1.ImageParam{
 						Filter: &infrav1.ImageFilter{
 							Name: ptr.To("fake-image"),
@@ -180,11 +238,15 @@ var _ = Describe("OpenStackCluster API validations", func() {
 			Expect(createObj(cluster)).NotTo(Succeed(), "OpenStackCluster creation should not succeed")
 		})
 
-		It("should not allow a bastion floating IP with DisableExternalNetwork set to true", func() {
+		It("should not allow a bastion floating IP with EnableExternalNetwork set to false", func() {
 			cluster.Spec.Bastion = &infrav1.Bastion{
 				Enabled: ptr.To(true),
 				Spec: &infrav1.OpenStackMachineSpec{
-					Flavor: ptr.To("flavor-name"),
+					Flavor: infrav1.FlavorParam{
+						Filter: &infrav1.FlavorFilter{
+							Name: ptr.To("flavor-name"),
+						},
+					},
 					Image: infrav1.ImageParam{
 						Filter: &infrav1.ImageFilter{
 							Name: ptr.To("fake-image"),
@@ -193,13 +255,15 @@ var _ = Describe("OpenStackCluster API validations", func() {
 				},
 				FloatingIP: ptr.To("10.0.0.0"),
 			}
-			cluster.Spec.DisableExternalNetwork = ptr.To(true)
+			cluster.Spec.EnableExternalNetwork = ptr.To(false)
 			Expect(createObj(cluster)).ToNot(Succeed(), "OpenStackCluster creation should not succeed")
 		})
 
-		It("should not allow DisableAPIServerFloatingIP to be false with DisableExternalNetwork set to true", func() {
-			cluster.Spec.DisableAPIServerFloatingIP = ptr.To(false)
-			cluster.Spec.DisableExternalNetwork = ptr.To(true)
+		It("should not allow EnableFloatingIP to be true with EnableExternalNetwork set to false", func() {
+			cluster.Spec.APIServer = &infrav1.APIServer{
+				EnableFloatingIP: ptr.To(true),
+			}
+			cluster.Spec.EnableExternalNetwork = ptr.To(false)
 			Expect(createObj(cluster)).ToNot(Succeed(), "OpenStackCluster creation should not succeed")
 		})
 
@@ -216,7 +280,12 @@ var _ = Describe("OpenStackCluster API validations", func() {
 				Kind:    "OpenStackCluster",
 			})
 			spec := obj["spec"].(map[string]any)
-			spec["apiServerPort"] = apiServerPort
+			apiServer, ok := spec["apiServer"].(map[string]any)
+			if !ok {
+				apiServer = map[string]any{}
+				spec["apiServer"] = apiServer
+			}
+			apiServer["port"] = apiServerPort
 
 			return u
 		}

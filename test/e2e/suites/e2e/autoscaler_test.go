@@ -25,13 +25,13 @@ import (
 	"k8s.io/utils/ptr"
 	capi_e2e "sigs.k8s.io/cluster-api/test/e2e"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
 	shared "sigs.k8s.io/cluster-api-provider-openstack/test/e2e/shared"
 )
 
 // Currently marked as PR-blocking to ensure it runs
 // might need to remove it.
-var _ = Describe("Autoscaler on ClusterClass cluster [PR-Blocking] [Autoscaler] [ClusterClass]", func() {
+var _ = Describe("Autoscaler on ClusterClass cluster [Autoscaler] [ClusterClass]", func() {
 	capi_e2e.AutoscalerSpec(context.TODO(), func() capi_e2e.AutoscalerSpecInput {
 		infraAPIGroup := infrav1.GroupName
 

@@ -32,8 +32,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/pkg/errors"
+	pkgerrors "github.com/pkg/errors"
 	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -44,9 +45,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
+	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-	toolscache "sigs.k8s.io/controller-runtime/pkg/cache"
+	ctrlcache "sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	controlplanev1 "sigs.k8s.io/cluster-api/api/controlplane/kubeadm/v1beta2"
@@ -91,12 +92,12 @@ func WaitForDeploymentsAvailable(ctx context.Context, input WaitForDeploymentsAv
 // DescribeFailedDeployment returns detailed output to help debug a deployment failure in e2e.
 func DescribeFailedDeployment(input WaitForDeploymentsAvailableInput, deployment *appsv1.Deployment) string {
 	b := strings.Builder{}
-	b.WriteString(fmt.Sprintf("Deployment %s failed to get status.Available = True condition",
-		klog.KObj(input.Deployment)))
+	fmt.Fprintf(&b, "Deployment %s failed to get status.Available = True condition",
+		klog.KObj(input.Deployment))
 	if deployment == nil {
 		b.WriteString("\nDeployment: nil\n")
 	} else {
-		b.WriteString(fmt.Sprintf("\nDeployment:\n%s\n", PrettyPrint(deployment)))
+		fmt.Fprintf(&b, "\nDeployment:\n%s\n", PrettyPrint(deployment))
 	}
 	return b.String()
 }
@@ -104,7 +105,7 @@ func DescribeFailedDeployment(input WaitForDeploymentsAvailableInput, deployment
 // WatchDeploymentLogsByLabelSelectorInput is the input for WatchDeploymentLogsByLabelSelector.
 type WatchDeploymentLogsByLabelSelectorInput struct {
 	GetLister GetLister
-	Cache     toolscache.Cache
+	Cache     ctrlcache.Cache
 	ClientSet *kubernetes.Clientset
 	Labels    map[string]string
 	LogPath   string
@@ -140,7 +141,7 @@ func WatchDeploymentLogsByLabelSelector(ctx context.Context, input WatchDeployme
 // WatchDeploymentLogsByNameInput is the input for WatchDeploymentLogsByName.
 type WatchDeploymentLogsByNameInput struct {
 	GetLister  GetLister
-	Cache      toolscache.Cache
+	Cache      ctrlcache.Cache
 	ClientSet  *kubernetes.Clientset
 	Deployment *appsv1.Deployment
 	LogPath    string
@@ -174,7 +175,7 @@ func WatchDeploymentLogsByName(ctx context.Context, input WatchDeploymentLogsByN
 
 // watchPodLogsInput is the input for watchPodLogs.
 type watchPodLogsInput struct {
-	Cache                toolscache.Cache
+	Cache                ctrlcache.Cache
 	ClientSet            *kubernetes.Clientset
 	Namespace            string
 	ManagingResourceName string
@@ -215,7 +216,7 @@ type watchPodLogsEventHandler struct {
 	startedPods sync.Map
 }
 
-func newWatchPodLogsEventHandler(ctx context.Context, input watchPodLogsInput, selector labels.Selector) cache.ResourceEventHandler {
+func newWatchPodLogsEventHandler(ctx context.Context, input watchPodLogsInput, selector labels.Selector) toolscache.ResourceEventHandler {
 	return &watchPodLogsEventHandler{
 		ctx:         ctx,
 		input:       input,
@@ -287,6 +288,7 @@ func (eh *watchPodLogsEventHandler) streamPodLogs(pod *corev1.Pod) {
 			}
 
 			// Retry streaming the logs of the pods unless ctx.Done() or if the pod does not exist anymore.
+			streamed := false
 			err = wait.PollUntilContextCancel(eh.ctx, 2*time.Second, false, func(ctx context.Context) (done bool, err error) {
 				// Wait for pod to be in running state
 				actual, err := eh.input.ClientSet.CoreV1().Pods(pod.Namespace).Get(ctx, pod.Name, metav1.GetOptions{})
@@ -297,6 +299,14 @@ func (eh *watchPodLogsEventHandler) streamPodLogs(pod *corev1.Pod) {
 					}
 					// Only log the error to not cause the test to fail via GinkgoRecover
 					log.Logf("Error getting pod %s, container %s: %v", klog.KRef(pod.Namespace, pod.Name), container.Name, err)
+					return true, nil
+				}
+				// On retries, stop if the container has terminated for good (e.g.
+				// completed init container, or pod terminated/being deleted during
+				// upgrade). This also covers pods in Succeeded/Failed phase.
+				// Skip this check on the first attempt so we still capture
+				// historical logs from already-completed containers.
+				if streamed && containerHasTerminated(actual, container.Name) {
 					return true, nil
 				}
 				// Retry later if pod is currently not running
@@ -318,6 +328,7 @@ func (eh *watchPodLogsEventHandler) streamPodLogs(pod *corev1.Pod) {
 					// Failing to stream logs should not cause the test to fail
 					log.Logf("Got error while streaming logs for pod %s, container %s: %v", klog.KRef(pod.Namespace, pod.Name), container.Name, err)
 				}
+				streamed = true
 				return false, nil
 			})
 			if err != nil {
@@ -325,6 +336,45 @@ func (eh *watchPodLogsEventHandler) streamPodLogs(pod *corev1.Pod) {
 			}
 		}(pod, container)
 	}
+}
+
+// containerHasTerminated checks whether a specific container (regular or init)
+// has terminated for good in the given pod, i.e. it is not expected to produce
+// any more logs.
+func containerHasTerminated(pod *corev1.Pod, containerName string) bool {
+	// Check pod phase first — if the whole pod is done, all containers are done.
+	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+		return true
+	}
+
+	// Init containers only ever run once per pod: the pod does not reach the
+	// Running phase until all init containers have completed successfully, so
+	// observing one here (with the pod Running) always means it is done for
+	// good and won't run again for this pod.
+	for _, cs := range pod.Status.InitContainerStatuses {
+		if cs.Name == containerName {
+			return cs.State.Terminated != nil
+		}
+	}
+
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Name != containerName {
+			continue
+		}
+		if cs.State.Terminated == nil {
+			return false
+		}
+		// Unlike init containers, a regular container's Terminated state alone
+		// doesn't guarantee it is done for good: with restartPolicy Always or
+		// OnFailure it may be about to be restarted by kubelet (e.g. after a
+		// crash), in which case more logs are still expected. Only with
+		// restartPolicy Never is kubelet guaranteed not to restart it.
+		if pod.Spec.RestartPolicy != corev1.RestartPolicyNever {
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 // logMetadata contains metadata about the logs.
@@ -418,10 +468,10 @@ func dumpPodMetrics(ctx context.Context, client *kubernetes.Clientset, metricsPa
 }
 
 func verifyMetrics(data []byte, pod *corev1.Pod) error {
-	var parser expfmt.TextParser
+	parser := expfmt.NewTextParser(model.UTF8Validation)
 	mf, err := parser.TextToMetricFamilies(bytes.NewReader(data))
 	if err != nil {
-		return errors.Wrapf(err, "failed to parse data to metrics families")
+		return pkgerrors.Wrapf(err, "failed to parse data to metrics families")
 	}
 
 	var errs []error
@@ -458,7 +508,7 @@ func verifyMetrics(data []byte, pod *corev1.Pod) error {
 	}
 
 	if len(errs) > 0 {
-		return errors.WithMessagef(kerrors.NewAggregate(errs), "panics occurred in Pod %s", klog.KObj(pod))
+		return pkgerrors.WithMessagef(kerrors.NewAggregate(errs), "panics occurred in Pod %s", klog.KObj(pod))
 	}
 
 	return nil

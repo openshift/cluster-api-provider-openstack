@@ -142,12 +142,6 @@ ORC_VERSION=v2.0.3
 kubectl apply -f "https://github.com/k-orc/openstack-resource-controller/releases/download/${ORC_VERSION}/install.yaml"
 ```
 
-We also publish a Kustomize module which can be used to install ORC:
-
-```bash
-kubectl apply --server-side -k "https://github.com/k-orc/openstack-resource-controller/dist?ref=${ORC_VERSION}"
-```
-
 In most cases, the default configuration should be sufficient.
 Check the [ORC documentation](https://k-orc.cloud) for more information.
 
@@ -225,7 +219,7 @@ The recommmend minimum value of control plane flavor's vCPU is 2 and minimum val
 Depending on the CNI that will be deployed on the cluster, you may need to add specific security group rules to the control plane and worker nodes. For example, if you are using Calico with BGP, you will need to add the following security group rules to the control plane and worker nodes:
 
  ```yaml
- apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+ apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
  kind: OpenStackCluster
  metadata:
    name: <cluster-name>
@@ -233,7 +227,7 @@ Depending on the CNI that will be deployed on the cluster, you may need to add s
  spec:
     ...
     managedSecurityGroups:
-      allNodesSecurityGroupRules:
+      clusterNodesSecurityGroupRules:
       - remoteManagedGroups:
         - controlplane
         - worker
@@ -278,7 +272,7 @@ Note: If your openstack cluster does not already have a public network, you shou
 You can use a pre-existing router instead of creating a new one. When deleting a cluster a pre-existing router will not be deleted.
 
  ```yaml
- apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+ apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
  kind: OpenStackCluster
  metadata:
    name: <cluster-name>
@@ -309,12 +303,12 @@ associated to the first controller node and the other controller nodes have no f
 to any other controller node. So we recommend to only set one controller node when floating IP is needed,
 or please consider using load balancer instead, see [issue #1265](https://github.com/kubernetes-sigs/cluster-api-provider-openstack/issues/1265) for further information.
 
-Note: `spec.disableExternalNetwork` must be unset or set to `false` to allow the API server to have a floating IP.
+Note: `spec.enableExternalNetwork` must be unset or set to `true` to allow the API server to have a floating IP.
 
 ### Disabling the API server floating IP
 
 It is possible to provision a cluster without a floating IP for the API server by setting
-`OpenStackCluster.spec.disableAPIServerFloatingIP: true` (the default is `false`). This will
+`OpenStackCluster.spec.APIServer.enableFloatingIP: false` (the default is `true`). This will
 prevent a floating IP from being allocated.
 
 > **WARNING**
@@ -344,19 +338,20 @@ IP, the load balancer virtual IP on the cluster network is used.
 > This requires "amphora" as load balancer provider at in version >= `v2.12`
 
 It is possible to restrict access to the Kubernetes API server on a network level. If required, you can specify
-the allowed CIDRs by `spec.APIServerLoadBalancer.AllowedCIDRs` of `OpenStackCluster`.
+the allowed CIDRs by `spec.APIServer.ManagedLoadBalancer.AllowedCIDRs` of `OpenStackCluster`.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackCluster
 metadata:
   name: <cluster-name>
   namespace: <cluster-namespace>
 spec:
-  apiServerLoadBalancer:
-    allowedCIDRs:
-    - 192.168.10/24
-    - 10.10.0.0/16
+  apiServer:
+    managedLoadBalancer:
+      allowedCIDRs:
+      - 192.168.10/24
+      - 10.10.0.0/16
 ```
 
 All known IPs of the target cluster will be discovered dynamically (e.g. you don't have to take care of target Cluster own Router IP, internal CIDRs or any Bastion Host IP).
@@ -365,7 +360,7 @@ All known IPs of the target cluster will be discovered dynamically (e.g. you don
 All applied CIDRs (user defined + dynamically discovered) are written back into `status.network.apiServerLoadBalancer.allowedCIDRs`
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackCluster
 metadata:
   name: <cluster-name>
@@ -393,12 +388,12 @@ openstack loadbalancer listener unset --allowed-cidrs <listener ID>
 
 ## Network Filters
 
-If you have a complex query that you want to use to lookup a network, then you can do this by using a network filter. More details about the filter can be found in [NetworkParam](https://github.com/kubernetes-sigs/cluster-api-provider-openstack/blob/main/api/v1beta1/types.go)
+If you have a complex query that you want to use to lookup a network, then you can do this by using a network filter. More details about the filter can be found in [NetworkParam](https://github.com/kubernetes-sigs/cluster-api-provider-openstack/blob/main/api/v1beta2/types.go)
 
 By using filters to look up a network, please note that it is possible to get multiple networks as a result. This should not be a problem, however please test your filters with `openstack network list` to be certain that it returns the networks you want. Please refer to the following usage example:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -416,7 +411,7 @@ spec:
 You can specify multiple networks (or subnets) to connect your server to. To do this, simply add another entry in the networks array. The following example connects the server to 3 different networks:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -440,7 +435,7 @@ spec:
 Rather than just using a network, you have the option of specifying a specific subnet to connect your server to. The following is an example of how to specify a specific subnet of a network to use for your server.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -461,7 +456,7 @@ spec:
 A server can also be connected to networks by describing what ports to create. Describing a server's connection with `ports` allows for finer and more advanced configuration. For example, you can specify per-port security groups, fixed IPs, VNIC type or profile.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -555,7 +550,7 @@ ports:
 `port security` can be applied to specific port to enable/disable the `port security` on that port; When not set, it takes the value of the corresponding field at the network level.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -567,7 +562,7 @@ spec:
       - network:
           id: <your-network-id>
         ...
-        disablePortSecurity: true
+        enablePortSecurity: false
         ...
 ```
 
@@ -600,8 +595,8 @@ between cluster nodes on all ports and protocols (API server and node port traff
 permitted from anywhere, as with the default rules).
 
 We can add additional security group rules that authorize traffic between nodes and/or from the outside
-world using `allNodesSecurityGroupRules`, `controlPlaneNodesSecurityGroupRules` and `workerNodesSecurityGroupRules`.
-These properties take a list of security group rules that should be applied to all nodes, control plane nodes only
+world using `clusterNodesSecurityGroupRules`, `controlPlaneNodesSecurityGroupRules` and `workerNodesSecurityGroupRules`.
+These properties take a list of security group rules that should be applied to all cluster nodes, control plane nodes only
 or worker nodes only respectively.
 
 In a rule definition, the fields `remoteManagedGroups`, `remoteGroupID` and `remoteIPPrefix` are mutually exclusive.
@@ -613,7 +608,7 @@ For example, to apply a security group rule to all nodes to permit BGP traffic b
 
 ```yaml
 managedSecurityGroups:
-  allNodesSecurityGroupRules:
+  clusterNodesSecurityGroupRules:
   - remoteManagedGroups:
     - controlplane
     - worker
@@ -652,7 +647,7 @@ If this is not flexible enough, pre-existing security groups can be added to the
 spec of an `OpenStackMachineTemplate`, e.g.:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
 metadata:
   name: ${CLUSTER_NAME}-control-plane
@@ -669,7 +664,7 @@ spec:
 You have the ability to tag all resources created by the cluster in the `OpenStackCluster` spec. Here is an example how to configure tagging:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackCluster
 metadata:
   name: <cluster-name>
@@ -682,7 +677,7 @@ spec:
 To tag resources specific to a machine, add a value to the tags field in the `OpenStackMachineTemplate` spec like this:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -699,7 +694,7 @@ spec:
 You also have the option to add metadata to instances. Here is a usage example:
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -717,7 +712,7 @@ spec:
 For example in `OpenStackMachineTemplate` set `spec.rootVolume.diskSize` to something greater than `0` means boot from volume.
 
 ```yaml
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
 kind: OpenStackMachineTemplate
 metadata:
   name: <cluster-name>-controlplane
@@ -759,7 +754,9 @@ spec:
   bastion:
     enabled: true
     spec:
-      flavor: <Flavor name>
+      flavor:
+        filter:
+          name: <Flavor name>
       image:  <Image name>
       sshKeyName: <Key pair name>
 ```
@@ -779,7 +776,7 @@ spec:
     floatingIP: <Floating IP address>
 ```
 
-Note: A floating IP can only be added if `OpenStackCluster.Spec.DisableExternalNetwork` is not set or set to `false`.
+Note: A floating IP can only be added if `OpenStackCluster.Spec.EnableExternalNetwork` is not set or set to `true`.
 
 If `managedSecurityGroups` is set to a non-nil value (e.g. `{}`), security group rule opening 22/tcp is added to security groups for bastion, controller, and worker nodes respectively. Otherwise, you have to add `securityGroups` to the `bastion` in `OpenStackCluster` spec and `OpenStackMachineTemplate` spec template respectively.
 
