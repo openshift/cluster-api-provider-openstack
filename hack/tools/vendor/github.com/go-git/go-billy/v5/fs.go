@@ -128,18 +128,12 @@ type Symlink interface {
 	Readlink(link string) (string, error)
 }
 
-// Chmod abstracts the logic around changing file modes.
-type Chmod interface {
-	// Chmod changes the mode of the named file to mode. If the file is a
-	// symbolic link, it changes the mode of the link's target.
-	Chmod(name string, mode os.FileMode) error
-}
-
 // Change abstract the FileInfo change related operations in a storage-agnostic
 // interface as an extension to the Basic interface
 type Change interface {
-	Chmod
-
+	// Chmod changes the mode of the named file to mode. If the file is a
+	// symbolic link, it changes the mode of the link's target.
+	Chmod(name string, mode os.FileMode) error
 	// Lchown changes the numeric uid and gid of the named file. If the file is
 	// a symbolic link, it changes the uid and gid of the link itself.
 	Lchown(name string, uid, gid int) error

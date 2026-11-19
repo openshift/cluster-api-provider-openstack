@@ -20,7 +20,7 @@ import (
 	"context"
 	"time"
 
-	pkgerrors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -252,7 +252,7 @@ func retryWithExponentialBackoff(ctx context.Context, opts wait.Backoff, operati
 		return true, nil
 	})
 	if err != nil {
-		return pkgerrors.Wrapf(err, "action failed after %d attempts", i)
+		return errors.Wrapf(err, "action failed after %d attempts", i)
 	}
 	return nil
 }

@@ -1,4 +1,5 @@
 //go:build aix || darwin || dragonfly || freebsd || linux || netbsd || openbsd || solaris || zos
+// +build aix darwin dragonfly freebsd linux netbsd openbsd solaris zos
 
 /*
 Copyright 2023 The Kubernetes Authors.
@@ -24,7 +25,7 @@ import (
 
 // GetSysProcAttr returns the SysProcAttr to use for the process,
 // for unix systems this returns a SysProcAttr with Setpgid set to true,
-// which creates a new process group for the child process.
+// which inherits the parent's process group id.
 func GetSysProcAttr() *unix.SysProcAttr {
 	return &unix.SysProcAttr{
 		Setpgid: true,

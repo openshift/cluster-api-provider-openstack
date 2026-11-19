@@ -95,10 +95,6 @@ type contextItem struct {
 // context, cause, and metadata like code and category. It is thread-safe and
 // supports pooling for performance.
 type Error struct {
-	// Fields used in atomic operations. Place them at the beginning of the
-	// struct to ensure proper alignment across all architectures.
-	count uint64 // Occurrence count for tracking frequency.
-
 	// Primary fields (frequently accessed).
 	msg   string    // The error message displayed by Error().
 	name  string    // The error name or type (e.g., "AuthError").
@@ -107,6 +103,7 @@ type Error struct {
 	// Secondary metadata.
 	template   string // Fallback message template if msg is empty.
 	category   string // Error category (e.g., "network").
+	count      uint64 // Occurrence count for tracking frequency.
 	code       int32  // HTTP-like status code (e.g., 400, 500).
 	smallCount int32  // Number of items in smallContext.
 
@@ -175,7 +172,7 @@ func newError() *Error {
 //
 //	err := errors.Empty().With("key", "value").WithCode(400)
 func Empty() *Error {
-	return newError()
+	return emptyError
 }
 
 // Named creates an error with the specified name and captures a stack trace.
@@ -216,18 +213,10 @@ func New(text string) *Error {
 //	err := errors.Newf("query failed: %w", cause)
 //	// err.Error() will match fmt.Errorf("query failed: %w", cause).Error()
 //	// errors.Unwrap(err) == cause
-func Newf(f any, args ...interface{}) *Error {
-	var format string
-	switch v := f.(type) {
-	case string:
-		format = v
-	case fmt.Stringer:
-		format = v.String()
-	default:
-		panic("Newf: format must be a string or fmt.Stringer")
-	}
+func Newf(format string, args ...interface{}) *Error {
 	err := newError()
 
+	// --- Start: Parsing and Validation (mostly unchanged) ---
 	var wCount int
 	var wArgPos = -1
 	var wArg error
@@ -367,10 +356,11 @@ func Newf(f any, args ...interface{}) *Error {
 		err.formatWrapped = false
 		return err
 	}
+	// --- End: Parsing and Validation ---
 
-	//  Start: Processing Valid Format String
+	// --- Start: Processing Valid Format String ---
 	if wCount == 1 && wArg != nil {
-		//  Handle %w: Simulate for Sprintf and pre-format
+		// --- Handle %w: Simulate for Sprintf and pre-format ---
 		err.cause = wArg         // Set the cause for unwrapping
 		err.formatWrapped = true // Signal that msg is the final formatted string
 
@@ -407,10 +397,10 @@ func Newf(f any, args ...interface{}) *Error {
 			// Store the final, fully formatted string, matching fmt.Errorf output
 			err.msg = result
 		}
-		//  End %w Simulation
+		// --- End %w Simulation ---
 
 	} else {
-		//  No %w or wArg is nil: Format directly (original logic)
+		// --- No %w or wArg is nil: Format directly (original logic) ---
 		result, fmtErr := FmtErrorCheck(format, args...)
 		if fmtErr != nil {
 			err.msg = fmt.Sprintf("errors.Newf: formatting error for format %q: %v", format, fmtErr)
@@ -421,7 +411,7 @@ func Newf(f any, args ...interface{}) *Error {
 			err.formatWrapped = false // Ensure false if no %w was involved
 		}
 	}
-	//  End: Processing Valid Format String
+	// --- End: Processing Valid Format String ---
 
 	return err
 }
@@ -456,6 +446,38 @@ func FmtErrorCheck(format string, args ...interface{}) (result string, err error
 	}()
 	result = fmt.Sprintf(format, args...)
 	return result, nil
+}
+
+// countFmtArgs counts format specifiers that consume arguments in a format string.
+// Ignores %% and non-consuming verbs like %n.
+// Internal use by Newf for argument validation.
+func countFmtArgs(format string) int {
+	count := 0
+	runes := []rune(format)
+	i := 0
+	for i < len(runes) {
+		if runes[i] == '%' {
+			if i+1 < len(runes) && runes[i+1] == '%' {
+				i += 2 // Skip %%
+				continue
+			}
+			i++ // Move past %
+			for i < len(runes) && (runes[i] == '+' || runes[i] == '-' || runes[i] == '#' ||
+				runes[i] == ' ' || runes[i] == '0' ||
+				(runes[i] >= '1' && runes[i] <= '9') || runes[i] == '.') {
+				i++
+			}
+			if i < len(runes) {
+				if strings.ContainsRune("vTtbcdoqxXUeEfFgGsp", runes[i]) {
+					count++
+				}
+				i++ // Move past verb
+			}
+		} else {
+			i++
+		}
+	}
+	return count
 }
 
 // Std creates a standard error using errors.New for compatibility.
@@ -678,8 +700,8 @@ func (e *Error) Error() string {
 		return e.msg // Return the pre-formatted fmt.Errorf-compatible string
 	}
 
-	//  Original logic for errors not created via Newf("%w", ...)
-	//  or errors created via New/Named and then Wrap() called.
+	// --- Original logic for errors not created via Newf("%w", ...) ---
+	// --- or errors created via New/Named and then Wrap() called. ---
 	var buf strings.Builder
 
 	// Append primary message part (msg, template, or name)

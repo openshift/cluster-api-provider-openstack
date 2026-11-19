@@ -14,8 +14,6 @@ import (
 // ChrootOS is a legacy filesystem based on a "soft chroot" of the os filesystem.
 // Although this is still the default os filesystem, consider using BoundOS instead.
 //
-// Deprecated: use New with WithBoundOS instead.
-//
 // Behaviours of note:
 //  1. A "soft chroot" translates the base dir to "/" for the purposes of the
 //     fs abstraction.
@@ -26,14 +24,6 @@ import (
 type ChrootOS struct{}
 
 func newChrootOS(baseDir string) billy.Filesystem {
-	if baseDir != "" {
-		resolved, err := filepath.EvalSymlinks(baseDir)
-		if err != nil {
-			return chroot.New(&ChrootOS{}, baseDir)
-		}
-		baseDir = resolved
-	}
-
 	return chroot.New(&ChrootOS{}, baseDir)
 }
 
@@ -82,10 +72,6 @@ func (fs *ChrootOS) Stat(filename string) (os.FileInfo, error) {
 
 func (fs *ChrootOS) Remove(filename string) error {
 	return os.Remove(filename)
-}
-
-func (fs *ChrootOS) Chmod(path string, mode os.FileMode) error {
-	return os.Chmod(path, mode)
 }
 
 func (fs *ChrootOS) TempFile(dir, prefix string) (billy.File, error) {

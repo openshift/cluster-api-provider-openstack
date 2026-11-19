@@ -8,8 +8,9 @@ import (
 	"io"
 	"math"
 	"math/big"
-	"sort"
+	"slices"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -194,8 +195,8 @@ func (e *encoder) encodeObject(vs map[string]any) error {
 		kvs[i] = keyVal{k, v}
 		i++
 	}
-	sort.Slice(kvs, func(i, j int) bool {
-		return kvs[i].key < kvs[j].key
+	slices.SortFunc(kvs, func(x, y keyVal) int {
+		return strings.Compare(x.key, y.key)
 	})
 	for i, kv := range kvs {
 		if i > 0 {

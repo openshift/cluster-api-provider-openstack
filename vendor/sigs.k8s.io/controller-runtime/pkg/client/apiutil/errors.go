@@ -18,7 +18,7 @@ package apiutil
 
 import (
 	"fmt"
-	"slices"
+	"sort"
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -34,16 +34,16 @@ type ErrResourceDiscoveryFailed map[schema.GroupVersion]error
 
 // Error implements the error interface.
 func (e *ErrResourceDiscoveryFailed) Error() string {
-	subErrors := make([]string, 0, len(*e))
+	subErrors := []string{}
 	for k, v := range *e {
 		subErrors = append(subErrors, fmt.Sprintf("%s: %v", k, v))
 	}
-	slices.Sort(subErrors)
+	sort.Strings(subErrors)
 	return fmt.Sprintf("unable to retrieve the complete list of server APIs: %s", strings.Join(subErrors, ", "))
 }
 
 func (e *ErrResourceDiscoveryFailed) Unwrap() []error {
-	subErrors := make([]error, 0, len(*e))
+	subErrors := []error{}
 	for gv, err := range *e {
 		if apierrors.IsNotFound(err) {
 			err = &meta.NoResourceMatchError{PartialResource: gv.WithResource("")}

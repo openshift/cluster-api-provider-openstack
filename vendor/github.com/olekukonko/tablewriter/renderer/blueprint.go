@@ -1,11 +1,10 @@
 package renderer
 
 import (
-	"io"
-	"strings"
-
 	"github.com/olekukonko/ll"
 	"github.com/olekukonko/tablewriter/pkg/twwidth"
+	"io"
+	"strings"
 
 	"github.com/olekukonko/tablewriter/tw"
 )
@@ -44,7 +43,7 @@ func NewBlueprint(configs ...tw.Rendition) *Blueprint {
 		// Merge user settings with default settings
 		cfg.Settings = mergeSettings(cfg.Settings, userCfg.Settings)
 	}
-	return &Blueprint{config: cfg, logger: ll.New("blueprint").Disable()}
+	return &Blueprint{config: cfg, logger: ll.New("blueprint")}
 }
 
 // Close performs cleanup (no-op in this implementation).
@@ -284,7 +283,7 @@ func (f *Blueprint) formatCell(content string, width int, padding tw.Padding, al
 	leftPadChar := padding.Left
 	rightPadChar := padding.Right
 
-	// if f.config.Settings.Cushion.Enabled() || f.config.Settings.Cushion.Default() {
+	//if f.config.Settings.Cushion.Enabled() || f.config.Settings.Cushion.Default() {
 	//	if leftPadChar == tw.Empty {
 	//		leftPadChar = tw.Space
 	//	}
@@ -298,7 +297,10 @@ func (f *Blueprint) formatCell(content string, width int, padding tw.Padding, al
 	padRightWidth := twwidth.Width(rightPadChar)
 
 	// Calculate available width for content
-	availableContentWidth := max(width-padLeftWidth-padRightWidth, 0)
+	availableContentWidth := width - padLeftWidth - padRightWidth
+	if availableContentWidth < 0 {
+		availableContentWidth = 0
+	}
 	f.logger.Debugf("Available content width: %d", availableContentWidth)
 
 	// Truncate content if it exceeds available width
@@ -309,7 +311,10 @@ func (f *Blueprint) formatCell(content string, width int, padding tw.Padding, al
 	}
 
 	// Calculate total padding needed
-	totalPaddingWidth := max(width-runeWidth, 0)
+	totalPaddingWidth := width - runeWidth
+	if totalPaddingWidth < 0 {
+		totalPaddingWidth = 0
+	}
 	f.logger.Debugf("Total padding width: %d", totalPaddingWidth)
 
 	var result strings.Builder
@@ -322,22 +327,14 @@ func (f *Blueprint) formatCell(content string, width int, padding tw.Padding, al
 		result.WriteString(content)
 		rightPaddingWidth = totalPaddingWidth - padLeftWidth
 		if rightPaddingWidth > 0 {
-			padChar := rightPadChar
-			if padChar == tw.Empty {
-				padChar = tw.Space
-			}
-			result.WriteString(tw.PadRight(tw.Empty, padChar, rightPaddingWidth))
-			f.logger.Debugf("Applied right padding: '%s' for %d width", padChar, rightPaddingWidth)
+			result.WriteString(tw.PadRight(tw.Empty, rightPadChar, rightPaddingWidth))
+			f.logger.Debugf("Applied right padding: '%s' for %d width", rightPadChar, rightPaddingWidth)
 		}
 	case tw.AlignRight:
 		leftPaddingWidth = totalPaddingWidth - padRightWidth
 		if leftPaddingWidth > 0 {
-			padChar := leftPadChar
-			if padChar == tw.Empty {
-				padChar = tw.Space
-			}
-			result.WriteString(tw.PadLeft(tw.Empty, padChar, leftPaddingWidth))
-			f.logger.Debugf("Applied left padding: '%s' for %d width", padChar, leftPaddingWidth)
+			result.WriteString(tw.PadLeft(tw.Empty, leftPadChar, leftPaddingWidth))
+			f.logger.Debugf("Applied left padding: '%s' for %d width", leftPadChar, leftPaddingWidth)
 		}
 		result.WriteString(content)
 		result.WriteString(rightPadChar)
@@ -345,23 +342,15 @@ func (f *Blueprint) formatCell(content string, width int, padding tw.Padding, al
 		leftPaddingWidth = (totalPaddingWidth-padLeftWidth-padRightWidth)/2 + padLeftWidth
 		rightPaddingWidth = totalPaddingWidth - leftPaddingWidth
 		if leftPaddingWidth > padLeftWidth {
-			padChar := leftPadChar
-			if padChar == tw.Empty {
-				padChar = tw.Space
-			}
-			result.WriteString(tw.PadLeft(tw.Empty, padChar, leftPaddingWidth-padLeftWidth))
-			f.logger.Debugf("Applied left centering padding: '%s' for %d width", padChar, leftPaddingWidth-padLeftWidth)
+			result.WriteString(tw.PadLeft(tw.Empty, leftPadChar, leftPaddingWidth-padLeftWidth))
+			f.logger.Debugf("Applied left centering padding: '%s' for %d width", leftPadChar, leftPaddingWidth-padLeftWidth)
 		}
 		result.WriteString(leftPadChar)
 		result.WriteString(content)
 		result.WriteString(rightPadChar)
 		if rightPaddingWidth > padRightWidth {
-			padChar := rightPadChar
-			if padChar == tw.Empty {
-				padChar = tw.Space
-			}
-			result.WriteString(tw.PadRight(tw.Empty, padChar, rightPaddingWidth-padRightWidth))
-			f.logger.Debugf("Applied right centering padding: '%s' for %d width", padChar, rightPaddingWidth-padRightWidth)
+			result.WriteString(tw.PadRight(tw.Empty, rightPadChar, rightPaddingWidth-padRightWidth))
+			f.logger.Debugf("Applied right centering padding: '%s' for %d width", rightPadChar, rightPaddingWidth-padRightWidth)
 		}
 	default:
 		// Default to left alignment
@@ -369,12 +358,8 @@ func (f *Blueprint) formatCell(content string, width int, padding tw.Padding, al
 		result.WriteString(content)
 		rightPaddingWidth = totalPaddingWidth - padLeftWidth
 		if rightPaddingWidth > 0 {
-			padChar := rightPadChar
-			if padChar == tw.Empty {
-				padChar = tw.Space
-			}
-			result.WriteString(tw.PadRight(tw.Empty, padChar, rightPaddingWidth))
-			f.logger.Debugf("Applied right padding: '%s' for %d width", padChar, rightPaddingWidth)
+			result.WriteString(tw.PadRight(tw.Empty, rightPadChar, rightPaddingWidth))
+			f.logger.Debugf("Applied right padding: '%s' for %d width", rightPadChar, rightPaddingWidth)
 		}
 	}
 
@@ -450,7 +435,7 @@ func (f *Blueprint) renderLine(ctx tw.Formatting) {
 			prevWidth := ctx.Row.Widths.Get(colIndex - 1)
 			prevCellCtx, prevOk := ctx.Row.Current[colIndex-1]
 			prevIsHMergeEnd := prevOk && prevCellCtx.Merge.Horizontal.Present && prevCellCtx.Merge.Horizontal.End
-			if (prevWidth > 0 || prevIsHMergeEnd) && (!ok || (!cellCtx.Merge.Horizontal.Present || cellCtx.Merge.Horizontal.Start)) {
+			if (prevWidth > 0 || prevIsHMergeEnd) && (!ok || !(cellCtx.Merge.Horizontal.Present && !cellCtx.Merge.Horizontal.Start)) {
 				shouldAddSeparator = true
 			}
 		}
@@ -469,7 +454,10 @@ func (f *Blueprint) renderLine(ctx tw.Formatting) {
 			if ctx.Row.Position == tw.Row {
 				dynamicTotalWidth := 0
 				for k := 0; k < span && colIndex+k < numCols; k++ {
-					normWidth := max(ctx.NormalizedWidths.Get(colIndex+k), 0)
+					normWidth := ctx.NormalizedWidths.Get(colIndex + k)
+					if normWidth < 0 {
+						normWidth = 0
+					}
 					dynamicTotalWidth += normWidth
 					if k > 0 && separatorDisplayWidth > 0 && ctx.NormalizedWidths.Get(colIndex+k) > 0 {
 						dynamicTotalWidth += separatorDisplayWidth
@@ -513,24 +501,21 @@ func (f *Blueprint) renderLine(ctx tw.Formatting) {
 		// Set cell padding and alignment
 		padding := cellCtx.Padding
 		align := cellCtx.Align
-		switch align {
-		case tw.AlignNone:
-			switch ctx.Row.Position {
-			case tw.Header:
+		if align == tw.AlignNone {
+			if ctx.Row.Position == tw.Header {
 				align = tw.AlignCenter
-			case tw.Footer:
+			} else if ctx.Row.Position == tw.Footer {
 				align = tw.AlignRight
-			default:
+			} else {
 				align = tw.AlignLeft
 			}
 			f.logger.Debugf("renderLine: col %d (data: '%s') using renderer default align '%s' for position %s.", colIndex, cellCtx.Data, align, ctx.Row.Position)
-		case tw.Skip:
-			switch ctx.Row.Position {
-			case tw.Header:
+		} else if align == tw.Skip {
+			if ctx.Row.Position == tw.Header {
 				align = tw.AlignCenter
-			case tw.Footer:
+			} else if ctx.Row.Position == tw.Footer {
 				align = tw.AlignRight
-			default:
+			} else {
 				align = tw.AlignLeft
 			}
 			f.logger.Debugf("renderLine: col %d (data: '%s') cellCtx.Align was Skip/empty, falling back to basic default '%s'.", colIndex, cellCtx.Data, align)
@@ -602,6 +587,7 @@ func (f *Blueprint) renderLine(ctx tw.Formatting) {
 func (f *Blueprint) Rendition(config tw.Rendition) {
 	f.config = mergeRendition(f.config, config)
 	f.logger.Debugf("Blueprint.Rendition updated. New config: %+v", f.config)
+
 }
 
 // Ensure Blueprint implements tw.Renditioning

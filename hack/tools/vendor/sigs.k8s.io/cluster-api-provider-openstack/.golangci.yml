@@ -158,6 +158,7 @@ linters:
     - linters:
       - revive
       source: _ "embed"
+
     - linters:
       - revive
       - staticcheck

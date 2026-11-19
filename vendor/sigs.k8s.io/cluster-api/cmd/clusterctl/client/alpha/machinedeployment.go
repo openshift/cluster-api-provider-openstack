@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	pkgerrors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -41,7 +41,7 @@ func getMachineDeployment(ctx context.Context, proxy cluster.Proxy, name, namesp
 		Name:      name,
 	}
 	if err := c.Get(ctx, mdObjKey, mdObj); err != nil {
-		return nil, pkgerrors.Wrapf(err, "failed to get MachineDeployment %s/%s",
+		return nil, errors.Wrapf(err, "failed to get MachineDeployment %s/%s",
 			mdObjKey.Namespace, mdObjKey.Name)
 	}
 	return mdObj, nil
@@ -65,11 +65,11 @@ func patchMachineDeployment(ctx context.Context, proxy cluster.Proxy, name, name
 		Name:      name,
 	}
 	if err := cFrom.Get(ctx, mdObjKey, mdObj); err != nil {
-		return pkgerrors.Wrapf(err, "failed to get MachineDeployment %s/%s", mdObj.GetNamespace(), mdObj.GetName())
+		return errors.Wrapf(err, "failed to get MachineDeployment %s/%s", mdObj.GetNamespace(), mdObj.GetName())
 	}
 
 	if err := cFrom.Patch(ctx, mdObj, patch); err != nil {
-		return pkgerrors.Wrapf(err, "failed while patching MachineDeployment %s/%s", mdObj.GetNamespace(), mdObj.GetName())
+		return errors.Wrapf(err, "failed while patching MachineDeployment %s/%s", mdObj.GetNamespace(), mdObj.GetName())
 	}
 	return nil
 }

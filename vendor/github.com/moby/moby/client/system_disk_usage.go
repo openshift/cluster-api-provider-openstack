@@ -244,15 +244,12 @@ func imageDiskUsageFromLegacyAPI(du *legacyDiskUsage) ImagesDiskUsage {
 		Items:      du.Images,
 	}
 
-	for _, img := range idu.Items {
-		switch {
-		case img.Containers < 0:
-			// No container-count information available; skip (assume it's in use).
-		case img.Containers > 0:
+	for _, i := range idu.Items {
+		if i.Containers > 0 {
 			idu.ActiveCount++
-		case img.Containers == 0 && img.Size != -1 && img.SharedSize != -1:
-			reclaimable := img.Size - img.SharedSize
-			idu.Reclaimable += reclaimable
+		} else if i.Size != -1 && i.SharedSize != -1 {
+			// Only count reclaimable size if we have size information
+			idu.Reclaimable += (i.Size - i.SharedSize)
 		}
 	}
 

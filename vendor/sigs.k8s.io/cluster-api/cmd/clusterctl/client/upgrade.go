@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	pkgerrors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
@@ -125,11 +125,14 @@ type ApplyUpgradeOptions struct {
 
 	// WaitProviderTimeout sets the timeout per provider upgrade.
 	WaitProviderTimeout time.Duration
+
+	// EnableCRDStorageVersionMigration enables storage version migration of CRDs.
+	EnableCRDStorageVersionMigration bool
 }
 
 func (c *clusterctlClient) ApplyUpgrade(ctx context.Context, options ApplyUpgradeOptions) error {
 	if options.Contract != "" && options.Contract != c.currentContractVersion {
-		return pkgerrors.Errorf("current version of clusterctl could only upgrade to %s contract, requested %s", clusterv1.GroupVersion.Version, options.Contract)
+		return errors.Errorf("current version of clusterctl could only upgrade to %s contract, requested %s", clusterv1.GroupVersion.Version, options.Contract)
 	}
 
 	// Default WaitProviderTimeout as we cannot rely on defaulting in the CLI
@@ -174,8 +177,9 @@ func (c *clusterctlClient) ApplyUpgrade(ctx context.Context, options ApplyUpgrad
 		len(options.AddonProviders) > 0
 
 	opts := cluster.UpgradeOptions{
-		WaitProviders:       options.WaitProviders,
-		WaitProviderTimeout: options.WaitProviderTimeout,
+		WaitProviders:                    options.WaitProviders,
+		WaitProviderTimeout:              options.WaitProviderTimeout,
+		EnableCRDStorageVersionMigration: options.EnableCRDStorageVersionMigration,
 	}
 
 	// If we are upgrading a specific set of providers only, process the providers and call ApplyCustomPlan.
@@ -229,7 +233,7 @@ func addUpgradeItems(ctx context.Context, clusterClient cluster.Client, upgradeI
 			return nil, err
 		}
 		if providerUpgradeItem.NextVersion == "" {
-			return nil, pkgerrors.Errorf("invalid provider name %q. Provider name should be in the form namespace/name:version and version cannot be empty", upgradeReference)
+			return nil, errors.Errorf("invalid provider name %q. Provider name should be in the form namespace/name:version and version cannot be empty", upgradeReference)
 		}
 		upgradeItems = append(upgradeItems, *providerUpgradeItem)
 	}
@@ -251,17 +255,17 @@ func parseUpgradeItemWithNamespace(ref string, providerType clusterctlv1.Provide
 	refSplit := strings.Split(strings.ToLower(ref), "/")
 
 	if len(refSplit) != 2 {
-		return nil, pkgerrors.Errorf(upgradeItemProviderNameError, ref)
+		return nil, errors.Errorf(upgradeItemProviderNameError, ref)
 	}
 
 	if refSplit[0] == "" {
-		return nil, pkgerrors.Errorf(upgradeItemProviderNameError, ref)
+		return nil, errors.Errorf(upgradeItemProviderNameError, ref)
 	}
 	namespace := refSplit[0]
 
 	name, version, err := parseProviderName(refSplit[1])
 	if err != nil {
-		return nil, pkgerrors.Wrapf(err, upgradeItemProviderNameError, ref)
+		return nil, errors.Wrapf(err, upgradeItemProviderNameError, ref)
 	}
 
 	return &cluster.UpgradeItem{
@@ -282,17 +286,17 @@ func parseUpgradeItemWithNamespace(ref string, providerType clusterctlv1.Provide
 
 func parseUpgradeItemWithoutNamespace(ctx context.Context, clusterClient cluster.Client, ref string, providerType clusterctlv1.ProviderType) (*cluster.UpgradeItem, error) {
 	if !strings.Contains(ref, ":") {
-		return nil, pkgerrors.Errorf(upgradeItemProviderNameError, ref)
+		return nil, errors.Errorf(upgradeItemProviderNameError, ref)
 	}
 
 	name, version, err := parseProviderName(ref)
 	if err != nil {
-		return nil, pkgerrors.Wrapf(err, upgradeItemProviderNameError, ref)
+		return nil, errors.Wrapf(err, upgradeItemProviderNameError, ref)
 	}
 
 	namespace, err := clusterClient.ProviderInventory().GetProviderNamespace(ctx, name, providerType)
 	if err != nil {
-		return nil, pkgerrors.Errorf("unable to find default namespace for provider %q", ref)
+		return nil, errors.Errorf("unable to find default namespace for provider %q", ref)
 	}
 
 	return &cluster.UpgradeItem{

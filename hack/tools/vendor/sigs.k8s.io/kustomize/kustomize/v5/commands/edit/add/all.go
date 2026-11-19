@@ -47,12 +47,6 @@ func NewCmdAdd(
 
 	# Adds a transformer configuration to the kustomization
 	kustomize edit add transformer <filepath>
-
-	# Adds a configuration file to the kustomization
-	kustomize edit add configuration <filepath>
-
-	# Adds a generator configuration to the kustomization
-	kustomize edit add generator <filepath>
 `,
 		Args: cobra.MinimumNArgs(1),
 	}
@@ -67,7 +61,6 @@ func NewCmdAdd(
 		newCmdAddLabel(fSys, ldr.Validator().MakeLabelValidator()),
 		newCmdAddAnnotation(fSys, ldr.Validator().MakeAnnotationValidator()),
 		newCmdAddTransformer(fSys),
-		newCmdAddConfiguration(fSys),
 		newCmdAddGenerator(fSys),
 	)
 	return c

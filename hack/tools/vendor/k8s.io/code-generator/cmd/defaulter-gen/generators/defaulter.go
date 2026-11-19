@@ -73,18 +73,12 @@ func extractDefaultTag(comments []string) ([]string, error) {
 	return tags[defaultTagName], nil
 }
 
-func extractTag(comments []string) ([]string, bool) {
+func extractTag(comments []string) ([]string, error) {
 	tags, err := genutil.ExtractCommentTagsWithoutArguments("+", []string{tagName}, comments)
 	if err != nil {
-		klog.Fatalf("Error extracting %s tag: %v", tagName, err)
+		return nil, err
 	}
-
-	values, found := tags[tagName]
-	if !found || len(values) == 0 {
-		return nil, false
-	}
-
-	return values, true
+	return tags[tagName], nil
 }
 
 func extractInputTag(comments []string) ([]string, error) {
@@ -336,10 +330,9 @@ func GetTargets(context *generator.Context, args *args.Args) []generator.Target 
 			getManualDefaultingFunctions(context, context.Universe[pp], existingDefaulters)
 		}
 
-		typesWith, found := extractTag(pkg.Comments)
-		if !found {
-			klog.V(2).InfoS("  did not find required tag", "tag", tagName)
-			continue
+		typesWith, err := extractTag(pkg.Comments)
+		if err != nil {
+			klog.Fatalf("Error extracting %s tag: %v", tagName, err)
 		}
 		shouldCreateObjectDefaulterFn := func(t *types.Type) bool {
 			if defaults, ok := existingDefaulters[t]; ok && defaults.object != nil {

@@ -60,9 +60,7 @@ Installation and setup instructions: https://kubernetes.io/docs/tasks/tools/inst
 	// format and output
 	var jsonSchema map[string]interface{}
 	output := stdout.Bytes()
-	if err := json.Unmarshal(output, &jsonSchema); err != nil {
-		return fmt.Errorf("unable to parse the schema returned by kubectl: %w%s", err, errMsg)
-	}
+	json.Unmarshal(output, &jsonSchema)
 	output, _ = json.MarshalIndent(jsonSchema, "", "  ")
 
 	if format == "yaml" {

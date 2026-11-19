@@ -17,7 +17,6 @@ type Buffering struct {
 	FlushInterval time.Duration // Maximum time between flushes (default: 10s)
 	MaxBuffer     int           // Maximum buffer size before applying backpressure (default: 1000)
 	OnOverflow    func(int)     // Called when buffer reaches MaxBuffer (default: logs warning)
-	ErrorOutput   io.Writer     // Destination for internal errors like flush failures (default: os.Stderr)
 }
 
 // BufferingOpt configures Buffered handler.
@@ -67,18 +66,6 @@ func WithOverflowHandler(fn func(int)) BufferingOpt {
 	}
 }
 
-// WithErrorOutput sets the destination for internal errors (e.g., downstream handler failures).
-// Defaults to os.Stderr if not set.
-// Example:
-//
-//	// Redirect internal errors to a file or discard them
-//	handler := NewBuffered(textHandler, WithErrorOutput(os.Stdout))
-func WithErrorOutput(w io.Writer) BufferingOpt {
-	return func(c *Buffering) {
-		c.ErrorOutput = w
-	}
-}
-
 // Buffered wraps any Handler to provide buffering capabilities.
 // It buffers log entries in a channel and flushes them based on batch size, time interval, or explicit flush.
 // The generic type H ensures compatibility with any lx.Handler implementation.
@@ -106,8 +93,7 @@ func NewBuffered[H lx.Handler](handler H, opts ...BufferingOpt) *Buffered[H] {
 		BatchSize:     100,              // Default: flush every 100 entries
 		FlushInterval: 10 * time.Second, // Default: flush every 10 seconds
 		MaxBuffer:     1000,             // Default: max 1000 entries in buffer
-		ErrorOutput:   os.Stderr,        // Default: report errors to stderr
-		OnOverflow: func(count int) { // Default: log overflow to io.Discard (silent by default for overflow)
+		OnOverflow: func(count int) { // Default: log overflow to io.Discard
 			fmt.Fprintf(io.Discard, "log buffer overflow: %d entries\n", count)
 		},
 	}
@@ -126,9 +112,6 @@ func NewBuffered[H lx.Handler](handler H, opts ...BufferingOpt) *Buffered[H] {
 	}
 	if config.FlushInterval <= 0 {
 		config.FlushInterval = 10 * time.Second // Minimum flush interval is 10s
-	}
-	if config.ErrorOutput == nil {
-		config.ErrorOutput = os.Stderr
 	}
 
 	// Initialize Buffered handler
@@ -190,25 +173,18 @@ func (b *Buffered[H]) Flush() {
 
 // Close flushes any remaining entries and stops the worker.
 // It ensures shutdown is performed only once and waits for the worker to finish.
-// If the underlying handler implements a Close() error method, it will be called to release resources.
 // Thread-safe via sync.Once and WaitGroup.
-// Returns any error from the underlying handler's Close, or nil.
+// Returns nil as it does not produce errors.
 // Example:
 //
 //	buffered.Close() // Flushes entries and stops worker
 func (b *Buffered[H]) Close() error {
-	var closeErr error
 	b.shutdownOnce.Do(func() {
 		close(b.shutdown)            // Signal worker to shut down
 		b.wg.Wait()                  // Wait for worker to finish
 		runtime.SetFinalizer(b, nil) // Remove finalizer
-
-		// Check if underlying handler has a Close method and call it
-		if closer, ok := any(b.handler).(interface{ Close() error }); ok {
-			closeErr = closer.Close()
-		}
 	})
-	return closeErr
+	return nil
 }
 
 // Final ensures remaining entries are flushed during garbage collection.
@@ -270,7 +246,7 @@ func (b *Buffered[H]) worker() {
 }
 
 // flushBatch processes a batch of entries through the wrapped handler.
-// It writes each entry to the underlying handler, logging any errors to the configured ErrorOutput.
+// It writes each entry to the underlying handler, logging any errors to stderr.
 // Example (internal usage):
 //
 //	b.flushBatch([]*lx.Entry{entry1, entry2})
@@ -278,16 +254,14 @@ func (b *Buffered[H]) flushBatch(batch []*lx.Entry) {
 	for _, entry := range batch {
 		// Process each entry through the handler
 		if err := b.handler.Handle(entry); err != nil {
-			if b.config.ErrorOutput != nil {
-				fmt.Fprintf(b.config.ErrorOutput, "log flush error: %v\n", err)
-			}
+			fmt.Fprintf(os.Stderr, "log flush error: %v\n", err) // Log errors to stderr
 		}
 	}
 }
 
 // drainRemaining processes any remaining entries in the channel.
 // It flushes all entries from the entries channel to the underlying handler,
-// logging any errors to the configured ErrorOutput. Used during flush or shutdown.
+// logging any errors to stderr. Used during flush or shutdown.
 // Example (internal usage):
 //
 //	b.drainRemaining() // Flushes all pending entries
@@ -296,9 +270,7 @@ func (b *Buffered[H]) drainRemaining() {
 		select {
 		case entry := <-b.entries: // Process next entry
 			if err := b.handler.Handle(entry); err != nil {
-				if b.config.ErrorOutput != nil {
-					fmt.Fprintf(b.config.ErrorOutput, "log drain error: %v\n", err)
-				}
+				fmt.Fprintf(os.Stderr, "log drain error: %v\n", err) // Log errors to stderr
 			}
 		default: // Exit when channel is empty
 			return

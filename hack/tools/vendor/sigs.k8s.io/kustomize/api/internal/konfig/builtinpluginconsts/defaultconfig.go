@@ -14,7 +14,6 @@ func GetDefaultFieldSpecs() []byte {
 		[]byte(nameSuffixFieldSpecs),
 		[]byte(commonLabelFieldSpecs),
 		[]byte(templateLabelFieldSpecs),
-		[]byte(volumeClaimTemplateLabelFieldSpecs),
 		[]byte(commonAnnotationFieldSpecs),
 		[]byte(namespaceFieldSpecs),
 		[]byte(varReferenceFieldSpecs),
@@ -33,7 +32,6 @@ func GetDefaultFieldSpecsAsMap() map[string]string {
 	result["namesuffix"] = nameSuffixFieldSpecs
 	result["commonlabels"] = commonLabelFieldSpecs
 	result["templatelabels"] = templateLabelFieldSpecs
-	result["volumeclaimtemplatelabels"] = volumeClaimTemplateLabelFieldSpecs
 	result["commonannotations"] = commonAnnotationFieldSpecs
 	result["namespace"] = namespaceFieldSpecs
 	result["varreference"] = varReferenceFieldSpecs
