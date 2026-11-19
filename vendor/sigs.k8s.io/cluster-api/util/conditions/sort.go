@@ -67,7 +67,6 @@ func defaultSortLessFunc(i, j metav1.Condition) bool {
 // | ControlPlaneComponentsHealthy  |         | x   |    |    |    |         |
 // | NodeHealthy                    |         |     |    |    |    | x       |
 // | NodeReady                      |         |     |    |    |    | x       |
-// | NodeKubeadmLabelsAndTaintsSet  |         |     |    |    |    | x       |
 // | EtcdPodHealthy                 |         |     |    |    |    | x       |
 // | EtcdMemberHealthy              |         |     |    |    |    | x       |
 // | APIServerPodHealthy            |         |     |    |    |    | x       |
@@ -111,7 +110,6 @@ var order = []string{
 	kubeadmControlPlaneControlPlaneComponentsHealthyCondition,
 	clusterv1.MachineNodeHealthyCondition,
 	clusterv1.MachineNodeReadyCondition,
-	KubeadmControlPlaneMachineNodeKubeadmLabelsAndTaintsSetCondition,
 	kubeadmControlPlaneMachineEtcdPodHealthyCondition,
 	kubeadmControlPlaneMachineEtcdMemberHealthyCondition,
 	kubeadmControlPlaneMachineAPIServerPodHealthyCondition,
@@ -143,14 +141,13 @@ const (
 
 // Constants inlined for ordering (we want to avoid importing the KCP API package).
 const (
-	kubeadmControlPlaneCertificatesAvailableCondition                = "CertificatesAvailable"
-	kubeadmControlPlaneInitializedCondition                          = "Initialized"
-	kubeadmControlPlaneEtcdClusterHealthyCondition                   = "EtcdClusterHealthy"
-	kubeadmControlPlaneControlPlaneComponentsHealthyCondition        = "ControlPlaneComponentsHealthy"
-	KubeadmControlPlaneMachineNodeKubeadmLabelsAndTaintsSetCondition = "NodeKubeadmLabelsAndTaintsSet"
-	kubeadmControlPlaneMachineAPIServerPodHealthyCondition           = "APIServerPodHealthy"
-	kubeadmControlPlaneMachineControllerManagerPodHealthyCondition   = "ControllerManagerPodHealthy"
-	kubeadmControlPlaneMachineSchedulerPodHealthyCondition           = "SchedulerPodHealthy"
-	kubeadmControlPlaneMachineEtcdPodHealthyCondition                = "EtcdPodHealthy"
-	kubeadmControlPlaneMachineEtcdMemberHealthyCondition             = "EtcdMemberHealthy"
+	kubeadmControlPlaneCertificatesAvailableCondition              = "CertificatesAvailable"
+	kubeadmControlPlaneInitializedCondition                        = "Initialized"
+	kubeadmControlPlaneEtcdClusterHealthyCondition                 = "EtcdClusterHealthy"
+	kubeadmControlPlaneControlPlaneComponentsHealthyCondition      = "ControlPlaneComponentsHealthy"
+	kubeadmControlPlaneMachineAPIServerPodHealthyCondition         = "APIServerPodHealthy"
+	kubeadmControlPlaneMachineControllerManagerPodHealthyCondition = "ControllerManagerPodHealthy"
+	kubeadmControlPlaneMachineSchedulerPodHealthyCondition         = "SchedulerPodHealthy"
+	kubeadmControlPlaneMachineEtcdPodHealthyCondition              = "EtcdPodHealthy"
+	kubeadmControlPlaneMachineEtcdMemberHealthyCondition           = "EtcdMemberHealthy"
 )

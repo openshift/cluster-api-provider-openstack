@@ -18,11 +18,10 @@ package config
 
 import (
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/drone/envsubst/v2"
-	pkgerrors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -30,7 +29,7 @@ const (
 	CertManagerConfigKey = "cert-manager"
 
 	// CertManagerDefaultVersion defines the default cert-manager version to be used by clusterctl.
-	CertManagerDefaultVersion = "v1.21.2"
+	CertManagerDefaultVersion = "v1.21.0"
 
 	// CertManagerDefaultURL defines the default cert-manager repository url to be used by clusterctl.
 	// NOTE: At runtime CertManagerDefaultVersion may be replaced with the
@@ -63,21 +62,19 @@ func newCertManagerClient(reader Reader) *certManagerClient {
 
 // configCertManager mirrors config.CertManager interface and allows serialization of the corresponding info.
 type configCertManager struct {
-	URL                   string `json:"url,omitempty"`
-	Version               string `json:"version,omitempty"`
-	Timeout               string `json:"timeout,omitempty"`
-	ExternallyProvisioned string `json:"externallyProvisioned,omitempty"`
+	URL     string `json:"url,omitempty"`
+	Version string `json:"version,omitempty"`
+	Timeout string `json:"timeout,omitempty"`
 }
 
 func (p *certManagerClient) Get() (CertManager, error) {
 	url := CertManagerDefaultURL
 	version := CertManagerDefaultVersion
 	timeout := CertManagerDefaultTimeout.String()
-	externallyProvisioned := false
 
 	userCertManager := &configCertManager{}
 	if err := p.reader.UnmarshalKey(CertManagerConfigKey, &userCertManager); err != nil {
-		return nil, pkgerrors.Wrap(err, "failed to unmarshal certManager from the clusterctl configuration file")
+		return nil, errors.Wrap(err, "failed to unmarshal certManager from the clusterctl configuration file")
 	}
 	if userCertManager.URL != "" {
 		url = userCertManager.URL
@@ -85,7 +82,7 @@ func (p *certManagerClient) Get() (CertManager, error) {
 
 	url, err := envsubst.Eval(url, os.Getenv)
 	if err != nil {
-		return nil, pkgerrors.Wrapf(err, "unable to evaluate url: %q", url)
+		return nil, errors.Wrapf(err, "unable to evaluate url: %q", url)
 	}
 
 	if userCertManager.Version != "" {
@@ -94,12 +91,6 @@ func (p *certManagerClient) Get() (CertManager, error) {
 	if userCertManager.Timeout != "" {
 		timeout = userCertManager.Timeout
 	}
-	if userCertManager.ExternallyProvisioned != "" {
-		externallyProvisioned, err = strconv.ParseBool(userCertManager.ExternallyProvisioned)
-		if err != nil {
-			return nil, err
-		}
-	}
 
-	return NewCertManager(url, version, timeout, externallyProvisioned), nil
+	return NewCertManager(url, version, timeout), nil
 }

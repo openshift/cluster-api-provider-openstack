@@ -14,7 +14,6 @@ package matchers
 import (
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"reflect"
 
 	"github.com/onsi/gomega/matchers/internal/miter"
@@ -53,11 +52,26 @@ func isFloat(a any) bool {
 	return reflect.Float32 <= kind && kind <= reflect.Float64
 }
 
-func toBigInt(a any) *big.Int {
+func toInteger(a any) int64 {
 	if isInteger(a) {
-		return big.NewInt(reflect.ValueOf(a).Int())
+		return reflect.ValueOf(a).Int()
+	} else if isUnsignedInteger(a) {
+		return int64(reflect.ValueOf(a).Uint())
+	} else if isFloat(a) {
+		return int64(reflect.ValueOf(a).Float())
 	}
-	return new(big.Int).SetUint64(reflect.ValueOf(a).Uint())
+	panic(fmt.Sprintf("Expected a number!  Got <%T> %#v", a, a))
+}
+
+func toUnsignedInteger(a any) uint64 {
+	if isInteger(a) {
+		return uint64(reflect.ValueOf(a).Int())
+	} else if isUnsignedInteger(a) {
+		return reflect.ValueOf(a).Uint()
+	} else if isFloat(a) {
+		return uint64(reflect.ValueOf(a).Float())
+	}
+	panic(fmt.Sprintf("Expected a number!  Got <%T> %#v", a, a))
 }
 
 func toFloat(a any) float64 {

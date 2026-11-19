@@ -53,6 +53,7 @@ const (
 	loadBalancerProvisioningStatusActive        = "ACTIVE"
 	loadBalancerProvisioningStatusPendingDelete = "PENDING_DELETE"
 	poolMemberProvisioningStatusActive          = "ACTIVE"
+	loadBalancerProtocolTCP                     = "TCP"
 )
 
 // getPrimarySubnetID returns the ID of the primary cluster subnet for use in

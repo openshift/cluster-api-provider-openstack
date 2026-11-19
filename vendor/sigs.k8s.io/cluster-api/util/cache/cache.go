@@ -17,15 +17,14 @@ limitations under the License.
 package cache
 
 import (
-	"context"
 	"fmt"
 	"time"
 
-	toolscache "k8s.io/client-go/tools/cache"
+	kcache "k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	runtimecatalog "sigs.k8s.io/cluster-api/api/runtime/catalog"
 	runtimehooksv1 "sigs.k8s.io/cluster-api/api/runtime/hooks/v1alpha1"
+	runtimecatalog "sigs.k8s.io/cluster-api/exp/runtime/catalog"
 )
 
 const (
@@ -65,9 +64,9 @@ type Cache[E Entry] interface {
 
 // New creates a new cache.
 // ttl is the duration for which we keep entries in the cache.
-func New[E Entry](ctx context.Context, ttl time.Duration) Cache[E] {
+func New[E Entry](ttl time.Duration) Cache[E] {
 	r := &cache[E]{
-		Store: toolscache.NewTTLStore(func(obj any) (string, error) {
+		Store: kcache.NewTTLStore(func(obj interface{}) (string, error) {
 			// We only add objects of type E to the cache, so it's safe to cast to E.
 			return obj.(E).Key(), nil
 		}, ttl),
@@ -79,18 +78,14 @@ func New[E Entry](ctx context.Context, ttl time.Duration) Cache[E] {
 			// items lazily. If we don't do this the cache grows indefinitely.
 			r.List()
 
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(expirationInterval):
-			}
+			time.Sleep(expirationInterval)
 		}
 	}()
 	return r
 }
 
 type cache[E Entry] struct {
-	toolscache.Store
+	kcache.Store
 }
 
 // Add adds the given entry to the Cache.

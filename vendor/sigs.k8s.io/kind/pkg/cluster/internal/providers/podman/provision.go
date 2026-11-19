@@ -254,11 +254,7 @@ func runArgsForLoadBalancer(cfg *config.Cluster, name string, args []string) ([]
 
 	// finally, specify the image to run
 	_, image := sanitizeImage(loadbalancer.Image)
-	args = append(args, image)
-
-	args = append(args, loadbalancer.GenerateBootstrapCommand(cfg.Name, name)...)
-
-	return args, nil
+	return append(args, image), nil
 }
 
 func getProxyEnv(cfg *config.Cluster, networkName string, nodeNames []string) (map[string]string, error) {

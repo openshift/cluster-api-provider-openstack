@@ -113,17 +113,9 @@ type Endpoint struct {
 	Port int
 	// Path is the repository path.
 	Path string
-	// InsecureSkipTLS skips SSL verification if Protocol is HTTPS.
+	// InsecureSkipTLS skips ssl verify if protocol is https
 	InsecureSkipTLS bool
-	// ClientCert specifies an optional client certificate to use for mutual
-	// TLS authentication if Protocol is HTTPS.
-	ClientCert []byte
-	// ClientKey specifies an optional client key to use for mutual TLS
-	// authentication if Protocol is HTTPS.
-	ClientKey []byte
-	// CaBundle specifies an optional CA bundle to use for SSL verification
-	// if Protocol is HTTPS. The bundle is added in addition to the system
-	// CA bundle.
+	// CaBundle specify additional ca bundle with system cert pool
 	CaBundle []byte
 	// Proxy provides info required for connecting to a proxy.
 	Proxy ProxyOptions

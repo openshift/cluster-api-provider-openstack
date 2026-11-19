@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	pkgerrors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/ptr"
@@ -59,19 +59,19 @@ func newDefinitionsIndex(fldPath *field.Path, definitions []clusterv1.ClusterCla
 	for _, definition := range definitions {
 		// Check that the definition has definitions.
 		if len(definition.Definitions) == 0 {
-			errs = append(errs, pkgerrors.Errorf("variable %q has no definitions", definition.Name))
+			errs = append(errs, errors.Errorf("variable %q has no definitions", definition.Name))
 		}
 
 		// Check that the definitions have no conflict.
 		if ptr.Deref(definition.DefinitionsConflict, false) {
-			errs = append(errs, pkgerrors.Errorf("variable %q has conflicting definitions", definition.Name))
+			errs = append(errs, errors.Errorf("variable %q has conflicting definitions", definition.Name))
 		}
 
 		// Add the definition.
 		definitionsMap[definition.Name] = &definition
 	}
 	if len(errs) > 0 {
-		definitionStrings := make([]string, 0, len(definitions))
+		var definitionStrings []string
 		for _, d := range definitions {
 			definitionStrings = append(definitionStrings, fmt.Sprintf("Name: %s", d.Name))
 		}

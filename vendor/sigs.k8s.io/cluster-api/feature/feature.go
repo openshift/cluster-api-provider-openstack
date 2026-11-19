@@ -61,16 +61,12 @@ const (
 	// also considers VolumeAttachments in addition to Nodes.status.volumesAttached when waiting for volumes to be detached.
 	//
 	// beta: v1.9
-	// GA: v1.13
-	//
-	// Deprecated: MachineWaitForVolumeDetachConsiderVolumeAttachments feature is now GA and the corresponding feature flag will be removed in the v1.15 release.
 	MachineWaitForVolumeDetachConsiderVolumeAttachments featuregate.Feature = "MachineWaitForVolumeDetachConsiderVolumeAttachments"
 
 	// PriorityQueue is a feature gate that controls if the controller uses the controller-runtime PriorityQueue
 	// instead of the default queue implementation.
 	//
 	// alpha: v1.10
-	// beta: v1.13
 	PriorityQueue featuregate.Feature = "PriorityQueue"
 
 	// ReconcilerRateLimiting is a feature gate that controls if reconcilers are rate-limited.
@@ -78,7 +74,6 @@ const (
 	// Note: If this feature gate is enabled the PriorityQueue feature gate must be enabled as well.
 	//
 	// alpha: v1.12
-	// beta: v1.13
 	ReconcilerRateLimiting featuregate.Feature = "ReconcilerRateLimiting"
 
 	// InPlaceUpdates is a feature gate for the in-place machine updates functionality.
@@ -99,11 +94,11 @@ func init() {
 // To add a new feature, define a key for it above and add it here.
 var defaultClusterAPIFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 	// Every feature should be initiated here:
-	MachineWaitForVolumeDetachConsiderVolumeAttachments: {Default: true, PreRelease: featuregate.GA},
-	MachinePool:                    {Default: true, PreRelease: featuregate.Beta},
-	MachineSetPreflightChecks:      {Default: true, PreRelease: featuregate.Beta},
-	PriorityQueue:                  {Default: true, PreRelease: featuregate.Beta},
-	ReconcilerRateLimiting:         {Default: true, PreRelease: featuregate.Beta},
+	MachinePool:               {Default: true, PreRelease: featuregate.Beta},
+	MachineSetPreflightChecks: {Default: true, PreRelease: featuregate.Beta},
+	MachineWaitForVolumeDetachConsiderVolumeAttachments: {Default: true, PreRelease: featuregate.Beta},
+	PriorityQueue:                  {Default: false, PreRelease: featuregate.Alpha},
+	ReconcilerRateLimiting:         {Default: false, PreRelease: featuregate.Alpha},
 	ClusterTopology:                {Default: false, PreRelease: featuregate.Alpha},
 	KubeadmBootstrapFormatIgnition: {Default: false, PreRelease: featuregate.Alpha},
 	RuntimeSDK:                     {Default: false, PreRelease: featuregate.Alpha},

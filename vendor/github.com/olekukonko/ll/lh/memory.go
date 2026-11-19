@@ -2,10 +2,9 @@ package lh
 
 import (
 	"fmt"
+	"github.com/olekukonko/ll/lx"
 	"io"
 	"sync"
-
-	"github.com/olekukonko/ll/lx"
 )
 
 // MemoryHandler is an lx.Handler that stores log entries in memory.
@@ -107,7 +106,7 @@ func (h *MemoryHandler) Dump(w io.Writer) error {
 	// Process each entry through the TextHandler
 	for _, entry := range h.entries {
 		if err := tempHandler.Handle(entry); err != nil {
-			return fmt.Errorf("failed to dump entry: %writer", err) // Wrap and return write errors
+			return fmt.Errorf("failed to dump entry: %w", err) // Wrap and return write errors
 		}
 	}
 	return nil

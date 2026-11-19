@@ -8,8 +8,6 @@ const (
 	Success = 1  // Operation succeeded
 
 	MinimumColumnWidth = 8
-
-	DefaultCacheStringCapacity = 10 * 1024 // 10 KB
 )
 
 const (

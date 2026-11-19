@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/go-git/go-billy/v5/util"
-	"github.com/go-git/go-git/v5/internal/pathutil"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
@@ -142,7 +141,7 @@ func (w *Worktree) diffStagingWithWorktree(reverse, excludeIgnoredChanges bool) 
 		return nil, err
 	}
 
-	to := filesystem.NewRootNodeWithOptions(w.Filesystem, submodules, filesystem.Options{Index: idx})
+	to := filesystem.NewRootNode(w.Filesystem, submodules)
 
 	var c merkletrie.Changes
 	if reverse {
@@ -371,8 +370,6 @@ func (w *Worktree) doAdd(path string, ignorePattern []gitignore.Pattern, skipSta
 		}
 	}
 
-	path = filepath.ToSlash(filepath.Clean(path))
-
 	if err != nil || !fi.IsDir() {
 		added, h, err = w.doAddFile(idx, s, path, ignorePattern)
 	} else {
@@ -546,14 +543,6 @@ func (w *Worktree) addOrUpdateFileToIndex(idx *index.Index, filename string, h p
 }
 
 func (w *Worktree) doAddFileToIndex(idx *index.Index, filename string, h plumbing.Hash) error {
-	// Mirror upstream's Index.Add gate at the v5 caller boundary: the
-	// index feeds future trees, so a name that the tree-side
-	// pathutil.ValidTreePath gate would reject must not enter the
-	// index in the first place. v5 keeps Index.Add's existing signature
-	// for API compatibility, so the validation happens here.
-	if err := pathutil.ValidTreePath(filename); err != nil {
-		return err
-	}
 	return w.doUpdateFileToIndex(idx.Add(filename), filename, h)
 }
 

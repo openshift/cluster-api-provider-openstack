@@ -24,6 +24,7 @@ import (
 
 type Args struct {
 	OutputFile   string
+	BoundingDirs []string // Only deal with types rooted under these dirs.
 	GoHeaderFile string
 }
 
@@ -36,6 +37,8 @@ func New() *Args {
 func (args *Args) AddFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&args.OutputFile, "output-file", "generated.deepcopy.go",
 		"the name of the file to be generated")
+	fs.StringSliceVar(&args.BoundingDirs, "bounding-dirs", args.BoundingDirs,
+		"Comma-separated list of import paths which bound the types for which deep-copies will be generated.")
 	fs.StringVar(&args.GoHeaderFile, "go-header-file", "",
 		"the path to a file containing boilerplate header text; the string \"YEAR\" will be replaced with the current 4-digit year")
 }

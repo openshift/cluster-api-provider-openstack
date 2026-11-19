@@ -49,14 +49,8 @@ func usernsRemap() bool {
 }
 
 // mountDevMapper checks if the Docker storage driver is Btrfs or ZFS
-// or if the backing filesystem is Btrfs.
-// Rootless Docker cannot create device nodes, so skip the mount.
+// or if the backing filesystem is Btrfs
 func mountDevMapper() bool {
-	i, err := info()
-	if err == nil && i != nil && i.Rootless {
-		return false
-	}
-
 	storage := ""
 	// check the docker storage driver
 	cmd := exec.Command("docker", "info", "-f", "{{.Driver}}")

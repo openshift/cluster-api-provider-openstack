@@ -7,14 +7,13 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"runtime"
-	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,24 +21,20 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/pkg/errors"
 	"github.com/russross/blackfriday/v2"
-	"k8s.io/gengo/v2"
-	"k8s.io/gengo/v2/parser"
-	"k8s.io/gengo/v2/types"
-	"k8s.io/klog/v2"
+	"k8s.io/gengo/parser"
+	"k8s.io/gengo/types"
+	"k8s.io/klog"
 )
 
 var (
 	flConfig      = flag.String("config", "", "path to config file")
 	flAPIDir      = flag.String("api-dir", "", "api directory (or import path), point this to pkg/apis")
 	flTemplateDir = flag.String("template-dir", "template", "path to template/ dir")
-	flVersion     = flag.Bool("version", false, "print version and exit")
 
 	flHTTPAddr = flag.String("http-addr", "", "start an HTTP server on specified addr to view the result (e.g. :8080)")
 	flOutFile  = flag.String("out-file", "", "path to output file to save the result")
-
-	// set by go build
-	version string
 )
 
 const (
@@ -89,14 +84,6 @@ func init() {
 	flag.Set("alsologtostderr", "true") // for klog
 	flag.Parse()
 
-	commitHash, commitTime, dirtyBuild := getBuildInfo()
-	arch := fmt.Sprintf("%v/%v", runtime.GOOS, runtime.GOARCH)
-
-	if *flVersion {
-		fmt.Printf("gen-crd-api-reference-docs version=%s commit=%s date=%s dirty=%v arch=%s go=%v\n", version, commitHash, commitTime, dirtyBuild, arch, runtime.Version())
-		os.Exit(0)
-	}
-
 	if *flConfig == "" {
 		panic("-config not specified")
 	}
@@ -112,6 +99,7 @@ func init() {
 	if err := resolveTemplateDir(*flTemplateDir); err != nil {
 		panic(err)
 	}
+
 }
 
 func resolveTemplateDir(dir string) error {
@@ -120,9 +108,9 @@ func resolveTemplateDir(dir string) error {
 		return err
 	}
 	if fi, err := os.Stat(path); err != nil {
-		return fmt.Errorf("cannot read the %s directory: %w", path, err)
+		return errors.Wrapf(err, "cannot read the %s directory", path)
 	} else if !fi.IsDir() {
-		return fmt.Errorf("%s path is not a directory", path)
+		return errors.Errorf("%s path is not a directory", path)
 	}
 	return nil
 }
@@ -159,7 +147,7 @@ func main() {
 		var b bytes.Buffer
 		err := render(&b, apiPackages, config)
 		if err != nil {
-			return "", fmt.Errorf("failed to render the result: %w", err)
+			return "", errors.Wrap(err, "failed to render the result")
 		}
 
 		// remove trailing whitespace from each html line for markdown renderers
@@ -169,14 +157,14 @@ func main() {
 
 	if *flOutFile != "" {
 		dir := filepath.Dir(*flOutFile)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0755); err != nil {
 			klog.Fatalf("failed to create dir %s: %v", dir, err)
 		}
 		s, err := mkOutput()
 		if err != nil {
 			klog.Fatalf("failed: %+v", err)
 		}
-		if err := os.WriteFile(*flOutFile, []byte(s), 0o644); err != nil {
+		if err := ioutil.WriteFile(*flOutFile, []byte(s), 0644); err != nil {
 			klog.Fatalf("failed to write to out file: %v", err)
 		}
 		klog.Infof("written to %s", *flOutFile)
@@ -204,7 +192,7 @@ func main() {
 // groupName extracts the "//+groupName" meta-comment from the specified
 // package's comments, or returns empty string if it cannot be found.
 func groupName(pkg *types.Package) string {
-	m := gengo.ExtractCommentTags("+", pkg.Comments)
+	m := types.ExtractCommentTags("+", pkg.Comments)
 	v := m["groupName"]
 	if len(v) == 1 {
 		return v[0]
@@ -213,42 +201,38 @@ func groupName(pkg *types.Package) string {
 }
 
 func parseAPIPackages(dir string) ([]*types.Package, error) {
-	p := parser.New()
-
-	pkgsFound, errFind := p.FindPackages(dir + "/...")
-	if errFind != nil {
-		return nil, fmt.Errorf("failed to find packages in %s: %w", dir, errFind)
+	b := parser.New()
+	// the following will silently fail (turn on -v=4 to see logs)
+	if err := b.AddDirRecursive(*flAPIDir); err != nil {
+		return nil, err
 	}
-	klog.Infof("found %d packages", len(pkgsFound))
-
-	errLoad := p.LoadPackages(pkgsFound...)
-	if errLoad != nil {
-		return nil, fmt.Errorf("failed to load packages: %w", errLoad)
-	}
-
-	scan, err := p.NewUniverse()
+	scan, err := b.FindTypes()
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse pkgs and types: %w", err)
+		return nil, errors.Wrap(err, "failed to parse pkgs and types")
 	}
-
-	var pkgs []*types.Package
-	for _, pkg := range scan {
-
+	var pkgNames []string
+	for p := range scan {
+		pkg := scan[p]
 		klog.V(3).Infof("trying package=%v groupName=%s", p, groupName(pkg))
 
 		// Do not pick up packages that are in vendor/ as API packages. (This
 		// happened in knative/eventing-sources/vendor/..., where a package
 		// matched the pattern, but it didn't have a compatible import path).
 		if isVendorPackage(pkg) {
-			klog.V(3).Infof("package=%v coming from vendor/, ignoring.", pkg.Name)
+			klog.V(3).Infof("package=%v coming from vendor/, ignoring.", p)
 			continue
 		}
 
 		if groupName(pkg) != "" && len(pkg.Types) > 0 || containsString(pkg.DocComments, docCommentForceIncludes) {
-			klog.V(3).Infof("package=%v has groupName and has types", pkg.Name)
-			klog.Info("using package=", pkg.Name)
-			pkgs = append(pkgs, pkg)
+			klog.V(3).Infof("package=%v has groupName and has types", p)
+			pkgNames = append(pkgNames, p)
 		}
+	}
+	sort.Strings(pkgNames)
+	var pkgs []*types.Package
+	for _, p := range pkgNames {
+		klog.Infof("using package=%s", p)
+		pkgs = append(pkgs, scan[p])
 	}
 	return pkgs, nil
 }
@@ -281,7 +265,7 @@ func combineAPIPackages(pkgs []*types.Package) ([]*apiPackage, error) {
 	for _, pkg := range pkgs {
 		apiGroup, apiVersion, err := apiVersionForPackage(pkg)
 		if err != nil {
-			return nil, fmt.Errorf("could not get apiVersion for package %s: %w", pkg.Path, err)
+			return nil, errors.Wrapf(err, "could not get apiVersion for package %s", pkg.Path)
 		}
 
 		typeList := make([]*types.Type, 0, len(pkg.Types))
@@ -319,7 +303,7 @@ func combineAPIPackages(pkgs []*types.Package) ([]*apiPackage, error) {
 // isVendorPackage determines if package is coming from vendor/ dir.
 func isVendorPackage(pkg *types.Package) bool {
 	vendorPattern := string(os.PathSeparator) + "vendor" + string(os.PathSeparator)
-	return strings.Contains(pkg.Dir, vendorPattern)
+	return strings.Contains(pkg.SourcePath, vendorPattern)
 }
 
 func findTypeReferences(pkgs []*apiPackage) map[*types.Type][]*types.Type {
@@ -421,7 +405,7 @@ func linkForType(t *types.Type, c generatorConfig, typePkgMap map[*types.Type]*a
 		return "#" + anchorIDForLocalType(t, typePkgMap), nil
 	}
 
-	arrIndex := func(a []string, i int) string {
+	var arrIndex = func(a []string, i int) string {
 		return a[(len(a)+i)%len(a)]
 	}
 
@@ -435,7 +419,7 @@ func linkForType(t *types.Type, c generatorConfig, typePkgMap map[*types.Type]*a
 		for _, v := range c.ExternalPackages {
 			r, err := regexp.Compile(v.TypeMatchPrefix)
 			if err != nil {
-				return "", fmt.Errorf("pattern %q failed to compile: %w", v.TypeMatchPrefix, err)
+				return "", errors.Wrapf(err, "pattern %q failed to compile", v.TypeMatchPrefix)
 			}
 			if r.MatchString(id) {
 				tpl, err := texttemplate.New("").Funcs(map[string]interface{}{
@@ -443,7 +427,7 @@ func linkForType(t *types.Type, c generatorConfig, typePkgMap map[*types.Type]*a
 					"arrIndex": arrIndex,
 				}).Parse(v.DocsURLTemplate)
 				if err != nil {
-					return "", fmt.Errorf("docs URL template failed to parse: %w", err)
+					return "", errors.Wrap(err, "docs URL template failed to parse")
 				}
 
 				var b bytes.Buffer
@@ -453,7 +437,7 @@ func linkForType(t *types.Type, c generatorConfig, typePkgMap map[*types.Type]*a
 						"PackagePath":     t.Name.Package,
 						"PackageSegments": segments,
 					}); err != nil {
-					return "", fmt.Errorf("docs url template execution error: %w", err)
+					return "", errors.Wrap(err, "docs url template execution error")
 				}
 				return b.String(), nil
 			}
@@ -490,28 +474,21 @@ func typeDisplayName(t *types.Type, c generatorConfig, typePkgMap map[*types.Typ
 		s = tryDereference(t).Name.Name
 	}
 
+	if t.Kind == types.Pointer {
+		s = strings.TrimLeft(s, "*")
+	}
+
 	switch t.Kind {
 	case types.Struct,
 		types.Interface,
 		types.Alias,
+		types.Pointer,
+		types.Slice,
 		types.Builtin:
 		// noop
-
-	case types.Pointer:
-		// Use the display name of the element of the pointer as the display name of the pointer.
-		return typeDisplayName(t.Elem, c, typePkgMap)
-
-	case types.Slice:
-		// Use the display name of the element of the slice to build the display name of the slice.
-		elemName := typeDisplayName(t.Elem, c, typePkgMap)
-		return fmt.Sprintf("[]%s", elemName)
-
 	case types.Map:
-		// Use the display names of the key and element types of the map to build the display name of the map.
-		keyName := typeDisplayName(t.Key, c, typePkgMap)
-		elemName := typeDisplayName(t.Elem, c, typePkgMap)
-		return fmt.Sprintf("map[%s]%s", keyName, elemName)
-
+		// return original name
+		return t.Name.Name
 	case types.DeclarationOf:
 		// For constants, we want to display the value
 		// rather than the name of the constant, since the
@@ -526,9 +503,7 @@ func typeDisplayName(t *types.Type, c generatorConfig, typePkgMap map[*types.Typ
 
 			return *t.ConstValue
 		}
-
 		klog.Fatalf("type %s is a non-const declaration, which is unhandled", t.Name)
-
 	default:
 		klog.Fatalf("type %s has kind=%v which is unhandled", t.Name, t.Kind)
 	}
@@ -538,6 +513,10 @@ func typeDisplayName(t *types.Type, c generatorConfig, typePkgMap map[*types.Typ
 		if strings.HasPrefix(s, prefix) {
 			s = strings.Replace(s, prefix, replacement, 1)
 		}
+	}
+
+	if t.Kind == types.Slice {
+		s = "[]" + s
 	}
 
 	return s
@@ -613,7 +592,7 @@ func filterCommentTags(comments []string) []string {
 }
 
 func isOptionalMember(m types.Member) bool {
-	tags := gengo.ExtractCommentTags("+", m.CommentLines)
+	tags := types.ExtractCommentTags("+", m.CommentLines)
 	_, ok := tags["optional"]
 	return ok
 }
@@ -621,9 +600,9 @@ func isOptionalMember(m types.Member) bool {
 func apiVersionForPackage(pkg *types.Package) (string, string, error) {
 	group := groupName(pkg)
 	version := pkg.Name // assumes basename (i.e. "v1" in "core/v1") is apiVersion
-	r := `^v\d+((alpha|beta|api|stable)[a-z0-9]+)?$`
+	r := `^v\d+((alpha|beta)[a-z0-9]+)?$`
 	if !regexp.MustCompile(r).MatchString(version) {
-		return "", "", fmt.Errorf("cannot infer kubernetes apiVersion of go package %s (basename %q doesn't match expected pattern %s that's used to determine apiVersion)", pkg.Path, version, r)
+		return "", "", errors.Errorf("cannot infer kubernetes apiVersion of go package %s (basename %q doesn't match expected pattern %s that's used to determine apiVersion)", pkg.Path, version, r)
 	}
 	return group, version, nil
 }
@@ -685,7 +664,7 @@ func render(w io.Writer, pkgs []*apiPackage, config generatorConfig) error {
 		"apiGroup":           func(t *types.Type) string { return apiGroupForType(t, typePkgMap) },
 		"packageAnchorID": func(p *apiPackage) string {
 			// TODO(ahmetb): currently this is the same as packageDisplayName
-			// func, and it's fine since it returns valid DOM id strings like
+			// func, and it's fine since it retuns valid DOM id strings like
 			// 'serving.knative.dev/v1alpha1' which is valid per HTML5, except
 			// spaces, so just trim those.
 			return strings.Replace(p.identifier(), " ", "", -1)
@@ -693,7 +672,7 @@ func render(w io.Writer, pkgs []*apiPackage, config generatorConfig) error {
 		"linkForType": func(t *types.Type) string {
 			v, err := linkForType(t, config, typePkgMap)
 			if err != nil {
-				klog.Fatal(fmt.Errorf("error getting link for type=%s: %w", t.Name, err))
+				klog.Fatal(errors.Wrapf(err, "error getting link for type=%s", t.Name))
 				return ""
 			}
 			return v
@@ -708,7 +687,7 @@ func render(w io.Writer, pkgs []*apiPackage, config generatorConfig) error {
 		"constantsOfType":  func(t *types.Type) []*types.Type { return constantsOfType(t, typePkgMap[t]) },
 	}).ParseGlob(filepath.Join(*flTemplateDir, "*.tpl"))
 	if err != nil {
-		return fmt.Errorf("parse error: %w", err)
+		return errors.Wrap(err, "parse error")
 	}
 
 	var gitCommit []byte
@@ -716,33 +695,9 @@ func render(w io.Writer, pkgs []*apiPackage, config generatorConfig) error {
 		gitCommit, _ = exec.Command("git", "rev-parse", "--short", "HEAD").Output()
 	}
 
-	if err := t.ExecuteTemplate(w, "packages", map[string]interface{}{
+	return errors.Wrap(t.ExecuteTemplate(w, "packages", map[string]interface{}{
 		"packages":  pkgs,
 		"config":    config,
 		"gitCommit": strings.TrimSpace(string(gitCommit)),
-	}); err != nil {
-		return fmt.Errorf("template execution error: %w", err)
-	}
-
-	return nil
-}
-
-func getBuildInfo() (string, string, bool) {
-	var commitHash, commitTime string
-	var dirtyBuild bool
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		return "", "", false
-	}
-	for _, kv := range info.Settings {
-		switch kv.Key {
-		case "vcs.revision":
-			commitHash = kv.Value
-		case "vcs.time":
-			commitTime = kv.Value
-		case "vcs.modified":
-			dirtyBuild = kv.Value == "true"
-		}
-	}
-	return commitHash, commitTime, dirtyBuild
+	}), "template execution error")
 }
