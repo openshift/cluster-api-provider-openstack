@@ -33,9 +33,7 @@ spec:
       value:
         enabled: ${OPENSTACK_BASTION_ENABLED:=false}
         spec:
-          flavor:
-            filter:
-              name: ${OPENSTACK_BASTION_FLAVOR:=m1.small}
+          flavor: ${OPENSTACK_BASTION_FLAVOR:=m1.small}
           image:
             imageRef:
               name: bastion-image

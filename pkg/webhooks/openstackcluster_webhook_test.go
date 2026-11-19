@@ -20,22 +20,22 @@ import (
 	"context"
 	"testing"
 
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega" //nolint:revive
 	"k8s.io/utils/ptr"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 )
 
 func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 	tests := []struct {
-		name       string
-		oldCluster *infrav1.OpenStackCluster
-		newCluster *infrav1.OpenStackCluster
-		wantErr    bool
+		name        string
+		oldTemplate *infrav1.OpenStackCluster
+		newTemplate *infrav1.OpenStackCluster
+		wantErr     bool
 	}{
 		{
 			name: "Changing OpenStackCluster.Spec.IdentityRef.Name is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -43,7 +43,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobarbaz",
@@ -55,7 +55,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Changing OpenStackCluster.Spec.IdentityRef.CloudName is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -63,7 +63,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -75,7 +75,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Changing OpenStackCluster.Spec.Bastion is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -88,11 +88,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 									Name: ptr.To("foobar"),
 								},
 							},
-							Flavor: infrav1.FlavorParam{
-								Filter: &infrav1.FlavorFilter{
-									Name: ptr.To("minimal"),
-								},
-							},
+							Flavor: ptr.To("minimal"),
 						},
 						Enabled: ptr.To(true),
 					},
@@ -103,7 +99,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -116,11 +112,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 									Name: ptr.To("foobarbaz"),
 								},
 							},
-							Flavor: infrav1.FlavorParam{
-								Filter: &infrav1.FlavorFilter{
-									Name: ptr.To("medium"),
-								},
-							},
+							Flavor: ptr.To("medium"),
 						},
 						Enabled: ptr.To(true),
 					},
@@ -129,20 +121,20 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "Changing security group rules on the OpenStackCluster.Spec.ManagedSecurityGroups.ClusterNodesSecurityGroupRules is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			name: "Changing security group rules on the OpenStackCluster.Spec.ManagedSecurityGroups.AllNodesSecurityGroupRules is allowed",
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
 					ManagedSecurityGroups: &infrav1.ManagedSecurityGroups{
-						ClusterNodesSecurityGroupRules: []infrav1.SecurityGroupRuleSpec{
+						AllNodesSecurityGroupRules: []infrav1.SecurityGroupRuleSpec{
 							{
 								Name:                "foobar",
 								Description:         ptr.To("foobar"),
-								PortRangeMin:        ptr.To[int32](80),
-								PortRangeMax:        ptr.To[int32](80),
+								PortRangeMin:        ptr.To(80),
+								PortRangeMax:        ptr.To(80),
 								Protocol:            ptr.To("tcp"),
 								RemoteManagedGroups: []infrav1.ManagedSecurityGroupName{"controlplane"},
 							},
@@ -150,19 +142,19 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
 					ManagedSecurityGroups: &infrav1.ManagedSecurityGroups{
-						ClusterNodesSecurityGroupRules: []infrav1.SecurityGroupRuleSpec{
+						AllNodesSecurityGroupRules: []infrav1.SecurityGroupRuleSpec{
 							{
 								Name:                "foobar",
 								Description:         ptr.To("foobar"),
-								PortRangeMin:        ptr.To[int32](80),
-								PortRangeMax:        ptr.To[int32](80),
+								PortRangeMin:        ptr.To(80),
+								PortRangeMax:        ptr.To(80),
 								Protocol:            ptr.To("tcp"),
 								RemoteManagedGroups: []infrav1.ManagedSecurityGroupName{"controlplane", "worker"},
 							},
@@ -174,7 +166,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Changing security group rules on the OpenStackCluster.Spec.ManagedSecurityGroups.ControlPlaneNodesSecurityGroupRules is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -185,8 +177,8 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 							{
 								Name:                "foobar",
 								Description:         ptr.To("foobar"),
-								PortRangeMin:        ptr.To[int32](80),
-								PortRangeMax:        ptr.To[int32](80),
+								PortRangeMin:        ptr.To(80),
+								PortRangeMax:        ptr.To(80),
 								Protocol:            ptr.To("tcp"),
 								RemoteManagedGroups: []infrav1.ManagedSecurityGroupName{"controlplane"},
 							},
@@ -194,7 +186,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -205,8 +197,8 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 							{
 								Name:                "foobar",
 								Description:         ptr.To("foobar"),
-								PortRangeMin:        ptr.To[int32](80),
-								PortRangeMax:        ptr.To[int32](80),
+								PortRangeMin:        ptr.To(80),
+								PortRangeMax:        ptr.To(80),
 								Protocol:            ptr.To("tcp"),
 								RemoteManagedGroups: []infrav1.ManagedSecurityGroupName{"controlplane", "worker"},
 							},
@@ -218,7 +210,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Changing security group rules on the OpenStackCluster.Spec.ManagedSecurityGroups.WorkerNodesSecurityGroupRules is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -229,8 +221,8 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 							{
 								Name:                "foobar",
 								Description:         ptr.To("foobar"),
-								PortRangeMin:        ptr.To[int32](80),
-								PortRangeMax:        ptr.To[int32](80),
+								PortRangeMin:        ptr.To(80),
+								PortRangeMax:        ptr.To(80),
 								Protocol:            ptr.To("tcp"),
 								RemoteManagedGroups: []infrav1.ManagedSecurityGroupName{"worker"},
 							},
@@ -238,7 +230,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -249,8 +241,8 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 							{
 								Name:                "foobar",
 								Description:         ptr.To("foobar"),
-								PortRangeMin:        ptr.To[int32](80),
-								PortRangeMax:        ptr.To[int32](80),
+								PortRangeMin:        ptr.To(80),
+								PortRangeMax:        ptr.To(80),
 								Protocol:            ptr.To("tcp"),
 								RemoteManagedGroups: []infrav1.ManagedSecurityGroupName{"worker", "controlplane"},
 							},
@@ -261,71 +253,34 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "Mutually exclusive security group rule fields on update are rejected",
-			oldCluster: &infrav1.OpenStackCluster{
-				Spec: infrav1.OpenStackClusterSpec{
-					IdentityRef: infrav1.OpenStackIdentityReference{
-						Name:      "foobar",
-						CloudName: "foobar",
-					},
-					ManagedSecurityGroups: &infrav1.ManagedSecurityGroups{},
-				},
-			},
-			newCluster: &infrav1.OpenStackCluster{
-				Spec: infrav1.OpenStackClusterSpec{
-					IdentityRef: infrav1.OpenStackIdentityReference{
-						Name:      "foobar",
-						CloudName: "foobar",
-					},
-					ManagedSecurityGroups: &infrav1.ManagedSecurityGroups{
-						ClusterNodesSecurityGroupRules: []infrav1.SecurityGroupRuleSpec{
-							{
-								Name:                "bad-rule",
-								Protocol:            ptr.To("tcp"),
-								PortRangeMin:        ptr.To[int32](80),
-								PortRangeMax:        ptr.To[int32](80),
-								RemoteManagedGroups: []infrav1.ManagedSecurityGroupName{"controlplane"},
-								RemoteGroupID:       ptr.To("some-group-id"),
-							},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
 			name: "Changing CIDRs on the OpenStackCluster.Spec.APIServerLoadBalancer.AllowedCIDRs is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
-					APIServer: &infrav1.APIServer{
-						ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{
-							Enabled: ptr.To(true),
-							AllowedCIDRs: []string{
-								"0.0.0.0/0",
-								"192.168.10.0/24",
-							},
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						Enabled: ptr.To(true),
+						AllowedCIDRs: []string{
+							"0.0.0.0/0",
+							"192.168.10.0/24",
 						},
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
-					APIServer: &infrav1.APIServer{
-						ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{
-							Enabled: ptr.To(true),
-							AllowedCIDRs: []string{
-								"0.0.0.0/0",
-								"192.168.10.0/24",
-								"10.6.0.0/16",
-							},
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						Enabled: ptr.To(true),
+						AllowedCIDRs: []string{
+							"0.0.0.0/0",
+							"192.168.10.0/24",
+							"10.6.0.0/16",
 						},
 					},
 				},
@@ -334,7 +289,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Adding OpenStackCluster.Spec.ControlPlaneAvailabilityZones is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -342,7 +297,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -358,7 +313,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Modifying OpenStackCluster.Spec.ControlPlaneAvailabilityZones is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -370,7 +325,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -387,7 +342,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Removing OpenStackCluster.Spec.ControlPlaneAvailabilityZones is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -399,7 +354,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -411,7 +366,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Modifying OpenstackCluster.Spec.ControlPlaneOmitAvailabilityZone is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -419,7 +374,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -431,112 +386,97 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "Changing OpenStackCluster.Spec.APIServer.FixedIP is allowed when API Server Floating IP is disabled",
-			oldCluster: &infrav1.OpenStackCluster{
+			name: "Changing OpenStackCluster.Spec.APIServerFixedIP is allowed when API Server Floating IP is disabled",
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
-					APIServer: &infrav1.APIServer{
-						EnableFloatingIP: ptr.To(false),
-					},
+					DisableAPIServerFloatingIP: ptr.To(true),
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
-					APIServer: &infrav1.APIServer{
-						EnableFloatingIP: ptr.To(false),
-						FixedIP:          ptr.To("20.1.56.1"),
-					},
+					DisableAPIServerFloatingIP: ptr.To(true),
+					APIServerFixedIP:           ptr.To("20.1.56.1"),
 				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "Changing OpenStackCluster.Spec.APIServer.FixedIP is not allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			name: "Changing OpenStackCluster.Spec.APIServerFixedIP is not allowed",
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
-					APIServer: &infrav1.APIServer{
-						EnableFloatingIP: ptr.To(true),
-					},
+					DisableAPIServerFloatingIP: ptr.To(false),
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
-					APIServer: &infrav1.APIServer{
-						EnableFloatingIP: ptr.To(true),
-						FixedIP:          ptr.To("20.1.56.1"),
-					},
+					DisableAPIServerFloatingIP: ptr.To(false),
+					APIServerFixedIP:           ptr.To("20.1.56.1"),
 				},
 			},
 			wantErr: true,
 		},
+
 		{
-			name: "Changing OpenStackCluster.Spec.APIServer.Port is allowed when API Server Floating IP is disabled",
-			oldCluster: &infrav1.OpenStackCluster{
+			name: "Changing OpenStackCluster.Spec.APIServerPort is allowed when API Server Floating IP is disabled",
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
-					APIServer: &infrav1.APIServer{
-						EnableFloatingIP: ptr.To(false),
-					},
+					DisableAPIServerFloatingIP: ptr.To(true),
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						EnableFloatingIP: ptr.To(false),
-						Port:             ptr.To(uint16(8443)),
-					},
+					DisableAPIServerFloatingIP: ptr.To(true),
+					APIServerPort:              ptr.To(uint16(8443)),
 				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "Changing OpenStackCluster.Spec.APIServer.Port is not allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			name: "Changing OpenStackCluster.Spec.APIServerPort is not allowed",
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
-					APIServer: &infrav1.APIServer{
-						EnableFloatingIP: ptr.To(true),
-					},
+					DisableAPIServerFloatingIP: ptr.To(false),
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
-					APIServer: &infrav1.APIServer{
-						EnableFloatingIP: ptr.To(true),
-						Port:             ptr.To(uint16(8443)),
-					},
+					DisableAPIServerFloatingIP: ptr.To(false),
+					APIServerPort:              ptr.To(uint16(8443)),
 				},
 			},
 			wantErr: true,
 		},
 		{
-			name: "Changing OpenStackCluster.Spec.APIServer.FloatingIP is allowed when it matches the current api server loadbalancer IP",
-			oldCluster: &infrav1.OpenStackCluster{
+			name: "Changing OpenStackCluster.Spec.APIServerFloatingIP is allowed when it matches the current api server loadbalancer IP",
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -544,23 +484,21 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 				Status: infrav1.OpenStackClusterStatus{
-					APIServerManagedLoadBalancer: &infrav1.LoadBalancer{
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
 						IP: "1.2.3.4",
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
-					APIServer: &infrav1.APIServer{
-						FloatingIP: ptr.To("1.2.3.4"),
-					},
+					APIServerFloatingIP: ptr.To("1.2.3.4"),
 				},
 				Status: infrav1.OpenStackClusterStatus{
-					APIServerManagedLoadBalancer: &infrav1.LoadBalancer{
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
 						IP: "1.2.3.4",
 					},
 				},
@@ -569,7 +507,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Changing OpenStackCluster.Spec.APIServerFloatingIP is not allowed when it doesn't matches the current api server loadbalancer IP",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -577,23 +515,21 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 				Status: infrav1.OpenStackClusterStatus{
-					APIServerManagedLoadBalancer: &infrav1.LoadBalancer{
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
 						IP: "1.2.3.4",
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
-					APIServer: &infrav1.APIServer{
-						FloatingIP: ptr.To("5.6.7.8"),
-					},
+					APIServerFloatingIP: ptr.To("5.6.7.8"),
 				},
 				Status: infrav1.OpenStackClusterStatus{
-					APIServerManagedLoadBalancer: &infrav1.LoadBalancer{
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
 						IP: "1.2.3.4",
 					},
 				},
@@ -602,7 +538,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Removing OpenStackCluster.Spec.Bastion when it is enabled is not allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -611,11 +547,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					Bastion: &infrav1.Bastion{
 						Enabled: ptr.To(true),
 						Spec: &infrav1.OpenStackMachineSpec{
-							Flavor: infrav1.FlavorParam{
-								Filter: &infrav1.FlavorFilter{
-									Name: ptr.To("m1.small"),
-								},
-							},
+							Flavor: ptr.To("m1.small"),
 							Image: infrav1.ImageParam{
 								Filter: &infrav1.ImageFilter{
 									Name: ptr.To("ubuntu"),
@@ -625,7 +557,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -637,7 +569,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Removing OpenStackCluster.Spec.Bastion when it is disabled is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -646,11 +578,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					Bastion: &infrav1.Bastion{
 						Enabled: ptr.To(false),
 						Spec: &infrav1.OpenStackMachineSpec{
-							Flavor: infrav1.FlavorParam{
-								Filter: &infrav1.FlavorFilter{
-									Name: ptr.To("m1.small"),
-								},
-							},
+							Flavor: ptr.To("m1.small"),
 							Image: infrav1.ImageParam{
 								Filter: &infrav1.ImageFilter{
 									Name: ptr.To("ubuntu"),
@@ -660,7 +588,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -672,7 +600,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Switching OpenStackCluster.Spec.Network from filter.name to id is allowed when they refer to the same network",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -693,7 +621,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -716,7 +644,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Switching OpenStackCluster.Spec.Network from filter.name to id is not allowed when they refer to different networks",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -737,7 +665,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -760,7 +688,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Switching OpenStackCluster.Spec.Subnets from filter.name to id is allowed when they refer to the same subnet",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -792,7 +720,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -826,7 +754,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Switching OpenStackCluster.Spec.Subnets from filter.name to id is not allowed when they refer to different subnets",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -858,7 +786,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -892,7 +820,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Switching one OpenStackCluster.Spec.Subnets entry from filter to a mismatched ID (from another subnet) should be rejected, even if other subnets remain unchanged",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -933,7 +861,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -977,7 +905,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 
 		{
 			name: "Changing OpenStackCluster.Spec.ManagedSubnets.DNSNameservers is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1000,7 +928,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1027,7 +955,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Adding new DNSNameserver to OpenStackCluster.Spec.ManagedSubnets.DNSNameservers is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1049,7 +977,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1076,7 +1004,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Removing DNSNameservers from OpenStackCluster.Spec.ManagedSubnets is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1099,7 +1027,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1123,7 +1051,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Multiple subnets with DNSNameservers changes are allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1157,7 +1085,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1195,7 +1123,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Changing CIDR in OpenStackCluster.Spec.ManagedSubnets is not allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1217,7 +1145,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1243,7 +1171,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Modifying AllocationPools in OpenStackCluster.Spec.ManagedSubnets is not allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1265,7 +1193,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1291,7 +1219,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Adding a new subnet to OpenStackCluster.Spec.ManagedSubnets is not allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1313,7 +1241,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1351,7 +1279,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 		},
 		{
 			name: "Removing a subnet from OpenStackCluster.Spec.ManagedSubnets is not allowed",
-			oldCluster: &infrav1.OpenStackCluster{
+			oldTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1385,7 +1313,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 					},
 				},
 			},
-			newCluster: &infrav1.OpenStackCluster{
+			newTemplate: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1409,78 +1337,6 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 			},
 			wantErr: true,
 		},
-		{
-			name: "Setting PrimarySubnet is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
-				Spec: infrav1.OpenStackClusterSpec{
-					IdentityRef: infrav1.OpenStackIdentityReference{
-						Name:      "foobar",
-						CloudName: "foobar",
-					},
-				},
-			},
-			newCluster: &infrav1.OpenStackCluster{
-				Spec: infrav1.OpenStackClusterSpec{
-					IdentityRef: infrav1.OpenStackIdentityReference{
-						Name:      "foobar",
-						CloudName: "foobar",
-					},
-					PrimarySubnet: &infrav1.SubnetParam{
-						ID: ptr.To("aaaaaaaa-bbbb-cccc-dddd-111111111111"),
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "Changing PrimarySubnet is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
-				Spec: infrav1.OpenStackClusterSpec{
-					IdentityRef: infrav1.OpenStackIdentityReference{
-						Name:      "foobar",
-						CloudName: "foobar",
-					},
-					PrimarySubnet: &infrav1.SubnetParam{
-						ID: ptr.To("aaaaaaaa-bbbb-cccc-dddd-111111111111"),
-					},
-				},
-			},
-			newCluster: &infrav1.OpenStackCluster{
-				Spec: infrav1.OpenStackClusterSpec{
-					IdentityRef: infrav1.OpenStackIdentityReference{
-						Name:      "foobar",
-						CloudName: "foobar",
-					},
-					PrimarySubnet: &infrav1.SubnetParam{
-						ID: ptr.To("aaaaaaaa-bbbb-cccc-dddd-222222222222"),
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "Clearing PrimarySubnet is allowed",
-			oldCluster: &infrav1.OpenStackCluster{
-				Spec: infrav1.OpenStackClusterSpec{
-					IdentityRef: infrav1.OpenStackIdentityReference{
-						Name:      "foobar",
-						CloudName: "foobar",
-					},
-					PrimarySubnet: &infrav1.SubnetParam{
-						ID: ptr.To("aaaaaaaa-bbbb-cccc-dddd-111111111111"),
-					},
-				},
-			},
-			newCluster: &infrav1.OpenStackCluster{
-				Spec: infrav1.OpenStackClusterSpec{
-					IdentityRef: infrav1.OpenStackIdentityReference{
-						Name:      "foobar",
-						CloudName: "foobar",
-					},
-				},
-			},
-			wantErr: false,
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1488,7 +1344,7 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 			ctx := context.TODO()
 
 			webhook := &openStackClusterWebhook{}
-			warn, err := webhook.ValidateUpdate(ctx, tt.oldCluster, tt.newCluster)
+			warn, err := webhook.ValidateUpdate(ctx, tt.oldTemplate, tt.newTemplate)
 			if tt.wantErr {
 				g.Expect(err).To(HaveOccurred())
 			} else {
@@ -1502,13 +1358,13 @@ func TestOpenStackCluster_ValidateUpdate(t *testing.T) {
 
 func TestOpenStackCluster_ValidateCreate(t *testing.T) {
 	tests := []struct {
-		name    string
-		cluster *infrav1.OpenStackCluster
-		wantErr bool
+		name     string
+		template *infrav1.OpenStackCluster
+		wantErr  bool
 	}{
 		{
 			name: "OpenStackCluster.Spec.IdentityRef with correct spec on create",
-			cluster: &infrav1.OpenStackCluster{
+			template: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
@@ -1519,20 +1375,20 @@ func TestOpenStackCluster_ValidateCreate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "OpenStackCluster.Spec.ManagedSecurityGroups.ClusterNodesSecurityGroupRules with correct spec on create",
-			cluster: &infrav1.OpenStackCluster{
+			name: "OpenStackCluster.Spec.ManagedSecurityGroups.AllNodesSecurityGroupRules with correct spec on create",
+			template: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
 					ManagedSecurityGroups: &infrav1.ManagedSecurityGroups{
-						ClusterNodesSecurityGroupRules: []infrav1.SecurityGroupRuleSpec{
+						AllNodesSecurityGroupRules: []infrav1.SecurityGroupRuleSpec{
 							{
 								Name:         "foobar",
 								Description:  ptr.To("foobar"),
-								PortRangeMin: ptr.To[int32](80),
-								PortRangeMax: ptr.To[int32](80),
+								PortRangeMin: ptr.To(80),
+								PortRangeMax: ptr.To(80),
 								Protocol:     ptr.To("tcp"),
 							},
 						},
@@ -1542,71 +1398,23 @@ func TestOpenStackCluster_ValidateCreate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "OpenStackCluster.Spec.ManagedSecurityGroups.ClusterNodesSecurityGroupRules with mutually exclusive fields on create",
-			cluster: &infrav1.OpenStackCluster{
+			name: "OpenStackCluster.Spec.ManagedSecurityGroups.AllNodesSecurityGroupRules with mutually exclusive fields on create",
+			template: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
 					IdentityRef: infrav1.OpenStackIdentityReference{
 						Name:      "foobar",
 						CloudName: "foobar",
 					},
 					ManagedSecurityGroups: &infrav1.ManagedSecurityGroups{
-						ClusterNodesSecurityGroupRules: []infrav1.SecurityGroupRuleSpec{
+						AllNodesSecurityGroupRules: []infrav1.SecurityGroupRuleSpec{
 							{
 								Name:                "foobar",
 								Description:         ptr.To("foobar"),
-								PortRangeMin:        ptr.To[int32](80),
-								PortRangeMax:        ptr.To[int32](80),
+								PortRangeMin:        ptr.To(80),
+								PortRangeMax:        ptr.To(80),
 								Protocol:            ptr.To("tcp"),
 								RemoteManagedGroups: []infrav1.ManagedSecurityGroupName{"controlplane"},
 								RemoteGroupID:       ptr.To("foobar"),
-							},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "ControlPlane security group rules with mutually exclusive fields on create",
-			cluster: &infrav1.OpenStackCluster{
-				Spec: infrav1.OpenStackClusterSpec{
-					IdentityRef: infrav1.OpenStackIdentityReference{
-						Name:      "foobar",
-						CloudName: "foobar",
-					},
-					ManagedSecurityGroups: &infrav1.ManagedSecurityGroups{
-						ControlPlaneNodesSecurityGroupRules: []infrav1.SecurityGroupRuleSpec{
-							{
-								Name:                "bad-cp-rule",
-								Protocol:            ptr.To("tcp"),
-								PortRangeMin:        ptr.To[int32](443),
-								PortRangeMax:        ptr.To[int32](443),
-								RemoteManagedGroups: []infrav1.ManagedSecurityGroupName{"controlplane"},
-								RemoteIPPrefix:      ptr.To("10.0.0.0/8"),
-							},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "Worker security group rules with mutually exclusive fields on create",
-			cluster: &infrav1.OpenStackCluster{
-				Spec: infrav1.OpenStackClusterSpec{
-					IdentityRef: infrav1.OpenStackIdentityReference{
-						Name:      "foobar",
-						CloudName: "foobar",
-					},
-					ManagedSecurityGroups: &infrav1.ManagedSecurityGroups{
-						WorkerNodesSecurityGroupRules: []infrav1.SecurityGroupRuleSpec{
-							{
-								Name:           "bad-worker-rule",
-								Protocol:       ptr.To("tcp"),
-								PortRangeMin:   ptr.To[int32](80),
-								PortRangeMax:   ptr.To[int32](80),
-								RemoteGroupID:  ptr.To("some-group"),
-								RemoteIPPrefix: ptr.To("10.0.0.0/8"),
 							},
 						},
 					},
@@ -1621,7 +1429,7 @@ func TestOpenStackCluster_ValidateCreate(t *testing.T) {
 			ctx := context.TODO()
 
 			webhook := &openStackClusterWebhook{}
-			warn, err := webhook.ValidateCreate(ctx, tt.cluster)
+			warn, err := webhook.ValidateCreate(ctx, tt.template)
 			if tt.wantErr {
 				g.Expect(err).To(HaveOccurred())
 			} else {

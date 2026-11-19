@@ -1,5 +1,5 @@
 resources:
-- ../../../../../kustomize/flatcar-sysext
+- ../../../../../kustomize/v1beta1/flatcar-sysext
 
 components:
 - ../components/cluster-resource-sets

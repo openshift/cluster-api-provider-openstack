@@ -103,21 +103,20 @@ spec:
   replicas: ${CONTROL_PLANE_MACHINE_COUNT}
   version: ${KUBERNETES_VERSION}
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackCluster
 metadata:
   name: ${CLUSTER_NAME}
 spec:
-  apiServer:
-    managedLoadBalancer:
-      enabled: true
+  apiServerLoadBalancer:
+    enabled: true
   externalNetwork:
     id: ${OPENSTACK_EXTERNAL_NETWORK_ID}
   identityRef:
     cloudName: ${OPENSTACK_CLOUD}
     name: ${CLUSTER_NAME}-cloud-config
   managedSecurityGroups:
-    clusterNodesSecurityGroupRules:
+    allNodesSecurityGroupRules:
     - description: Created by cluster-api-provider-openstack - BGP (calico)
       direction: ingress
       etherType: IPv4
@@ -141,31 +140,27 @@ spec:
     dnsNameservers:
     - ${OPENSTACK_DNS_NAMESERVERS}
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackMachineTemplate
 metadata:
   name: ${CLUSTER_NAME}-control-plane
 spec:
   template:
     spec:
-      flavor:
-        filter:
-          name: ${OPENSTACK_CONTROL_PLANE_MACHINE_FLAVOR}
+      flavor: ${OPENSTACK_CONTROL_PLANE_MACHINE_FLAVOR}
       image:
         filter:
           name: ${OPENSTACK_IMAGE_NAME}
       sshKeyName: ${OPENSTACK_SSH_KEY_NAME}
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta2
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: OpenStackMachineTemplate
 metadata:
   name: ${CLUSTER_NAME}-md-0
 spec:
   template:
     spec:
-      flavor:
-        filter:
-          name: ${OPENSTACK_NODE_MACHINE_FLAVOR}
+      flavor: ${OPENSTACK_NODE_MACHINE_FLAVOR}
       image:
         filter:
           name: ${OPENSTACK_IMAGE_NAME}

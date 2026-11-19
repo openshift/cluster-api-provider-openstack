@@ -5,7 +5,7 @@
 name: Approve GH Workflows
 
 on:
-  pull_request_target: # zizmor: ignore[dangerous-triggers]
+  pull_request_target:
     types: [ opened, edited, reopened, synchronize, ready_for_review ]
 
 permissions: {}
@@ -13,7 +13,7 @@ permissions: {}
 jobs:
   approve:
     name: Approve on ok-to-test
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
 
     permissions:
       actions: write

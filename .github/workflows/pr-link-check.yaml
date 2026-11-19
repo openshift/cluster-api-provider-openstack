@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   check-links-pr:
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-latest
 
     steps:
     - name: Clone repository
@@ -21,7 +21,6 @@ jobs:
         fetch-depth: 0
         ref: ${{github.event.pull_request.head.ref}}
         repository: ${{github.event.pull_request.head.repo.full_name}}
-        persist-credentials: false
 
     - name: Add upstream remote
       run: |
@@ -30,17 +29,12 @@ jobs:
         git fetch upstream
 
     - name: Checkout base branch
-      env:
-        BASE_REF: ${{ github.event.pull_request.base.ref }}
-      run: git checkout "upstream/${BASE_REF}"
+      run: git checkout "upstream/${{ github.event.pull_request.base.ref }}"
 
     - name: Get list of changed Markdown files
       id: changed-files
-      env:
-        BASE_REF: ${{ github.event.pull_request.base.ref }}
-        HEAD_REF: ${{ github.head_ref }}
       run: |
-        git diff --name-only "upstream/${BASE_REF}...${HEAD_REF}" -- "*.md" > changed-files.txt
+        git diff --name-only "upstream/${{ github.event.pull_request.base.ref }}...${{ github.head_ref }}" -- "*.md" > changed-files.txt
         cat changed-files.txt
         if [[ -s "changed-files.txt" ]]; then
           echo "Changed md files found"
@@ -48,9 +42,7 @@ jobs:
         fi
 
     - name: Switch to PR branch
-      env:
-        HEAD_REF: ${{ github.head_ref }}
-      run: git checkout "${HEAD_REF}"
+      run: git checkout ${{ github.head_ref }}
 
     - name: Check links in changed files
       if: env.foundFiles == 'true'
@@ -63,8 +55,6 @@ jobs:
           --fallback-extensions "md"
           --github-token "${GITHUB_TOKEN}"
           --insecure
-          --max-retries 3
-          --retry-wait-time 5
           --exclude-all-private
           --no-progress
           $(cat changed-files.txt | tr '\n' ' ')

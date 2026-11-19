@@ -50,8 +50,7 @@ import (
 	orcv1alpha1 "github.com/k-orc/openstack-resource-controller/v2/api/v1alpha1"
 
 	infrav1alpha1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha1"
-	infrav1beta1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-openstack/controllers"
 	"sigs.k8s.io/cluster-api-provider-openstack/feature"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/metrics"
@@ -108,7 +107,6 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 	_ = clusterv1.AddToScheme(scheme)
 	_ = ipamv1.AddToScheme(scheme)
-	_ = infrav1beta1.AddToScheme(scheme)
 	_ = infrav1.AddToScheme(scheme)
 	_ = infrav1alpha1.AddToScheme(scheme)
 	_ = orcv1alpha1.AddToScheme(scheme)
@@ -295,7 +293,7 @@ func main() {
 	ctx := ctrl.SetupSignalHandler()
 
 	// Initialize event recorder.
-	record.InitFromRecorder(mgr.GetEventRecorder("openstack-controller"))
+	record.InitFromRecorder(mgr.GetEventRecorderFor("openstack-controller"))
 
 	setupChecks(mgr)
 	setupReconcilers(ctx, mgr, caCerts)
@@ -324,16 +322,16 @@ func setupReconcilers(ctx context.Context, mgr ctrl.Manager, caCerts []byte) {
 	scopeFactory := scope.NewFactory(scopeCacheMaxSize)
 
 	crdMigratorConfig := map[client.Object]crdmigrator.ByObjectConfig{
-		&infrav1beta1.OpenStackCluster{}: {
+		&infrav1.OpenStackCluster{}: {
 			UseCache: true,
 		},
-		&infrav1beta1.OpenStackMachine{}: {
+		&infrav1.OpenStackMachine{}: {
 			UseCache: true,
 		},
-		&infrav1beta1.OpenStackMachineTemplate{}: {
+		&infrav1.OpenStackMachineTemplate{}: {
 			UseCache: true,
 		},
-		&infrav1beta1.OpenStackClusterTemplate{}: {
+		&infrav1.OpenStackClusterTemplate{}: {
 			UseCache: true,
 		},
 		&infrav1alpha1.OpenStackFloatingIPPool{}: {
@@ -362,7 +360,7 @@ func setupReconcilers(ctx context.Context, mgr ctrl.Manager, caCerts []byte) {
 
 	if err := (&controllers.OpenStackClusterReconciler{
 		Client:           mgr.GetClient(),
-		Recorder:         mgr.GetEventRecorder("openstackcluster-controller"),
+		Recorder:         mgr.GetEventRecorderFor("openstackcluster-controller"),
 		WatchFilterValue: watchFilterValue,
 		ScopeFactory:     scopeFactory,
 		CaCertificates:   caCerts,
@@ -372,7 +370,7 @@ func setupReconcilers(ctx context.Context, mgr ctrl.Manager, caCerts []byte) {
 	}
 	if err := (&controllers.OpenStackMachineReconciler{
 		Client:           mgr.GetClient(),
-		Recorder:         mgr.GetEventRecorder("openstackmachine-controller"),
+		Recorder:         mgr.GetEventRecorderFor("openstackmachine-controller"),
 		WatchFilterValue: watchFilterValue,
 		ScopeFactory:     scopeFactory,
 		CaCertificates:   caCerts,
@@ -382,7 +380,7 @@ func setupReconcilers(ctx context.Context, mgr ctrl.Manager, caCerts []byte) {
 	}
 	if err := (&controllers.OpenStackFloatingIPPoolReconciler{
 		Client:         mgr.GetClient(),
-		Recorder:       mgr.GetEventRecorder("floatingippool-controller"),
+		Recorder:       mgr.GetEventRecorderFor("floatingippool-controller"),
 		ScopeFactory:   scopeFactory,
 		Scheme:         mgr.GetScheme(),
 		CaCertificates: caCerts,
@@ -392,7 +390,7 @@ func setupReconcilers(ctx context.Context, mgr ctrl.Manager, caCerts []byte) {
 	}
 	if err := (&controllers.OpenStackServerReconciler{
 		Client:           mgr.GetClient(),
-		Recorder:         mgr.GetEventRecorder("openstackserver-controller"),
+		Recorder:         mgr.GetEventRecorderFor("openstackserver-controller"),
 		WatchFilterValue: watchFilterValue,
 		ScopeFactory:     scopeFactory,
 		CaCertificates:   caCerts,
@@ -405,7 +403,7 @@ func setupReconcilers(ctx context.Context, mgr ctrl.Manager, caCerts []byte) {
 	if feature.Gates.Enabled(feature.AutoScaleFromZero) {
 		if err := (&controllers.OpenStackMachineTemplateReconciler{
 			Client:           mgr.GetClient(),
-			Recorder:         mgr.GetEventRecorder("openstackmachinetemplate-controller"),
+			Recorder:         mgr.GetEventRecorderFor("openstackmachinetemplate-controller"),
 			WatchFilterValue: watchFilterValue,
 			ScopeFactory:     scopeFactory,
 			CaCertificates:   caCerts,

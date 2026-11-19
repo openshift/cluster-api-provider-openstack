@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Kubernetes Authors.
+Copyright 2024 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,8 +29,6 @@ import (
 
 // OpenStackMachineTemplateApplyConfiguration represents a declarative configuration of the OpenStackMachineTemplate type for use
 // with apply.
-//
-// OpenStackMachineTemplate is the Schema for the openstackmachinetemplates API.
 type OpenStackMachineTemplateApplyConfiguration struct {
 	v1.TypeMetaApplyConfiguration    `json:",inline"`
 	*v1.ObjectMetaApplyConfiguration `json:"metadata,omitempty"`
@@ -49,14 +47,29 @@ func OpenStackMachineTemplate(name, namespace string) *OpenStackMachineTemplateA
 	return b
 }
 
-// ExtractOpenStackMachineTemplateFrom extracts the applied configuration owned by fieldManager from
-// openStackMachineTemplate for the specified subresource. Pass an empty string for subresource to extract
-// the main resource. Common subresources include "status", "scale", etc.
+// ExtractOpenStackMachineTemplate extracts the applied configuration owned by fieldManager from
+// openStackMachineTemplate. If no managedFields are found in openStackMachineTemplate for fieldManager, a
+// OpenStackMachineTemplateApplyConfiguration is returned with only the Name, Namespace (if applicable),
+// APIVersion and Kind populated. It is possible that no managed fields were found for because other
+// field managers have taken ownership of all the fields previously owned by fieldManager, or because
+// the fieldManager never owned fields any fields.
 // openStackMachineTemplate must be a unmodified OpenStackMachineTemplate API object that was retrieved from the Kubernetes API.
-// ExtractOpenStackMachineTemplateFrom provides a way to perform a extract/modify-in-place/apply workflow.
+// ExtractOpenStackMachineTemplate provides a way to perform a extract/modify-in-place/apply workflow.
 // Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
 // applied if another fieldManager has updated or force applied any of the previously applied fields.
-func ExtractOpenStackMachineTemplateFrom(openStackMachineTemplate *apiv1beta1.OpenStackMachineTemplate, fieldManager string, subresource string) (*OpenStackMachineTemplateApplyConfiguration, error) {
+// Experimental!
+func ExtractOpenStackMachineTemplate(openStackMachineTemplate *apiv1beta1.OpenStackMachineTemplate, fieldManager string) (*OpenStackMachineTemplateApplyConfiguration, error) {
+	return extractOpenStackMachineTemplate(openStackMachineTemplate, fieldManager, "")
+}
+
+// ExtractOpenStackMachineTemplateStatus is the same as ExtractOpenStackMachineTemplate except
+// that it extracts the status subresource applied configuration.
+// Experimental!
+func ExtractOpenStackMachineTemplateStatus(openStackMachineTemplate *apiv1beta1.OpenStackMachineTemplate, fieldManager string) (*OpenStackMachineTemplateApplyConfiguration, error) {
+	return extractOpenStackMachineTemplate(openStackMachineTemplate, fieldManager, "status")
+}
+
+func extractOpenStackMachineTemplate(openStackMachineTemplate *apiv1beta1.OpenStackMachineTemplate, fieldManager string, subresource string) (*OpenStackMachineTemplateApplyConfiguration, error) {
 	b := &OpenStackMachineTemplateApplyConfiguration{}
 	err := managedfields.ExtractInto(openStackMachineTemplate, internal.Parser().Type("io.k8s.sigs.cluster-api-provider-openstack.api.v1beta1.OpenStackMachineTemplate"), fieldManager, b, subresource)
 	if err != nil {
@@ -69,27 +82,6 @@ func ExtractOpenStackMachineTemplateFrom(openStackMachineTemplate *apiv1beta1.Op
 	b.WithAPIVersion("infrastructure.cluster.x-k8s.io/v1beta1")
 	return b, nil
 }
-
-// ExtractOpenStackMachineTemplate extracts the applied configuration owned by fieldManager from
-// openStackMachineTemplate. If no managedFields are found in openStackMachineTemplate for fieldManager, a
-// OpenStackMachineTemplateApplyConfiguration is returned with only the Name, Namespace (if applicable),
-// APIVersion and Kind populated. It is possible that no managed fields were found for because other
-// field managers have taken ownership of all the fields previously owned by fieldManager, or because
-// the fieldManager never owned fields any fields.
-// openStackMachineTemplate must be a unmodified OpenStackMachineTemplate API object that was retrieved from the Kubernetes API.
-// ExtractOpenStackMachineTemplate provides a way to perform a extract/modify-in-place/apply workflow.
-// Note that an extracted apply configuration will contain fewer fields than what the fieldManager previously
-// applied if another fieldManager has updated or force applied any of the previously applied fields.
-func ExtractOpenStackMachineTemplate(openStackMachineTemplate *apiv1beta1.OpenStackMachineTemplate, fieldManager string) (*OpenStackMachineTemplateApplyConfiguration, error) {
-	return ExtractOpenStackMachineTemplateFrom(openStackMachineTemplate, fieldManager, "")
-}
-
-// ExtractOpenStackMachineTemplateStatus extracts the applied configuration owned by fieldManager from
-// openStackMachineTemplate for the status subresource.
-func ExtractOpenStackMachineTemplateStatus(openStackMachineTemplate *apiv1beta1.OpenStackMachineTemplate, fieldManager string) (*OpenStackMachineTemplateApplyConfiguration, error) {
-	return ExtractOpenStackMachineTemplateFrom(openStackMachineTemplate, fieldManager, "status")
-}
-
 func (b OpenStackMachineTemplateApplyConfiguration) IsApplyConfiguration() {}
 
 // WithKind sets the Kind field in the declarative configuration to the given value

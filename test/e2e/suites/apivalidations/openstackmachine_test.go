@@ -24,7 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 )
 
 var _ = Describe("OpenStackMachine API validations", func() {
@@ -34,12 +34,8 @@ var _ = Describe("OpenStackMachine API validations", func() {
 		// Initialise a basic machine object in the correct namespace
 		machine := &infrav1.OpenStackMachine{
 			Spec: infrav1.OpenStackMachineSpec{
-				Image: infrav1.ImageParam{Filter: &infrav1.ImageFilter{Name: ptr.To("test-image")}},
-				Flavor: infrav1.FlavorParam{
-					Filter: &infrav1.FlavorFilter{
-						Name: ptr.To("flavor-name"),
-					},
-				},
+				Image:  infrav1.ImageParam{Filter: &infrav1.ImageFilter{Name: ptr.To("test-image")}},
+				Flavor: ptr.To("flavor-name"),
 			},
 		}
 		machine.Namespace = namespace.Name
@@ -64,7 +60,7 @@ var _ = Describe("OpenStackMachine API validations", func() {
 		Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "OpenStackMachine creation with spec.identityRef should succeed")
 	})
 
-	It("should allow the providerID to be updated", func() {
+	It("should only allow the providerID to be set once", func() {
 		machine := defaultMachine()
 
 		By("Creating a bare machine")
@@ -76,7 +72,7 @@ var _ = Describe("OpenStackMachine API validations", func() {
 
 		By("Modifying the providerID")
 		machine.Spec.ProviderID = ptr.To("bar")
-		Expect(k8sClient.Update(ctx, machine)).To(Succeed(), "Updating providerID should succeed")
+		Expect(k8sClient.Update(ctx, machine)).NotTo(Succeed(), "Updating providerID should fail")
 	})
 
 	It("should allow the identityRef to be set several times", func() {
@@ -166,64 +162,12 @@ var _ = Describe("OpenStackMachine API validations", func() {
 			machine := defaultMachine()
 
 			By("Creating a machine with no flavor or flavor id")
-			machine.Spec.Flavor = infrav1.FlavorParam{}
+			machine.Spec.Flavor = nil
 			Expect(k8sClient.Create(ctx, machine)).NotTo(Succeed(), "Creating a machine with no flavor name or id should fail")
 
 			By("Creating a machine with a flavor id")
-			machine.Spec.Flavor.ID = ptr.To("6aa02f56-c595-4d2f-9f8e-3c6296a4bed9")
+			machine.Spec.FlavorID = ptr.To("6aa02f56-c595-4d2f-9f8e-3c6296a4bed9")
 			Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "Creating a machine with a flavor id should succeed")
-		})
-
-		It("should not allow both flavor id and filter to be set", func() {
-			machine := defaultMachine()
-
-			By("Creating a machine with both flavor id and filter")
-			machine.Spec.Flavor = infrav1.FlavorParam{
-				ID: ptr.To("6aa02f56-c595-4d2f-9f8e-3c6296a4bed9"),
-				Filter: &infrav1.FlavorFilter{
-					Name: ptr.To("m1.small"),
-				},
-			}
-			Expect(k8sClient.Create(ctx, machine)).NotTo(Succeed(), "Creating a machine with both flavor id and filter should fail")
-		})
-
-		It("should not allow an empty flavor filter", func() {
-			machine := defaultMachine()
-
-			By("Creating a machine with an empty flavor filter")
-			machine.Spec.Flavor = infrav1.FlavorParam{
-				Filter: &infrav1.FlavorFilter{},
-			}
-			Expect(k8sClient.Create(ctx, machine)).NotTo(Succeed(), "Creating a machine with an empty flavor filter should fail")
-		})
-
-		It("should allow a flavor filter with name set", func() {
-			By("Creating a machine with a flavor filter name")
-			machine := defaultMachine()
-			machine.Spec.Flavor = infrav1.FlavorParam{Filter: &infrav1.FlavorFilter{Name: ptr.To("m1.small")}}
-			Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "Creating a machine with a flavor filter name should succeed")
-		})
-
-		It("should not allow the flavor to be changed", func() {
-			machine := defaultMachine()
-
-			By("Creating a bare machine")
-			Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "OpenStackMachine creation should succeed")
-
-			By("Changing the flavor filter name")
-			machine.Spec.Flavor = infrav1.FlavorParam{Filter: &infrav1.FlavorFilter{Name: ptr.To("m1.large")}}
-			Expect(k8sClient.Update(ctx, machine)).NotTo(Succeed(), "Updating flavor should fail")
-		})
-
-		It("should not allow the flavor representation to be changed from filter to id", func() {
-			machine := defaultMachine()
-
-			By("Creating a machine with a flavor filter")
-			Expect(k8sClient.Create(ctx, machine)).To(Succeed(), "OpenStackMachine creation should succeed")
-
-			By("Changing the flavor from filter to id")
-			machine.Spec.Flavor = infrav1.FlavorParam{ID: ptr.To("6aa02f56-c595-4d2f-9f8e-3c6296a4bed9")}
-			Expect(k8sClient.Update(ctx, machine)).NotTo(Succeed(), "Changing flavor representation should fail")
 		})
 	})
 
@@ -249,7 +193,7 @@ var _ = Describe("OpenStackMachine API validations", func() {
 			machine := defaultMachine()
 			machine.Spec.RootVolume = &infrav1.RootVolume{SizeGiB: 50, BlockDeviceVolume: infrav1.BlockDeviceVolume{}}
 			machine.Spec.AdditionalBlockDevices = []infrav1.AdditionalBlockDevice{
-				{Name: "user", SizeGiB: 30, Storage: infrav1.BlockDeviceStorage{Type: infrav1.LocalBlockDevice}},
+				{Name: "user", SizeGiB: 30, Storage: infrav1.BlockDeviceStorage{}},
 			}
 
 			By("Creating a machine with spec.RootVolume and non-root device name in spec.AdditionalBlockDevices")
@@ -260,14 +204,14 @@ var _ = Describe("OpenStackMachine API validations", func() {
 			machine := defaultMachine()
 			machine.Spec.RootVolume = &infrav1.RootVolume{SizeGiB: 50, BlockDeviceVolume: infrav1.BlockDeviceVolume{}}
 			machine.Spec.AdditionalBlockDevices = []infrav1.AdditionalBlockDevice{
-				{Name: "root", SizeGiB: 30, Storage: infrav1.BlockDeviceStorage{Type: infrav1.LocalBlockDevice}},
+				{Name: "root", SizeGiB: 30, Storage: infrav1.BlockDeviceStorage{}},
 			}
 
 			By("Creating a machine with spec.RootVolume and root device name in spec.AdditionalBlockDevices")
 			Expect(k8sClient.Create(ctx, machine)).NotTo(Succeed(), "OpenStackMachine creation with root device name in spec.AdditionalBlockDevices should not succeed")
 		})
 
-		It("should not allow to create machine with both SecurityGroups and EnablePortSecurity set to false", func() {
+		It("should not allow to create machine with both SecurityGroups and DisablePortSecurity", func() {
 			machine := defaultMachine()
 			machine.Spec.Ports = []infrav1.PortOpts{
 				{
@@ -275,13 +219,13 @@ var _ = Describe("OpenStackMachine API validations", func() {
 						Filter: &infrav1.SecurityGroupFilter{Name: "test-security-group"},
 					}},
 					ResolvedPortSpecFields: infrav1.ResolvedPortSpecFields{
-						EnablePortSecurity: ptr.To(false),
+						DisablePortSecurity: ptr.To(true),
 					},
 				},
 			}
 
-			By("Creating a machine with both SecurityGroups and EnablePortSecurity set to false")
-			Expect(k8sClient.Create(ctx, machine)).NotTo(Succeed(), "OpenStackMachine creation with both SecurityGroups and EnablePortSecurity set to false should not succeed")
+			By("Creating a machine with both SecurityGroups and DisablePortSecurity")
+			Expect(k8sClient.Create(ctx, machine)).NotTo(Succeed(), "OpenStackMachine creation with both SecurityGroups and DisablePortSecurity should not succeed")
 		})
 
 		/* FIXME: These tests are failing
@@ -499,7 +443,7 @@ var _ = Describe("OpenStackMachine API validations", func() {
 					Name: "test-hints",
 					Value: infrav1.SchedulerHintAdditionalValue{
 						Type:   infrav1.SchedulerHintTypeNumber,
-						Number: ptr.To[int32](1),
+						Number: ptr.To(1),
 					},
 				},
 			}
@@ -526,7 +470,7 @@ var _ = Describe("OpenStackMachine API validations", func() {
 					Name: "test-hints",
 					Value: infrav1.SchedulerHintAdditionalValue{
 						Type:   infrav1.SchedulerHintTypeBool,
-						Number: ptr.To[int32](1),
+						Number: ptr.To(1),
 					},
 				},
 			}
@@ -592,7 +536,7 @@ var _ = Describe("OpenStackMachine API validations", func() {
 					Name: "test-hints",
 					Value: infrav1.SchedulerHintAdditionalValue{
 						Type:   infrav1.SchedulerHintTypeString,
-						Number: ptr.To[int32](1),
+						Number: ptr.To(1),
 					},
 				},
 			}
