@@ -17221,6 +17221,7 @@ spec:
         - --feature-gates=PriorityQueue=${EXP_CAPO_PRIORITY_QUEUE:=true},AutoScaleFromZero=${EXP_CAPO_AUTOSCALE_FROM_ZERO:=false}
         - --tls-min-version=${TLS_MIN_VERSION}
         - --tls-cipher-suites=${TLS_CIPHER_SUITES}
+        - --tls-curve-preferences=${TLS_CURVE_PREFERENCES}
         command:
         - /manager
         image: registry.ci.openshift.org/openshift:openstack-cluster-api-controllers
