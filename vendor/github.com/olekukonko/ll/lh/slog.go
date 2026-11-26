@@ -2,9 +2,8 @@ package lh
 
 import (
 	"context"
-	"log/slog"
-
 	"github.com/olekukonko/ll/lx"
+	"log/slog"
 )
 
 // SlogHandler adapts a slog.Handler to implement lx.Handler.
@@ -36,15 +35,6 @@ func NewSlogHandler(h slog.Handler) *SlogHandler {
 // Example:
 //
 //	handler.Handle(&lx.Entry{Message: "test", Level: lx.LevelInfo}) // Processes as slog record
-//
-// Handle converts an lx.Entry to slog.Record and delegates to the slog.Handler.
-// It maps the entry's fields, level, namespace, class, and stack trace to slog attributes,
-// passing the resulting record to the underlying slog.Handler.
-// Returns an error if the slog.Handler fails to process the record.
-// Thread-safe if the underlying slog.Handler is thread-safe.
-// Example:
-//
-//	handler.Handle(&lx.Entry{Message: "test", Level: lx.LevelInfo}) // Processes as slog record
 func (h *SlogHandler) Handle(e *lx.Entry) error {
 	// Convert lx.LevelType to slog.Level
 	level := toSlogLevel(e.Level)
@@ -68,9 +58,9 @@ func (h *SlogHandler) Handle(e *lx.Entry) error {
 		record.AddAttrs(slog.String("stack", string(e.Stack))) // Add stack trace as string
 	}
 
-	// Add custom fields in order (preserving insertion order)
-	for _, pair := range e.Fields {
-		record.AddAttrs(slog.Any(pair.Key, pair.Value)) // Add each field as a key-value attribute
+	// Add custom fields
+	for k, v := range e.Fields {
+		record.AddAttrs(slog.Any(k, v)) // Add each field as a key-value attribute
 	}
 
 	// Handle the record with the underlying slog.Handler
@@ -91,7 +81,7 @@ func toSlogLevel(level lx.LevelType) slog.Level {
 		return slog.LevelInfo
 	case lx.LevelWarn:
 		return slog.LevelWarn
-	case lx.LevelError, lx.LevelFatal:
+	case lx.LevelError:
 		return slog.LevelError
 	default:
 		return slog.LevelInfo // Default for unknown levels

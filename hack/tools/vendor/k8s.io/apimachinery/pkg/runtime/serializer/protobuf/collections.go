@@ -17,10 +17,11 @@ limitations under the License.
 package protobuf
 
 import (
-	"encoding/binary"
 	"errors"
 	"io"
 	"math/bits"
+
+	"github.com/gogo/protobuf/proto"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -97,10 +98,6 @@ type streamingListData struct {
 	items      []runtime.Object
 }
 
-type sizer interface {
-	Size() int
-}
-
 // listSize return size of ListMeta and items to be later used for preallocations.
 // listMetaSize and itemSizes do not include header bytes (field identifier, size).
 func listSize(listMeta metav1.ListMeta, items []runtime.Object) (totalSize, listMetaSize int, itemSizes []int, err error) {
@@ -110,7 +107,7 @@ func listSize(listMeta metav1.ListMeta, items []runtime.Object) (totalSize, list
 	// Items
 	itemSizes = make([]int, len(items))
 	for i, item := range items {
-		sizer, ok := item.(sizer)
+		sizer, ok := item.(proto.Sizer)
 		if !ok {
 			return totalSize, listMetaSize, nil, errItemsSizer
 		}
@@ -135,23 +132,27 @@ func streamingEncodeUnknownList(w io.Writer, unk runtime.Unknown, listData strea
 }
 
 func streamingEncodeList(w io.Writer, listData streamingListData, memAlloc runtime.MemoryAllocator) (size int, err error) {
-	// headerScratch escapes via w.Write, so allocate it once per call instead of once per item.
-	headerScratch := make([]byte, 1+binary.MaxVarintLen64)
 	// ListMeta; 0xa = (1 << 3) | 2; field number: 1, type: 2 (LEN). https://protobuf.dev/programming-guides/encoding/#structure
-	n, err := doEncodeWithHeader(&listData.listMeta, w, 0xa, listData.listMetaSize, headerScratch, memAlloc)
+	n, err := doEncodeWithHeader(&listData.listMeta, w, 0xa, listData.listMetaSize, memAlloc)
 	size += n
 	if err != nil {
 		return size, err
 	}
 	// Items; 0x12 = (2 << 3) | 2; field number: 2, type: 2 (LEN). https://protobuf.dev/programming-guides/encoding/#structure
 	for i, item := range listData.items {
-		n, err := doEncodeWithHeader(item, w, 0x12, listData.itemsSizes[i], headerScratch, memAlloc)
+		n, err := doEncodeWithHeader(item, w, 0x12, listData.itemsSizes[i], memAlloc)
 		size += n
 		if err != nil {
 			return size, err
 		}
 	}
 	return size, nil
+}
+
+func writeVarintGenerated(w io.Writer, v int) (int, error) {
+	buf := make([]byte, sovGenerated(uint64(v)))
+	encodeVarintGenerated(buf, len(buf), uint64(v))
+	return w.Write(buf)
 }
 
 // sovGenerated is copied from `generated.pb.go` returns size of varint.

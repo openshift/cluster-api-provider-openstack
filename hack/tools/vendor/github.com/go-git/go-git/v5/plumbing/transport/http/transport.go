@@ -9,10 +9,8 @@ import (
 type transportOptions struct {
 	insecureSkipTLS bool
 	// []byte is not comparable.
-	clientCert string
-	clientKey  string
-	caBundle   string
-	proxyURL   url.URL
+	caBundle string
+	proxyURL url.URL
 }
 
 func (c *client) addTransport(opts transportOptions, transport *http.Transport) {

@@ -74,7 +74,7 @@ func pathForMerge(explicitPath string, getEnv func(string) string) string {
 
 func fileExists(filename string) bool {
 	info, err := os.Stat(filename)
-	if err != nil {
+	if os.IsNotExist(err) {
 		return false
 	}
 	return !info.IsDir()

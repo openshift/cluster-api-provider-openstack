@@ -29,6 +29,11 @@ const metadataLabelsFieldSpecs = `
   group: apps
   kind: StatefulSet
 
+- path: spec/volumeClaimTemplates[]/metadata/labels
+  create: true
+  group: apps
+  kind: StatefulSet
+
 - path: spec/template/metadata/labels
   create: true
   group: batch

@@ -17,7 +17,6 @@ limitations under the License.
 package framework
 
 import (
-	"context"
 	"os"
 	"os/exec"
 	"path"
@@ -44,7 +43,7 @@ func GatherJUnitReports(srcDir string, destDir string) error {
 		base := filepath.Base(p)
 		if strings.HasPrefix(base, "junit") {
 			newName := strings.ReplaceAll(base, "_", ".")
-			if err := os.Rename(p, path.Join(destDir, newName)); err != nil { //nolint:gosec // G122: path p is from filepath.Walk, not user-controlled symlink.
+			if err := os.Rename(p, path.Join(destDir, newName)); err != nil {
 				return err
 			}
 		}
@@ -63,7 +62,7 @@ func ResolveArtifactsDirectory(input string) string {
 		return dir
 	}
 
-	findRootCmd := exec.CommandContext(context.Background(), "git", "rev-parse", "--show-toplevel")
+	findRootCmd := exec.Command("git", "rev-parse", "--show-toplevel") //nolint:noctx // We don't care about command injection here.
 	out, err := findRootCmd.Output()
 	if err != nil {
 		return "_artifacts"

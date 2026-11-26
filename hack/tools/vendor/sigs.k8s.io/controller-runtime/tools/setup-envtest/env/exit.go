@@ -1,18 +1,5 @@
-/*
-Copyright 2021 The Kubernetes Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2021 The Kubernetes Authors
 
 package env
 
@@ -25,7 +12,7 @@ import (
 // Exit exits with the given code and error message.
 //
 // Defer HandleExitWithCode in main to catch this and get the right behavior.
-func Exit(code int, msg string, args ...any) {
+func Exit(code int, msg string, args ...interface{}) {
 	panic(&exitCode{
 		code: code,
 		err:  fmt.Errorf(msg, args...),
@@ -36,7 +23,7 @@ func Exit(code int, msg string, args ...any) {
 // wrapping the underlying error passed as well.
 //
 // Defer HandleExitWithCode in main to catch this and get the right behavior.
-func ExitCause(code int, err error, msg string, args ...any) {
+func ExitCause(code int, err error, msg string, args ...interface{}) {
 	args = append(args, err)
 	panic(&exitCode{
 		code: code,
@@ -61,7 +48,7 @@ func (c *exitCode) Unwrap() error {
 // asExit checks if the given (panic) value is an exitCode error,
 // and if so stores it in the given pointer.  It's roughly analogous
 // to errors.As, except it works on recover() values.
-func asExit(val any, exit **exitCode) bool {
+func asExit(val interface{}, exit **exitCode) bool {
 	if val == nil {
 		return false
 	}
@@ -94,7 +81,7 @@ func HandleExitWithCode() {
 // the cause.
 //
 // It's mainly useful for testing, normally you'd use HandleExitWithCode.
-func CheckRecover(cause any, cb func(int, error)) bool {
+func CheckRecover(cause interface{}, cb func(int, error)) bool {
 	if cause == nil {
 		return false
 	}

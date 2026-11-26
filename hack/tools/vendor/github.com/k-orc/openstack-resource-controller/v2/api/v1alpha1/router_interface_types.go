@@ -36,8 +36,8 @@ type RouterInterface struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	// spec specifies the desired state of the resource.
-	// +required
-	Spec RouterInterfaceSpec `json:"spec,omitzero"`
+	// +optional
+	Spec RouterInterfaceSpec `json:"spec,omitempty"`
 
 	// status defines the observed state of the resource.
 	// +optional

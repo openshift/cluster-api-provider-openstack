@@ -12,9 +12,8 @@ const rs = 0x1E
 
 type DecoderFn func(v any) error
 
-// NewJSONStreamDecoder builds a DecoderFn to read a stream of JSON records
-// formatted with the specified content-type.
-func NewJSONStreamDecoder(r io.Reader, contentType types.MediaType) DecoderFn {
+// NewJSONStreamDecoder builds adequate DecoderFn to read json records formatted with specified content-type
+func NewJSONStreamDecoder(r io.Reader, contentType string) DecoderFn {
 	switch contentType {
 	case types.MediaTypeJSONSequence:
 		return json.NewDecoder(NewRSFilterReader(r)).Decode
@@ -25,38 +24,27 @@ func NewJSONStreamDecoder(r io.Reader, contentType types.MediaType) DecoderFn {
 	}
 }
 
-type rsFilterReader struct {
+// RSFilterReader wraps an io.Reader and filters out ASCII RS characters
+type RSFilterReader struct {
 	reader io.Reader
+	buffer []byte
 }
 
-// NewRSFilterReader creates an [io.Reader] that filters out ASCII Record Separators (RS).
-func NewRSFilterReader(r io.Reader) io.Reader {
-	return &rsFilterReader{reader: r}
+// NewRSFilterReader creates a new RSFilterReader that filters out RS characters
+func NewRSFilterReader(r io.Reader) *RSFilterReader {
+	return &RSFilterReader{
+		reader: r,
+		buffer: make([]byte, 4096), // Internal buffer for reading chunks
+	}
 }
 
-func (r *rsFilterReader) Read(p []byte) (int, error) {
+// Read implements the io.Reader interface, filtering out RS characters
+func (r *RSFilterReader) Read(p []byte) (n int, err error) {
 	if len(p) == 0 {
 		return 0, nil
 	}
 
-	for {
-		n, err := r.reader.Read(p)
-		if n == 0 {
-			return 0, err
-		}
-
-		filtered := slices.DeleteFunc(p[:n], func(b byte) bool { return b == rs })
-		n = len(filtered)
-		if err != nil {
-			if err == io.EOF && n > 0 {
-				return n, nil
-			}
-			return n, err
-		}
-		if n == 0 {
-			// Avoid returning (0, nil) after consuming input; keep reading until data or an error (e.g., EOF).
-			continue
-		}
-		return n, nil
-	}
+	n, err = r.reader.Read(p)
+	filtered := slices.DeleteFunc(p[:n], func(b byte) bool { return b == rs })
+	return len(filtered), err
 }

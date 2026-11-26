@@ -29,7 +29,7 @@ import (
 
 	dockercontainer "github.com/moby/moby/api/types/container"
 	"github.com/onsi/ginkgo/v2"
-	pkgerrors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -84,7 +84,7 @@ type RunInput struct {
 // also gathered for inclusion in Prow.
 func Run(ctx context.Context, input RunInput) error {
 	if input.ClusterProxy == nil {
-		return pkgerrors.New("ClusterProxy must be provided")
+		return errors.New("ClusterProxy must be provided")
 	}
 	// If input.ClusterName is not set use a random string to allow parallel execution
 	// of kubetest on different clusters.
@@ -101,14 +101,14 @@ func Run(ctx context.Context, input RunInput) error {
 	if input.NumberOfNodes == 0 {
 		numNodes, err := countClusterNodes(ctx, input.ClusterProxy)
 		if err != nil {
-			return pkgerrors.Wrap(err, "Unable to count number of cluster nodes")
+			return errors.Wrap(err, "Unable to count number of cluster nodes")
 		}
 		input.NumberOfNodes = numNodes
 	}
 	if input.KubernetesVersion == "" && input.ConformanceImage == "" {
 		discoveredVersion, err := discoverClusterKubernetesVersion(input.ClusterProxy)
 		if err != nil {
-			return pkgerrors.Wrap(err, "Unable to discover server's Kubernetes version")
+			return errors.Wrap(err, "Unable to discover server's Kubernetes version")
 		}
 		input.KubernetesVersion = discoveredVersion
 	}
@@ -157,7 +157,7 @@ func Run(ctx context.Context, input RunInput) error {
 	}
 	user, err := user.Current()
 	if err != nil {
-		return pkgerrors.Wrap(err, "unable to determine current user")
+		return errors.Wrap(err, "unable to determine current user")
 	}
 	env := map[string]string{}
 
@@ -172,7 +172,7 @@ func Run(ctx context.Context, input RunInput) error {
 	}
 
 	// Formulate our command arguments
-	var args []string //nolint:prealloc // Not all paths append
+	var args []string
 	args = append(args, ginkgoArgs...)
 	args = append(
 		args,
@@ -188,7 +188,7 @@ func Run(ctx context.Context, input RunInput) error {
 
 	containerRuntime, err := container.NewDockerClient()
 	if err != nil {
-		return pkgerrors.Wrap(err, "Unable to run conformance tests")
+		return errors.Wrap(err, "Unable to run conformance tests")
 	}
 	ctx = container.RuntimeInto(ctx, containerRuntime)
 
@@ -206,7 +206,7 @@ func Run(ctx context.Context, input RunInput) error {
 	}, ginkgo.GinkgoWriter)
 	if err != nil {
 		return kerrors.NewAggregate([]error{
-			pkgerrors.Wrap(err, "Unable to run conformance tests"),
+			errors.Wrap(err, "Unable to run conformance tests"),
 			framework.GatherJUnitReports(reportDir, input.ArtifactsDirectory),
 		})
 	}
@@ -272,7 +272,7 @@ func dockeriseKubeconfig(kubetestConfigDir string, kubeConfigPath string) (strin
 func countClusterNodes(ctx context.Context, proxy framework.ClusterProxy) (int, error) {
 	nodeList, err := proxy.GetClientSet().CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return 0, pkgerrors.Wrap(err, "Unable to count nodes")
+		return 0, errors.Wrap(err, "Unable to count nodes")
 	}
 	return len(nodeList.Items), nil
 }
