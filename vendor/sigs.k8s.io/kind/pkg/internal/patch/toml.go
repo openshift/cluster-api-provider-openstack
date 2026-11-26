@@ -29,33 +29,18 @@ import (
 	"sigs.k8s.io/kind/pkg/errors"
 )
 
-// ContainerdTOML patches toPatch with the patches (should be TOML merge patches) and patches6902 (should be JSON 6902 patches)
-func ContainerdTOML(toPatch string, patches []string, patches6902 []string) (string, error) {
+// TOML patches toPatch with the patches (should be TOML merge patches) and patches6902 (should be JSON 6902 patches)
+func TOML(toPatch string, patches []string, patches6902 []string) (string, error) {
 	// convert to JSON for patching
 	j, err := tomlToJSON([]byte(toPatch))
 	if err != nil {
 		return "", err
 	}
-	version, err := containerdConfigVersion(toPatch)
-	if err != nil {
-		return "", errors.WithStack(err)
-	}
-	if version == 0 {
-		return "", errors.New("failed to detect containerd config version")
-	}
 	// apply merge patches
 	for _, patch := range patches {
 		pj, err := tomlToJSON([]byte(patch))
 		if err != nil {
-			return "", errors.WithStack(err)
-		}
-		patchVersion, err := containerdConfigVersion(patch)
-		if err != nil {
-			return "", errors.WithStack(err)
-		}
-		// skip if patch sets version and version does not match
-		if patchVersion != 0 && patchVersion != version {
-			continue
+			return "", err
 		}
 		patched, err := jsonpatch.MergePatch(j, pj)
 		if err != nil {
@@ -77,17 +62,6 @@ func ContainerdTOML(toPatch string, patches []string, patches6902 []string) (str
 	}
 	// convert result back to TOML
 	return jsonToTOMLString(j)
-}
-
-func containerdConfigVersion(configTOML string) (int, error) {
-	type version struct {
-		Version int `toml:"version,omitempty"`
-	}
-	v := version{}
-	if err := toml.Unmarshal([]byte(configTOML), &v); err != nil {
-		return 0, errors.WithStack(err)
-	}
-	return v.Version, nil
 }
 
 // tomlToJSON converts arbitrary TOML to JSON

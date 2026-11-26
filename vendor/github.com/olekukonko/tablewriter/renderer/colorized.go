@@ -1,12 +1,12 @@
 package renderer
 
 import (
-	"io"
-	"strings"
-
+	"github.com/fatih/color"
 	"github.com/olekukonko/ll"
 	"github.com/olekukonko/ll/lh"
 	"github.com/olekukonko/tablewriter/pkg/twwidth"
+	"io"
+	"strings"
 
 	"github.com/olekukonko/tablewriter/tw"
 )
@@ -21,6 +21,28 @@ type ColorizedConfig struct {
 	Border    Tint        // Colors for borders and lines
 	Separator Tint        // Colors for column separators
 	Symbols   tw.Symbols  // Symbols for table drawing (e.g., corners, lines)
+}
+
+// Colors is a slice of color attributes for use with fatih/color, such as color.FgWhite or color.Bold.
+type Colors []color.Attribute
+
+// Tint defines foreground and background color settings for table elements, with optional per-column overrides.
+type Tint struct {
+	FG      Colors // Foreground color attributes
+	BG      Colors // Background color attributes
+	Columns []Tint // Per-column color settings
+}
+
+// Apply applies the Tint's foreground and background colors to the given text, returning the text unchanged if no colors are set.
+func (t Tint) Apply(text string) string {
+	if len(t.FG) == 0 && len(t.BG) == 0 {
+		return text
+	}
+	// Combine foreground and background colors
+	combinedColors := append(t.FG, t.BG...)
+	// Create a color function and apply it to the text
+	c := color.New(combinedColors...).SprintFunc()
+	return c(text)
 }
 
 // Colorized renders colored ASCII tables with customizable borders, colors, and alignments.
@@ -103,7 +125,7 @@ func NewColorized(configs ...ColorizedConfig) *Colorized {
 			tw.Row:    tw.AlignLeft,
 			tw.Footer: tw.AlignRight,
 		},
-		logger: ll.New("colorized", ll.WithHandler(lh.NewMemoryHandler())).Disable(),
+		logger: ll.New("colorized", ll.WithHandler(lh.NewMemoryHandler())),
 	}
 	// Log initialization details
 	f.logger.Debugf("Initialized Colorized renderer with symbols: Center=%q, Row=%q, Column=%q", f.config.Symbols.Center(), f.config.Symbols.Row(), f.config.Symbols.Column())
@@ -354,29 +376,24 @@ func (c *Colorized) formatCell(content string, width int, padding tw.Padding, al
 	// Calculate visual width of content
 	contentVisualWidth := twwidth.Width(content)
 
-	// Set padding characters
+	// Set default padding characters
 	padLeftCharStr := padding.Left
-	padRightCharStr := padding.Right
-
-	// Determine the character to use for alignment filling.
-	// We default to the padding character defined for that side.
-	// If the padding character is empty (e.g. Overwrite: true), we MUST fallback to Space
-	// for the alignment calculation to prevent the content from shifting incorrectly.
-	alignFillLeft := padLeftCharStr
-	if alignFillLeft == tw.Empty {
-		alignFillLeft = tw.Space
+	if padLeftCharStr == tw.Empty {
+		padLeftCharStr = tw.Space
 	}
-	alignFillRight := padRightCharStr
-	if alignFillRight == tw.Empty {
-		alignFillRight = tw.Space
+	padRightCharStr := padding.Right
+	if padRightCharStr == tw.Empty {
+		padRightCharStr = tw.Space
 	}
 
 	// Calculate padding widths
 	definedPadLeftWidth := twwidth.Width(padLeftCharStr)
 	definedPadRightWidth := twwidth.Width(padRightCharStr)
-
 	// Calculate available width for content and alignment
-	availableForContentAndAlign := max(width-definedPadLeftWidth-definedPadRightWidth, 0)
+	availableForContentAndAlign := width - definedPadLeftWidth - definedPadRightWidth
+	if availableForContentAndAlign < 0 {
+		availableForContentAndAlign = 0
+	}
 
 	// Truncate content if it exceeds available width
 	if contentVisualWidth > availableForContentAndAlign {
@@ -386,30 +403,27 @@ func (c *Colorized) formatCell(content string, width int, padding tw.Padding, al
 	}
 
 	// Calculate remaining space for alignment
-	remainingSpaceForAlignment := max(availableForContentAndAlign-contentVisualWidth, 0)
+	remainingSpaceForAlignment := availableForContentAndAlign - contentVisualWidth
+	if remainingSpaceForAlignment < 0 {
+		remainingSpaceForAlignment = 0
+	}
 
 	// Apply alignment padding
-	// Note: We use tw.Pad* helpers here instead of strings.Repeat to handle multi-byte fill chars correctly.
 	leftAlignmentPadSpaces := tw.Empty
 	rightAlignmentPadSpaces := tw.Empty
-
 	switch align {
 	case tw.AlignLeft:
-		rightAlignmentPadSpaces = tw.PadRight(tw.Empty, alignFillRight, remainingSpaceForAlignment)
+		rightAlignmentPadSpaces = strings.Repeat(tw.Space, remainingSpaceForAlignment)
 	case tw.AlignRight:
-		leftAlignmentPadSpaces = tw.PadLeft(tw.Empty, alignFillLeft, remainingSpaceForAlignment)
+		leftAlignmentPadSpaces = strings.Repeat(tw.Space, remainingSpaceForAlignment)
 	case tw.AlignCenter:
 		leftSpacesCount := remainingSpaceForAlignment / 2
 		rightSpacesCount := remainingSpaceForAlignment - leftSpacesCount
-		if leftSpacesCount > 0 {
-			leftAlignmentPadSpaces = tw.PadLeft(tw.Empty, alignFillLeft, leftSpacesCount)
-		}
-		if rightSpacesCount > 0 {
-			rightAlignmentPadSpaces = tw.PadRight(tw.Empty, alignFillRight, rightSpacesCount)
-		}
+		leftAlignmentPadSpaces = strings.Repeat(tw.Space, leftSpacesCount)
+		rightAlignmentPadSpaces = strings.Repeat(tw.Space, rightSpacesCount)
 	default:
 		// Default to left alignment
-		rightAlignmentPadSpaces = tw.PadRight(tw.Empty, alignFillRight, remainingSpaceForAlignment)
+		rightAlignmentPadSpaces = strings.Repeat(tw.Space, remainingSpaceForAlignment)
 	}
 
 	// Apply colors to content and padding
@@ -458,7 +472,7 @@ func (c *Colorized) formatCell(content string, width int, padding tw.Padding, al
 	sb.WriteString(coloredPadRight)
 	output := sb.String()
 
-	// Adjust output width if necessary (safety check)
+	// Adjust output width if necessary
 	currentVisualWidth := twwidth.Width(output)
 	if currentVisualWidth != width {
 		c.logger.Debugf("formatCell MISMATCH: content='%s', target_w=%d. Calculated parts width = %d. String: '%s'",
@@ -525,7 +539,7 @@ func (c *Colorized) renderLine(ctx tw.Formatting, line []string, tint Tint) {
 		shouldAddSeparator := false
 		if i > 0 && c.config.Settings.Separators.BetweenColumns.Enabled() {
 			cellCtx, ok := ctx.Row.Current[i]
-			if !ok || (!cellCtx.Merge.Horizontal.Present || cellCtx.Merge.Horizontal.Start) {
+			if !ok || !(cellCtx.Merge.Horizontal.Present && !cellCtx.Merge.Horizontal.Start) {
 				shouldAddSeparator = true
 			}
 		}
@@ -560,7 +574,10 @@ func (c *Colorized) renderLine(ctx tw.Formatting, line []string, tint Tint) {
 				dynamicTotalWidth := 0
 				for k := 0; k < span && i+k < numCols; k++ {
 					colToSum := i + k
-					normWidth := max(ctx.NormalizedWidths.Get(colToSum), 0)
+					normWidth := ctx.NormalizedWidths.Get(colToSum)
+					if normWidth < 0 {
+						normWidth = 0
+					}
 					dynamicTotalWidth += normWidth
 					if k > 0 && separatorDisplayWidth > 0 {
 						dynamicTotalWidth += separatorDisplayWidth
@@ -616,7 +633,7 @@ func (c *Colorized) renderLine(ctx tw.Formatting, line []string, tint Tint) {
 		}
 		// Override alignment for footer merges or TOTAL pattern
 		if (ctx.Row.Position == tw.Footer && isHMergeStart) || isTotalPattern {
-			if align == tw.AlignNone {
+			if align != tw.AlignRight {
 				c.logger.Debugf("renderLine: Applying AlignRight override for Footer HMerge/TOTAL pattern at col %d. Original/default align was: %s", i, align)
 				align = tw.AlignRight
 			}

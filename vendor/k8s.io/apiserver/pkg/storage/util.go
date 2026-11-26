@@ -18,11 +18,10 @@ package storage
 
 import (
 	"fmt"
-	"strings"
 	"sync/atomic"
 
 	"k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/validate/content"
+	"k8s.io/apimachinery/pkg/api/validation/path"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -38,33 +37,27 @@ func SimpleUpdate(fn SimpleUpdateFunc) UpdateFunc {
 }
 
 func NamespaceKeyFunc(prefix string, obj runtime.Object) (string, error) {
-	if !strings.HasSuffix(prefix, "/") {
-		return "", fmt.Errorf("prefix should have '/' suffix")
-	}
 	meta, err := meta.Accessor(obj)
 	if err != nil {
 		return "", err
 	}
 	name := meta.GetName()
-	if msgs := content.IsPathSegmentName(name); len(msgs) != 0 {
+	if msgs := path.IsValidPathSegmentName(name); len(msgs) != 0 {
 		return "", fmt.Errorf("invalid name: %v", msgs)
 	}
-	return prefix + meta.GetNamespace() + "/" + name, nil
+	return prefix + "/" + meta.GetNamespace() + "/" + name, nil
 }
 
 func NoNamespaceKeyFunc(prefix string, obj runtime.Object) (string, error) {
-	if !strings.HasSuffix(prefix, "/") {
-		return "", fmt.Errorf("prefix should have '/' suffix")
-	}
 	meta, err := meta.Accessor(obj)
 	if err != nil {
 		return "", err
 	}
 	name := meta.GetName()
-	if msgs := content.IsPathSegmentName(name); len(msgs) != 0 {
+	if msgs := path.IsValidPathSegmentName(name); len(msgs) != 0 {
 		return "", fmt.Errorf("invalid name: %v", msgs)
 	}
-	return prefix + name, nil
+	return prefix + "/" + name, nil
 }
 
 // HighWaterMark is a thread-safe object for tracking the maximum value seen

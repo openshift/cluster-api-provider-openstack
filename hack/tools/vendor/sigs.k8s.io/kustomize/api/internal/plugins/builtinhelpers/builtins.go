@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/kustomize/api/resmap"
 )
 
-//go:generate go tool stringer -type=BuiltinPluginType
+//go:generate stringer -type=BuiltinPluginType
 type BuiltinPluginType int
 
 const (

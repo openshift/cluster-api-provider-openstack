@@ -2,10 +2,8 @@ package idxfile
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"sort"
-	"sync"
 
 	encbin "encoding/binary"
 
@@ -59,9 +57,8 @@ type MemoryIndex struct {
 	PackfileChecksum [hash.Size]byte
 	IdxChecksum      [hash.Size]byte
 
-	offsetHash      map[int64]plumbing.Hash
-	offsetBuildOnce sync.Once
-	mu              sync.RWMutex
+	offsetHash       map[int64]plumbing.Hash
+	offsetHashIsFull bool
 }
 
 var _ Index = (*MemoryIndex)(nil)
@@ -127,37 +124,32 @@ func (idx *MemoryIndex) FindOffset(h plumbing.Hash) (int64, error) {
 		return 0, plumbing.ErrObjectNotFound
 	}
 
-	offset, err := idx.getOffset(k, i)
-	if err != nil {
-		return 0, err
-	}
+	offset := idx.getOffset(k, i)
 
-	// Save the offset for reverse lookup
-	idx.mu.Lock()
-	if idx.offsetHash == nil {
-		idx.offsetHash = make(map[int64]plumbing.Hash)
+	if !idx.offsetHashIsFull {
+		// Save the offset for reverse lookup
+		if idx.offsetHash == nil {
+			idx.offsetHash = make(map[int64]plumbing.Hash)
+		}
+		idx.offsetHash[int64(offset)] = h
 	}
-	idx.offsetHash[int64(offset)] = h
-	idx.mu.Unlock()
 
 	return int64(offset), nil
 }
 
 const isO64Mask = uint64(1) << 31
 
-func (idx *MemoryIndex) getOffset(firstLevel, secondLevel int) (uint64, error) {
+func (idx *MemoryIndex) getOffset(firstLevel, secondLevel int) uint64 {
 	offset := secondLevel << 2
 	ofs := encbin.BigEndian.Uint32(idx.Offset32[firstLevel][offset : offset+4])
 
 	if (uint64(ofs) & isO64Mask) != 0 {
 		offset := 8 * (uint64(ofs) & ^isO64Mask)
-		if l := uint64(len(idx.Offset64)); l < 8 || offset > l-8 {
-			return 0, fmt.Errorf("%w: offset64 index out of range", ErrMalformedIdxFile)
-		}
-		return encbin.BigEndian.Uint64(idx.Offset64[offset : offset+8]), nil
+		n := encbin.BigEndian.Uint64(idx.Offset64[offset : offset+8])
+		return n
 	}
 
-	return uint64(ofs), nil
+	return uint64(ofs)
 }
 
 // FindCRC32 implements the Index interface.
@@ -181,17 +173,20 @@ func (idx *MemoryIndex) FindHash(o int64) (plumbing.Hash, error) {
 	var hash plumbing.Hash
 	var ok bool
 
-	var genErr error
-	idx.offsetBuildOnce.Do(func() {
-		genErr = idx.genOffsetHash()
-	})
-	if genErr != nil {
-		return plumbing.ZeroHash, genErr
+	if idx.offsetHash != nil {
+		if hash, ok = idx.offsetHash[o]; ok {
+			return hash, nil
+		}
 	}
 
-	idx.mu.RLock()
-	hash, ok = idx.offsetHash[o]
-	idx.mu.RUnlock()
+	// Lazily generate the reverse offset/hash map if required.
+	if !idx.offsetHashIsFull || idx.offsetHash == nil {
+		if err := idx.genOffsetHash(); err != nil {
+			return plumbing.ZeroHash, err
+		}
+
+		hash, ok = idx.offsetHash[o]
+	}
 
 	if !ok {
 		return plumbing.ZeroHash, plumbing.ErrObjectNotFound
@@ -207,7 +202,8 @@ func (idx *MemoryIndex) genOffsetHash() error {
 		return err
 	}
 
-	offsetHash := make(map[int64]plumbing.Hash, count)
+	idx.offsetHash = make(map[int64]plumbing.Hash, count)
+	idx.offsetHashIsFull = true
 
 	var hash plumbing.Hash
 	i := uint32(0)
@@ -215,18 +211,11 @@ func (idx *MemoryIndex) genOffsetHash() error {
 		mappedFirstLevel := idx.FanoutMapping[firstLevel]
 		for secondLevel := uint32(0); i < fanoutValue; i++ {
 			copy(hash[:], idx.Names[mappedFirstLevel][secondLevel*objectIDLength:])
-			off, err := idx.getOffset(mappedFirstLevel, int(secondLevel))
-			if err != nil {
-				return err
-			}
-			offsetHash[int64(off)] = hash
+			offset := int64(idx.getOffset(mappedFirstLevel, int(secondLevel)))
+			idx.offsetHash[offset] = hash
 			secondLevel++
 		}
 	}
-
-	idx.mu.Lock()
-	idx.offsetHash = offsetHash
-	idx.mu.Unlock()
 
 	return nil
 }
@@ -300,11 +289,7 @@ func (i *idxfileEntryIter) Next() (*Entry, error) {
 		mappedFirstLevel := i.idx.FanoutMapping[i.firstLevel]
 		entry := new(Entry)
 		copy(entry.Hash[:], i.idx.Names[mappedFirstLevel][i.secondLevel*objectIDLength:])
-		var err error
-		entry.Offset, err = i.idx.getOffset(mappedFirstLevel, i.secondLevel)
-		if err != nil {
-			return nil, err
-		}
+		entry.Offset = i.idx.getOffset(mappedFirstLevel, i.secondLevel)
 		entry.CRC32 = i.idx.getCRC32(mappedFirstLevel, i.secondLevel)
 
 		i.secondLevel++

@@ -23,11 +23,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
-	runtimecatalog "sigs.k8s.io/cluster-api/api/runtime/catalog"
 	runtimehooksv1 "sigs.k8s.io/cluster-api/api/runtime/hooks/v1alpha1"
+	runtimecatalog "sigs.k8s.io/cluster-api/exp/runtime/catalog"
 	"sigs.k8s.io/cluster-api/exp/topology/scope"
 	"sigs.k8s.io/cluster-api/internal/hooks"
 	"sigs.k8s.io/cluster-api/util/cache"
@@ -89,8 +91,14 @@ func (g *generator) callBeforeClusterUpgradeHook(ctx context.Context, s *scope.S
 			}
 		}
 
+		v1beta1Cluster := &clusterv1beta1.Cluster{}
+		// DeepCopy cluster because ConvertFrom has side effects like adding the conversion annotation.
+		if err := v1beta1Cluster.ConvertFrom(s.Current.Cluster.DeepCopy()); err != nil {
+			return false, errors.Wrap(err, "error converting Cluster to v1beta1 Cluster")
+		}
+
 		hookRequest := &runtimehooksv1.BeforeClusterUpgradeRequest{
-			Cluster:               *cleanupCluster(s.Current.Cluster),
+			Cluster:               *cleanupV1Beta1Cluster(v1beta1Cluster),
 			FromKubernetesVersion: *currentVersion,
 			ToKubernetesVersion:   topologyVersion,
 			ControlPlaneUpgrades:  toUpgradeStep(s.UpgradeTracker.ControlPlane.UpgradePlan),
@@ -146,8 +154,14 @@ func (g *generator) callBeforeControlPlaneUpgradeHook(ctx context.Context, s *sc
 	}
 
 	// NOTE: the hook should always be called before piking up a new version.
+	v1beta1Cluster := &clusterv1beta1.Cluster{}
+	// DeepCopy cluster because ConvertFrom has side effects like adding the conversion annotation.
+	if err := v1beta1Cluster.ConvertFrom(s.Current.Cluster.DeepCopy()); err != nil {
+		return false, errors.Wrap(err, "error converting Cluster to v1beta1 Cluster")
+	}
+
 	hookRequest := &runtimehooksv1.BeforeControlPlaneUpgradeRequest{
-		Cluster:               *cleanupCluster(s.Current.Cluster),
+		Cluster:               *cleanupV1Beta1Cluster(v1beta1Cluster),
 		FromKubernetesVersion: *currentVersion,
 		ToKubernetesVersion:   nextVersion,
 		ControlPlaneUpgrades:  toUpgradeStep(s.UpgradeTracker.ControlPlane.UpgradePlan),
@@ -207,9 +221,15 @@ func (g *generator) callAfterControlPlaneUpgradeHook(ctx context.Context, s *sco
 			}
 		}
 
+		// DeepCopy cluster because ConvertFrom has side effects like adding the conversion annotation.
+		v1beta1Cluster := &clusterv1beta1.Cluster{}
+		if err := v1beta1Cluster.ConvertFrom(s.Current.Cluster.DeepCopy()); err != nil {
+			return false, errors.Wrap(err, "error converting Cluster to v1beta1 Cluster")
+		}
+
 		// Call all the registered extension for the hook.
 		hookRequest := &runtimehooksv1.AfterControlPlaneUpgradeRequest{
-			Cluster:              *cleanupCluster(s.Current.Cluster),
+			Cluster:              *cleanupV1Beta1Cluster(v1beta1Cluster),
 			KubernetesVersion:    *currentVersion,
 			ControlPlaneUpgrades: toUpgradeStep(s.UpgradeTracker.ControlPlane.UpgradePlan),
 			WorkersUpgrades:      toUpgradeStep(s.UpgradeTracker.MachineDeployments.UpgradePlan, s.UpgradeTracker.MachinePools.UpgradePlan),
@@ -271,8 +291,14 @@ func (g *generator) callBeforeWorkersUpgradeHook(ctx context.Context, s *scope.S
 			}
 		}
 
+		// DeepCopy cluster because ConvertFrom has side effects like adding the conversion annotation.
+		v1beta1Cluster := &clusterv1beta1.Cluster{}
+		if err := v1beta1Cluster.ConvertFrom(s.Current.Cluster.DeepCopy()); err != nil {
+			return false, errors.Wrap(err, "error converting Cluster to v1beta1 Cluster")
+		}
+
 		hookRequest := &runtimehooksv1.BeforeWorkersUpgradeRequest{
-			Cluster:               *cleanupCluster(s.Current.Cluster),
+			Cluster:               *cleanupV1Beta1Cluster(v1beta1Cluster),
 			FromKubernetesVersion: *currentVersion,
 			ToKubernetesVersion:   nextVersion,
 			ControlPlaneUpgrades:  toUpgradeStep(s.UpgradeTracker.ControlPlane.UpgradePlan),
@@ -337,9 +363,15 @@ func (g *generator) callAfterWorkersUpgradeHook(ctx context.Context, s *scope.Sc
 			}
 		}
 
+		// DeepCopy cluster because ConvertFrom has side effects like adding the conversion annotation.
+		v1beta1Cluster := &clusterv1beta1.Cluster{}
+		if err := v1beta1Cluster.ConvertFrom(s.Current.Cluster.DeepCopy()); err != nil {
+			return false, errors.Wrap(err, "error converting Cluster to v1beta1 Cluster")
+		}
+
 		// Call all the registered extension for the hook.
 		hookRequest := &runtimehooksv1.AfterWorkersUpgradeRequest{
-			Cluster:              *cleanupCluster(s.Current.Cluster),
+			Cluster:              *cleanupV1Beta1Cluster(v1beta1Cluster),
 			KubernetesVersion:    *currentVersion,
 			ControlPlaneUpgrades: toUpgradeStep(s.UpgradeTracker.ControlPlane.UpgradePlan),
 			WorkersUpgrades:      toUpgradeStep(s.UpgradeTracker.MachineDeployments.UpgradePlan, s.UpgradeTracker.MachinePools.UpgradePlan),

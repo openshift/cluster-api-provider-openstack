@@ -36,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -138,10 +139,6 @@ func DumpAllResources(ctx context.Context, input DumpAllResourcesInput) {
 		Namespace:    input.Namespace,
 		IncludeTypes: input.IncludeTypes,
 	})
-	for i := range resources {
-		r := resources[i]
-		dumpObject(r, input.LogPath)
-	}
 
 	// Describe all clusters (this is a sort of summary of all the resources being bumped).
 	// Note: intentionally calling GetCAPIResources first as DescribeAllCluster is more likely to fail
@@ -153,6 +150,11 @@ func DumpAllResources(ctx context.Context, input DumpAllResourcesInput) {
 		LogFolder:            filepath.Join(input.LogPath, input.Namespace, "Cluster"),
 		Namespace:            input.Namespace,
 	})
+
+	for i := range resources {
+		r := resources[i]
+		dumpObject(r, input.LogPath)
+	}
 }
 
 // DumpNamespaceAndGVK specifies a GVK and namespace to be dumped.
@@ -165,6 +167,7 @@ type DumpNamespaceAndGVK struct {
 type DumpResourcesForClusterInput struct {
 	Lister    Lister
 	LogPath   string
+	Cluster   *clusterv1.Cluster
 	Resources []DumpNamespaceAndGVK
 }
 
@@ -172,6 +175,7 @@ type DumpResourcesForClusterInput struct {
 func DumpResourcesForCluster(ctx context.Context, input DumpResourcesForClusterInput) {
 	Expect(ctx).NotTo(BeNil(), "ctx is required for DumpResourcesForCluster")
 	Expect(input.Lister).NotTo(BeNil(), "input.Lister is required for DumpResourcesForCluster")
+	Expect(input.Cluster).NotTo(BeNil(), "input.Cluster is required for DumpResourcesForCluster")
 
 	for _, resource := range input.Resources {
 		resourceList := new(unstructured.UnstructuredList)
@@ -205,7 +209,7 @@ func DumpResourcesForCluster(ctx context.Context, input DumpResourcesForClusterI
 		})
 		if listErr != nil {
 			// NB. we are treating failures in collecting resources as a non-blocking operation (best effort)
-			fmt.Printf("Failed to list %s: %v\n", resource.GVK.Kind, listErr)
+			fmt.Printf("Failed to list %s for Cluster %s: %v\n", resource.GVK.Kind, klog.KObj(input.Cluster), listErr)
 			continue
 		}
 		for i := range resourceList.Items {

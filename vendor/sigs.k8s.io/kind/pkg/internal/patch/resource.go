@@ -51,11 +51,7 @@ func (r *resource) applyMergePatch(patch mergePatch) (matches bool, err error) {
 	if !r.matches(patch.matchInfo) {
 		return false, nil
 	}
-	newTargetJSON, strippedPatchJSON, err := mergeAndStrip(r.json, patch.json, r.matchInfo.APIVersion, patch.matchInfo.APIVersion)
-	if err != nil {
-		return true, err
-	}
-	patched, err := jsonpatch.MergePatch(newTargetJSON, strippedPatchJSON)
+	patched, err := jsonpatch.MergePatch(r.json, patch.json)
 	if err != nil {
 		return true, errors.WithStack(err)
 	}

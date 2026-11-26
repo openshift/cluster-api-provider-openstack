@@ -19,7 +19,7 @@ package client
 import (
 	"context"
 
-	pkgerrors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 
@@ -140,7 +140,7 @@ func (c *clusterctlClient) Delete(ctx context.Context, options DeleteOptions) er
 				return err
 			}
 			if provider.Namespace == "" {
-				return pkgerrors.Errorf("failed to identify the namespace for the %q provider", provider.ProviderName)
+				return errors.Errorf("failed to identify the namespace for the %q provider", provider.ProviderName)
 			}
 
 			if provider.Version != "" {
@@ -149,7 +149,7 @@ func (c *clusterctlClient) Delete(ctx context.Context, options DeleteOptions) er
 					return err
 				}
 				if provider.Version != version {
-					return pkgerrors.Errorf("failed to identify the provider %q with version %q", provider.ProviderName, provider.Version)
+					return errors.Errorf("failed to identify the provider %q with version %q", provider.ProviderName, provider.Version)
 				}
 			}
 

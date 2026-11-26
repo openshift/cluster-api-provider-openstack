@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"strings"
 
-	pkgerrors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -56,14 +56,16 @@ func Name(cluster string, suffix Purpose) string {
 // ParseSecretName return the cluster name and the suffix Purpose in name is a valid cluster secret,
 // otherwise it return error.
 func ParseSecretName(name string) (string, Purpose, error) {
-	if !strings.Contains(name, "-") {
-		return "", "", pkgerrors.Errorf("%q is not a valid cluster secret name. The purpose suffix is missing", name)
+	separatorPos := strings.LastIndex(name, "-")
+	if separatorPos == -1 {
+		return "", "", errors.Errorf("%q is not a valid cluster secret name. The purpose suffix is missing", name)
 	}
+	clusterName := name[:separatorPos]
+	purposeSuffix := Purpose(name[separatorPos+1:])
 	for _, purpose := range allSecretPurposes {
-		suffix := "-" + string(purpose)
-		if strings.HasSuffix(name, suffix) {
-			return strings.TrimSuffix(name, suffix), purpose, nil
+		if purpose == purposeSuffix {
+			return clusterName, purposeSuffix, nil
 		}
 	}
-	return "", "", pkgerrors.Errorf("%q is not a valid cluster secret name. Invalid purpose suffix", name)
+	return "", "", errors.Errorf("%q is not a valid cluster secret name. Invalid purpose suffix", name)
 }

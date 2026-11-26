@@ -26,7 +26,7 @@ import (
 	"strings"
 
 	jsonpatch "github.com/evanphx/json-patch/v5"
-	pkgerrors "github.com/pkg/errors"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -39,7 +39,7 @@ import (
 )
 
 // ApplyPatchToTypedObject applies the patch to a typed obj.
-func ApplyPatchToTypedObject[T any](ctx context.Context, currentMachine *T, machinePath runtimehooksv1.Patch, patchPath []string) error {
+func ApplyPatchToTypedObject[T any](ctx context.Context, currentMachine *T, machinePath runtimehooksv1.Patch, patchPath string) error {
 	// Note: Machine needs special handling because it is not a runtime.RawExtension. Simply converting it here to
 	//       a runtime.RawExtension so we can avoid making the code in applyPatchToObject more complex.
 	currentMachineRaw, err := ConvertToRawExtension(currentMachine)
@@ -68,11 +68,11 @@ func ApplyPatchToTypedObject[T any](ctx context.Context, currentMachine *T, mach
 // ApplyPatchToObject applies the patch to the obj.
 // Note: This is following the same general structure that is used in the applyPatchToRequest func in
 // internal/controllers/topology/cluster/patches/engine.go.
-func ApplyPatchToObject(ctx context.Context, obj *runtime.RawExtension, patch runtimehooksv1.Patch, patchPath []string) (objChanged bool, reterr error) {
+func ApplyPatchToObject(ctx context.Context, obj *runtime.RawExtension, patch runtimehooksv1.Patch, patchPath string) (objChanged bool, reterr error) {
 	log := ctrl.LoggerFrom(ctx)
 
 	if patch.PatchType == "" {
-		return false, pkgerrors.Errorf("failed to apply patch: patchType is not set")
+		return false, errors.Errorf("failed to apply patch: patchType is not set")
 	}
 
 	defer func() {
@@ -93,7 +93,7 @@ func ApplyPatchToObject(ctx context.Context, obj *runtime.RawExtension, patch ru
 		jsonPatch, err := jsonpatch.DecodePatch(patch.Patch)
 		if err != nil {
 			log.Error(err, "Failed to apply patch: error decoding json patch (RFC6902)", "patch", string(patch.Patch))
-			return false, pkgerrors.Wrap(err, "failed to apply patch: error decoding json patch (RFC6902)")
+			return false, errors.Wrap(err, "failed to apply patch: error decoding json patch (RFC6902)")
 		}
 
 		if len(jsonPatch) == 0 {
@@ -104,7 +104,7 @@ func ApplyPatchToObject(ctx context.Context, obj *runtime.RawExtension, patch ru
 		patchedObject, err = jsonPatch.Apply(patchedObject)
 		if err != nil {
 			log.Error(err, "Failed to apply patch: error applying json patch (RFC6902)", "patch", string(patch.Patch))
-			return false, pkgerrors.Wrap(err, "failed to apply patch: error applying json patch (RFC6902)")
+			return false, errors.Wrap(err, "failed to apply patch: error applying json patch (RFC6902)")
 		}
 	case runtimehooksv1.JSONMergePatchType:
 		if len(patch.Patch) == 0 || bytes.Equal(patch.Patch, []byte("{}")) {
@@ -116,16 +116,16 @@ func ApplyPatchToObject(ctx context.Context, obj *runtime.RawExtension, patch ru
 		patchedObject, err = jsonpatch.MergePatch(patchedObject, patch.Patch)
 		if err != nil {
 			log.Error(err, "Failed to apply patch: error applying json merge patch (RFC7386)", "patch", string(patch.Patch))
-			return false, pkgerrors.Wrap(err, "failed to apply patch: error applying json merge patch (RFC7386)")
+			return false, errors.Wrap(err, "failed to apply patch: error applying json merge patch (RFC7386)")
 		}
 	default:
-		return false, pkgerrors.Errorf("failed to apply patch: unknown patchType %s", patch.PatchType)
+		return false, errors.Errorf("failed to apply patch: unknown patchType %s", patch.PatchType)
 	}
 
 	// Overwrite the spec of obj with the spec of the patchedObject,
 	// to ensure that we only pick up changes to the spec.
 	if err := Patch(obj, patchedObject, patchPath); err != nil {
-		return false, pkgerrors.Wrap(err, "failed to apply patch to object")
+		return false, errors.Wrap(err, "failed to apply patch to object")
 	}
 
 	return true, nil
@@ -135,7 +135,7 @@ func ApplyPatchToObject(ctx context.Context, obj *runtime.RawExtension, patch ru
 func ConvertToRawExtension(object any) (runtime.RawExtension, error) {
 	objectBytes, err := json.Marshal(object)
 	if err != nil {
-		return runtime.RawExtension{}, pkgerrors.Wrap(err, "failed to marshal object to JSON")
+		return runtime.RawExtension{}, errors.Wrap(err, "failed to marshal object to JSON")
 	}
 
 	objectUnstructured, ok := object.(*unstructured.Unstructured)
@@ -143,7 +143,7 @@ func ConvertToRawExtension(object any) (runtime.RawExtension, error) {
 		objectUnstructured = &unstructured.Unstructured{}
 		// Note: This only succeeds if object has apiVersion & kind set (which is always the case).
 		if err := json.Unmarshal(objectBytes, objectUnstructured); err != nil {
-			return runtime.RawExtension{}, pkgerrors.Wrap(err, "failed to Unmarshal object into Unstructured")
+			return runtime.RawExtension{}, errors.Wrap(err, "failed to Unmarshal object into Unstructured")
 		}
 	}
 
@@ -156,100 +156,79 @@ func ConvertToRawExtension(object any) (runtime.RawExtension, error) {
 }
 
 // Patch overwrites spec in object with spec of patchedObjectBytes.
-func Patch(object *runtime.RawExtension, patchedObjectBytes []byte, patchPaths ...[]string) error {
+func Patch(object *runtime.RawExtension, patchedObjectBytes []byte, patchPath string) error {
 	objectUnstructured, err := bytesToUnstructured(object.Raw)
 	if err != nil {
-		return pkgerrors.Wrap(err, "failed to convert object to Unstructured")
+		return errors.Wrap(err, "failed to convert object to Unstructured")
 	}
 	patchedObjectUnstructured, err := bytesToUnstructured(patchedObjectBytes)
 	if err != nil {
-		return pkgerrors.Wrap(err, "failed to convert patched object to Unstructured")
-	}
-
-	fields := make([]CopyFieldsInputField, 0, len(patchPaths))
-	for _, patchPath := range patchPaths {
-		fields = append(fields, CopyFieldsInputField{
-			Src:  patchPath,
-			Dest: patchPath,
-		})
+		return errors.Wrap(err, "failed to convert patched object to Unstructured")
 	}
 
 	// Copy spec from patchedObjectUnstructured to objectUnstructured.
-	if err := CopyFields(CopyFieldsInput{
-		Src:    patchedObjectUnstructured,
-		Dest:   objectUnstructured,
-		Fields: fields,
+	if err := CopySpec(CopySpecInput{
+		Src:          patchedObjectUnstructured,
+		Dest:         objectUnstructured,
+		SrcSpecPath:  patchPath,
+		DestSpecPath: patchPath,
 	}); err != nil {
-		return pkgerrors.Wrap(err, "failed to apply patch to object")
+		return errors.Wrap(err, "failed to apply patch to object")
 	}
 
 	// Marshal objectUnstructured and store it in object.
 	objectBytes, err := objectUnstructured.MarshalJSON()
 	if err != nil {
-		return pkgerrors.Wrapf(err, "failed to marshal patched object")
+		return errors.Wrapf(err, "failed to marshal patched object")
 	}
 	object.Object = objectUnstructured
 	object.Raw = objectBytes
 	return nil
 }
 
-// CopyFieldsInput is a struct containing the input parameters of CopyFields.
-type CopyFieldsInput struct {
+// CopySpecInput is a struct containing the input parameters of CopySpec.
+type CopySpecInput struct {
 	Src              *unstructured.Unstructured
 	Dest             *unstructured.Unstructured
-	Fields           []CopyFieldsInputField
+	SrcSpecPath      string
+	DestSpecPath     string
 	FieldsToPreserve []contract.Path
 }
 
-// CopyFieldsInputField contains a single field that should be copied.
-type CopyFieldsInputField struct {
-	Src  []string
-	Dest []string
-}
-
-type preservedField struct {
-	Field contract.Path
-	Value interface{}
-}
-
-// CopyFields copies fields from src to dest while preserving fieldsToPreserve.
-func CopyFields(in CopyFieldsInput) error {
+// CopySpec copies a field from a srcSpecPath in src to a destSpecPath in dest,
+// while preserving fieldsToPreserve.
+func CopySpec(in CopySpecInput) error {
 	// Backup fields that should be preserved from dest.
-	var preservedFields []preservedField
+	preservedFields := map[string]interface{}{}
 	for _, field := range in.FieldsToPreserve {
 		value, found, err := unstructured.NestedFieldNoCopy(in.Dest.Object, field...)
 		if !found {
 			// Continue if the field does not exist in src. fieldsToPreserve don't have to exist.
 			continue
 		} else if err != nil {
-			return pkgerrors.Wrapf(err, "failed to get field %q from %s %s", strings.Join(field, "."), in.Dest.GetKind(), klog.KObj(in.Dest))
+			return errors.Wrapf(err, "failed to get field %q from %s %s", strings.Join(field, "."), in.Dest.GetKind(), klog.KObj(in.Dest))
 		}
-		preservedFields = append(preservedFields, preservedField{
-			Field: field,
-			Value: value,
-		})
+		preservedFields[strings.Join(field, ".")] = value
 	}
 
-	for _, field := range in.Fields {
-		// Get fieldValue from src.
-		fieldValue, found, err := unstructured.NestedFieldNoCopy(in.Src.Object, field.Src...)
-		if !found {
-			// Continue if field.Src does not exist in src, nothing to do.
-			continue
-		} else if err != nil {
-			return pkgerrors.Wrapf(err, "failed to get field %q from %s %s", strings.Join(field.Src, "."), in.Src.GetKind(), klog.KObj(in.Src))
-		}
+	// Get spec from src.
+	srcSpec, found, err := unstructured.NestedFieldNoCopy(in.Src.Object, strings.Split(in.SrcSpecPath, ".")...)
+	if !found {
+		// Return if srcSpecPath does not exist in src, nothing to do.
+		return nil
+	} else if err != nil {
+		return errors.Wrapf(err, "failed to get field %q from %s %s", in.SrcSpecPath, in.Src.GetKind(), klog.KObj(in.Src))
+	}
 
-		// Set fieldValue in dest.
-		if err := unstructured.SetNestedField(in.Dest.Object, fieldValue, field.Dest...); err != nil {
-			return pkgerrors.Wrapf(err, "failed to set field %q on %s %s", strings.Join(field.Dest, "."), in.Dest.GetKind(), klog.KObj(in.Dest))
-		}
+	// Set spec in dest.
+	if err := unstructured.SetNestedField(in.Dest.Object, srcSpec, strings.Split(in.DestSpecPath, ".")...); err != nil {
+		return errors.Wrapf(err, "failed to set field %q on %s %s", in.DestSpecPath, in.Dest.GetKind(), klog.KObj(in.Dest))
 	}
 
 	// Restore preserved fields.
-	for _, preservedField := range preservedFields {
-		if err := unstructured.SetNestedField(in.Dest.Object, preservedField.Value, preservedField.Field...); err != nil {
-			return pkgerrors.Wrapf(err, "failed to set field %q on %s %s", preservedField.Field, in.Dest.GetKind(), klog.KObj(in.Dest))
+	for path, value := range preservedFields {
+		if err := unstructured.SetNestedField(in.Dest.Object, value, strings.Split(path, ".")...); err != nil {
+			return errors.Wrapf(err, "failed to set field %q on %s %s", path, in.Dest.GetKind(), klog.KObj(in.Dest))
 		}
 	}
 	return nil
@@ -263,7 +242,7 @@ func bytesToUnstructured(b []byte) (*unstructured.Unstructured, error) {
 	// Unmarshal the JSON.
 	u := &unstructured.Unstructured{}
 	if _, _, err := unstructuredDecoder.Decode(b, nil, u); err != nil {
-		return nil, pkgerrors.Wrap(err, "failed to unmarshal object from json")
+		return nil, errors.Wrap(err, "failed to unmarshal object from json")
 	}
 
 	return u, nil

@@ -29,18 +29,13 @@ type CertManager interface {
 	// Timeout returns the timeout for cert-manager to start.
 	// If empty, 10m will be used.
 	Timeout() string
-
-	// ExternallyProvisioned returns the true/false to be used when clusterctl init is initialized.
-	// This checks to see if cert-manager has been installed outside of clusterctl
-	ExternallyProvisioned() bool
 }
 
 // certManager implements CertManager.
 type certManager struct {
-	url                   string
-	version               string
-	timeout               string
-	externallyProvisioned bool
+	url     string
+	version string
+	timeout string
 }
 
 // ensure certManager implements CertManager.
@@ -58,16 +53,11 @@ func (p *certManager) Timeout() string {
 	return p.timeout
 }
 
-func (p *certManager) ExternallyProvisioned() bool {
-	return p.externallyProvisioned
-}
-
 // NewCertManager creates a new CertManager with the given configuration.
-func NewCertManager(url, version, timeout string, externallyProvisioned bool) CertManager {
+func NewCertManager(url, version, timeout string) CertManager {
 	return &certManager{
-		url:                   url,
-		version:               version,
-		timeout:               timeout,
-		externallyProvisioned: externallyProvisioned,
+		url:     url,
+		version: version,
+		timeout: timeout,
 	}
 }
