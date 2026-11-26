@@ -159,3 +159,5 @@ require (
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kind v0.25.0 // indirect
 )
+
+replace golang.org/x/net => github.com/openshift-sustaining/net v0.43.0-sec.4
