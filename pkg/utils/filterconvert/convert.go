@@ -23,7 +23,7 @@ import (
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/networks"
 	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/subnets"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 )
 
 func SecurityGroupFilterToListOpts(securityGroupFilter *infrav1.SecurityGroupFilter) securitygroups.ListOpts {
@@ -49,7 +49,7 @@ func SubnetFilterToListOpts(subnetFilter *infrav1.SubnetFilter) subnets.ListOpts
 		Name:            subnetFilter.Name,
 		Description:     subnetFilter.Description,
 		ProjectID:       subnetFilter.ProjectID,
-		IPVersion:       int(subnetFilter.IPVersion),
+		IPVersion:       subnetFilter.IPVersion,
 		GatewayIP:       subnetFilter.GatewayIP,
 		CIDR:            subnetFilter.CIDR,
 		IPv6AddressMode: subnetFilter.IPv6AddressMode,

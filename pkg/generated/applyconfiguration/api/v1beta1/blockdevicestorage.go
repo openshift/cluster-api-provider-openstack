@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Kubernetes Authors.
+Copyright 2024 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,14 +24,8 @@ import (
 
 // BlockDeviceStorageApplyConfiguration represents a declarative configuration of the BlockDeviceStorage type for use
 // with apply.
-//
-// BlockDeviceStorage is the storage type of a block device to create and
-// contains additional storage options.
 type BlockDeviceStorageApplyConfiguration struct {
-	// Type is the type of block device to create.
-	// This can be either "Volume" or "Local".
-	Type *apiv1beta1.BlockDeviceType `json:"type,omitempty"`
-	// Volume contains additional storage options for a volume block device.
+	Type   *apiv1beta1.BlockDeviceType          `json:"type,omitempty"`
 	Volume *BlockDeviceVolumeApplyConfiguration `json:"volume,omitempty"`
 }
 

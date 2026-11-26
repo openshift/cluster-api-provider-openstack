@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Kubernetes Authors.
+Copyright 2024 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,9 +21,7 @@ package v1beta1
 // ServerMetadataApplyConfiguration represents a declarative configuration of the ServerMetadata type for use
 // with apply.
 type ServerMetadataApplyConfiguration struct {
-	// Key is the server metadata key
-	Key *string `json:"key,omitempty"`
-	// Value is the server metadata value
+	Key   *string `json:"key,omitempty"`
 	Value *string `json:"value,omitempty"`
 }
 

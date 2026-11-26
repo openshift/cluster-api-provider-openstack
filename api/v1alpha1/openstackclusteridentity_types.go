@@ -64,5 +64,5 @@ type OpenStackClusterIdentityList struct {
 }
 
 func init() {
-	objectTypes = append(objectTypes, &OpenStackClusterIdentity{}, &OpenStackClusterIdentityList{})
+	SchemeBuilder.Register(&OpenStackClusterIdentity{}, &OpenStackClusterIdentityList{})
 }

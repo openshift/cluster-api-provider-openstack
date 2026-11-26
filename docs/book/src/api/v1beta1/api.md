@@ -126,28 +126,9 @@ are specified.</p>
 <em>(Optional)</em>
 <p>Subnets specifies existing subnets to use if not ManagedSubnets are
 specified. All subnets must be in the network specified by Network.
-If no subnets are specified, all subnets in Network will be used.
-Multiple subnets of the same IP version are supported when PrimarySubnet
-is also set to identify which subnet should be used for services like
-load balancer VIP allocation.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>primarySubnet</code><br/>
-<em>
-<a href="#infrastructure.cluster.x-k8s.io/v1beta1.SubnetParam">
-SubnetParam
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>PrimarySubnet identifies the primary subnet for the cluster when multiple
-subnets are specified in Subnets. It is used to determine the subnet for
-load balancer VIP allocation and node member registration.
-If not specified and multiple subnets exist, the first subnet in the
-resolved Subnets list is used.</p>
+There can be zero, one, or two subnets. If no subnets are specified,
+all subnets in Network will be used. If 2 subnets are specified, one
+must be IPv4 and the other IPv6.</p>
 </td>
 </tr>
 <tr>
@@ -2493,28 +2474,9 @@ are specified.</p>
 <em>(Optional)</em>
 <p>Subnets specifies existing subnets to use if not ManagedSubnets are
 specified. All subnets must be in the network specified by Network.
-If no subnets are specified, all subnets in Network will be used.
-Multiple subnets of the same IP version are supported when PrimarySubnet
-is also set to identify which subnet should be used for services like
-load balancer VIP allocation.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>primarySubnet</code><br/>
-<em>
-<a href="#infrastructure.cluster.x-k8s.io/v1beta1.SubnetParam">
-SubnetParam
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>PrimarySubnet identifies the primary subnet for the cluster when multiple
-subnets are specified in Subnets. It is used to determine the subnet for
-load balancer VIP allocation and node member registration.
-If not specified and multiple subnets exist, the first subnet in the
-resolved Subnets list is used.</p>
+There can be zero, one, or two subnets. If no subnets are specified,
+all subnets in Network will be used. If 2 subnets are specified, one
+must be IPv4 and the other IPv6.</p>
 </td>
 </tr>
 <tr>
@@ -3123,28 +3085,9 @@ are specified.</p>
 <em>(Optional)</em>
 <p>Subnets specifies existing subnets to use if not ManagedSubnets are
 specified. All subnets must be in the network specified by Network.
-If no subnets are specified, all subnets in Network will be used.
-Multiple subnets of the same IP version are supported when PrimarySubnet
-is also set to identify which subnet should be used for services like
-load balancer VIP allocation.</p>
-</td>
-</tr>
-<tr>
-<td>
-<code>primarySubnet</code><br/>
-<em>
-<a href="#infrastructure.cluster.x-k8s.io/v1beta1.SubnetParam">
-SubnetParam
-</a>
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>PrimarySubnet identifies the primary subnet for the cluster when multiple
-subnets are specified in Subnets. It is used to determine the subnet for
-load balancer VIP allocation and node member registration.
-If not specified and multiple subnets exist, the first subnet in the
-resolved Subnets list is used.</p>
+There can be zero, one, or two subnets. If no subnets are specified,
+all subnets in Network will be used. If 2 subnets are specified, one
+must be IPv4 and the other IPv6.</p>
 </td>
 </tr>
 <tr>
@@ -4272,20 +4215,6 @@ NodeInfo
 </td>
 <td>
 <em>(Optional)</em>
-</td>
-</tr>
-<tr>
-<td>
-<code>conditions</code><br/>
-<em>
-sigs.k8s.io/cluster-api/api/core/v1beta1.Conditions
-</em>
-</td>
-<td>
-<em>(Optional)</em>
-<p>Conditions defines current service state of the OpenStackMachineTemplate.
-The Ready condition must surface issues during the entire lifecycle of the OpenStackMachineTemplate.
-(both during initial provisioning and after the initial provisioning is completed).</p>
 </td>
 </tr>
 </tbody>

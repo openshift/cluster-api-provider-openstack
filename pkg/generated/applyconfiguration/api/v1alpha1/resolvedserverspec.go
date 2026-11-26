@@ -1,5 +1,5 @@
 /*
-Copyright 2026 The Kubernetes Authors.
+Copyright 2024 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,22 +19,16 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1beta2 "sigs.k8s.io/cluster-api-provider-openstack/pkg/generated/applyconfiguration/api/v1beta2"
+	v1beta1 "sigs.k8s.io/cluster-api-provider-openstack/pkg/generated/applyconfiguration/api/v1beta1"
 )
 
 // ResolvedServerSpecApplyConfiguration represents a declarative configuration of the ResolvedServerSpec type for use
 // with apply.
-//
-// ResolvedServerSpec contains resolved references to resources required by the server.
 type ResolvedServerSpecApplyConfiguration struct {
-	// ServerGroupID is the ID of the server group the server should be added to and is calculated based on ServerGroupFilter.
-	ServerGroupID *string `json:"serverGroupID,omitempty"`
-	// ImageID is the ID of the image to use for the server and is calculated based on ImageFilter.
-	ImageID *string `json:"imageID,omitempty"`
-	// FlavorID is the ID of the flavor to use.
-	FlavorID *string `json:"flavorID,omitempty"`
-	// Ports is the fully resolved list of ports to create for the server.
-	Ports []v1beta2.ResolvedPortSpecApplyConfiguration `json:"ports,omitempty"`
+	ServerGroupID *string                                      `json:"serverGroupID,omitempty"`
+	ImageID       *string                                      `json:"imageID,omitempty"`
+	FlavorID      *string                                      `json:"flavorID,omitempty"`
+	Ports         []v1beta1.ResolvedPortSpecApplyConfiguration `json:"ports,omitempty"`
 }
 
 // ResolvedServerSpecApplyConfiguration constructs a declarative configuration of the ResolvedServerSpec type for use with
@@ -70,7 +64,7 @@ func (b *ResolvedServerSpecApplyConfiguration) WithFlavorID(value string) *Resol
 // WithPorts adds the given value to the Ports field in the declarative configuration
 // and returns the receiver, so that objects can be build by chaining "With" function invocations.
 // If called multiple times, values provided by each call will be appended to the Ports field.
-func (b *ResolvedServerSpecApplyConfiguration) WithPorts(values ...*v1beta2.ResolvedPortSpecApplyConfiguration) *ResolvedServerSpecApplyConfiguration {
+func (b *ResolvedServerSpecApplyConfiguration) WithPorts(values ...*v1beta1.ResolvedPortSpecApplyConfiguration) *ResolvedServerSpecApplyConfiguration {
 	for i := range values {
 		if values[i] == nil {
 			panic("nil value passed to WithPorts")

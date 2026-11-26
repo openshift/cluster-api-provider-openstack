@@ -25,10 +25,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	utilconversion "sigs.k8s.io/cluster-api/util/conversion"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	infrav1alpha1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1alpha1"
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 )
 
 type pointerToObject[T any] interface {
@@ -36,8 +36,8 @@ type pointerToObject[T any] interface {
 	runtime.Object
 }
 
-// fuzzValidator fuzzes a Validator with objects of the validator's expected type.
-func fuzzValidator[O any, PO pointerToObject[O]](t *testing.T, name string, validator admission.Validator[PO]) {
+// fuzzCustomValidator fuzzes a CustomValidator with objects of the validator's expected type.
+func fuzzCustomValidator[O any, PO pointerToObject[O]](t *testing.T, name string, validator webhook.CustomValidator) {
 	t.Helper()
 	fuzz := utilconversion.GetFuzzer(scheme.Scheme)
 	ctx := context.TODO()
@@ -77,21 +77,21 @@ func fuzzValidator[O any, PO pointerToObject[O]](t *testing.T, name string, vali
 }
 
 func Test_FuzzClusterWebhook(t *testing.T) {
-	fuzzValidator[infrav1.OpenStackCluster](t, "OpenStackCluster", &openStackClusterWebhook{})
+	fuzzCustomValidator[infrav1.OpenStackCluster](t, "OpenStackCluster", &openStackClusterWebhook{})
 }
 
 func Test_FuzzClusterTemplateWebhook(t *testing.T) {
-	fuzzValidator[infrav1.OpenStackClusterTemplate](t, "OpenStackClusterTemplate", &openStackClusterTemplateWebhook{})
+	fuzzCustomValidator[infrav1.OpenStackClusterTemplate](t, "OpenStackClusterTemplate", &openStackClusterTemplateWebhook{})
 }
 
 func Test_FuzzMachineWebhook(t *testing.T) {
-	fuzzValidator[infrav1.OpenStackMachine](t, "OpenStackMachine", &openStackMachineWebhook{})
+	fuzzCustomValidator[infrav1.OpenStackMachine](t, "OpenStackMachine", &openStackMachineWebhook{})
 }
 
 func Test_FuzzMachineTemplateWebhook(t *testing.T) {
-	fuzzValidator[infrav1.OpenStackMachineTemplate](t, "OpenStackMachineTemplate", &openStackMachineTemplateWebhook{})
+	fuzzCustomValidator[infrav1.OpenStackMachineTemplate](t, "OpenStackMachineTemplate", &openStackMachineTemplateWebhook{})
 }
 
 func Test_FuzzServerWebhook(t *testing.T) {
-	fuzzValidator[infrav1alpha1.OpenStackServer](t, "OpenStackServer", &openStackServerWebhook{})
+	fuzzCustomValidator[infrav1alpha1.OpenStackServer](t, "OpenStackServer", &openStackServerWebhook{})
 }

@@ -40,9 +40,6 @@ var (
 	// schemeBuilder is used to add go types to the GroupVersionKind scheme.
 	schemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
 
-	// localSchemeBuilder is referenced by conversion-gen to register conversion functions.
-	localSchemeBuilder = &schemeBuilder
-
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = schemeBuilder.AddToScheme
 

@@ -39,7 +39,10 @@ endif
 .DEFAULT_GOAL:=help
 
 # Use GOPROXY environment variable if set
-GOPROXY = $(shell go env GOPROXY)
+GOPROXY := $(shell go env GOPROXY)
+ifeq ($(GOPROXY),)
+GOPROXY := https://proxy.golang.org
+endif
 export GOPROXY
 
 $(TOOLS_BIN_DIR)/%: $(TOOLS_DIR_DEPS)

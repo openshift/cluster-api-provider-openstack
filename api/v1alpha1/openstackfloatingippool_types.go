@@ -20,8 +20,9 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 )
 
 const (
@@ -87,7 +88,7 @@ type OpenStackFloatingIPPoolStatus struct {
 	// +optional
 	FloatingIPNetwork *infrav1.NetworkStatus `json:"floatingIPNetwork,omitempty"`
 
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Conditions clusterv1beta1.Conditions `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -113,12 +114,12 @@ type OpenStackFloatingIPPoolList struct {
 }
 
 // GetConditions returns the observations of the operational state of the OpenStackFloatingIPPool resource.
-func (r *OpenStackFloatingIPPool) GetConditions() []metav1.Condition {
+func (r *OpenStackFloatingIPPool) GetConditions() clusterv1beta1.Conditions {
 	return r.Status.Conditions
 }
 
 // SetConditions sets the underlying service state of the OpenStackFloatingIPPool to the predescribed clusterv1.Conditions.
-func (r *OpenStackFloatingIPPool) SetConditions(conditions []metav1.Condition) {
+func (r *OpenStackFloatingIPPool) SetConditions(conditions clusterv1beta1.Conditions) {
 	r.Status.Conditions = conditions
 }
 
@@ -134,5 +135,5 @@ func (r *OpenStackFloatingIPPool) GetIdentityRef() (*string, *infrav1.OpenStackI
 }
 
 func init() {
-	objectTypes = append(objectTypes, &OpenStackFloatingIPPool{}, &OpenStackFloatingIPPoolList{})
+	SchemeBuilder.Register(&OpenStackFloatingIPPool{}, &OpenStackFloatingIPPoolList{})
 }

@@ -37,7 +37,7 @@ import (
 
 	orcv1alpha1 "github.com/k-orc/openstack-resource-controller/v2/api/v1alpha1"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/record"
 	capoerrors "sigs.k8s.io/cluster-api-provider-openstack/pkg/utils/errors"
@@ -231,7 +231,7 @@ func (s *Service) getOrCreateVolumeBuilder(eventObject runtime.Object, instanceS
 	createOpts := volumes.CreateOpts{
 		Name:             volumeName(instanceSpec.Name, blockDeviceSpec.Name),
 		Description:      description,
-		Size:             int(blockDeviceSpec.SizeGiB),
+		Size:             blockDeviceSpec.SizeGiB,
 		ImageID:          imageID,
 		AvailabilityZone: availabilityZone,
 		VolumeType:       volType,
@@ -324,7 +324,7 @@ func (s *Service) getBlockDevices(eventObject runtime.Object, instanceSpec *Inst
 		case infrav1.LocalBlockDevice:
 			sourceType = servers.SourceBlank
 			destinationType = servers.DestinationLocal
-			localDiskSizeGiB = int(blockDeviceSpec.SizeGiB)
+			localDiskSizeGiB = blockDeviceSpec.SizeGiB
 		default:
 			return nil, fmt.Errorf("invalid block device type %s", blockDeviceSpec.Storage.Type)
 		}
@@ -426,12 +426,14 @@ func (s *Service) getImageIDByReference(ctx context.Context, k8sClient client.Cl
 	return nil, nil
 }
 
-func (s *Service) GetFlavorID(flavorParam infrav1.FlavorParam) (string, error) {
-	if flavorParam.ID != nil {
-		return *flavorParam.ID, nil
+// Helper to resolve a flavor ID.
+// TODO: needs a breaking CRD change so it works like images.
+func (s *Service) GetFlavorID(flavorID, flavorName *string) (string, error) {
+	if flavorID != nil {
+		return *flavorID, nil
 	}
 
-	if flavorParam.Filter == nil || flavorParam.Filter.Name == nil {
+	if flavorName == nil {
 		return "", fmt.Errorf("no flavors were found: no name set")
 	}
 
@@ -441,12 +443,12 @@ func (s *Service) GetFlavorID(flavorParam infrav1.FlavorParam) (string, error) {
 	}
 
 	for _, flavor := range allFlavors {
-		if flavor.Name == *flavorParam.Filter.Name {
+		if flavor.Name == *flavorName {
 			return flavor.ID, nil
 		}
 	}
 
-	return "", fmt.Errorf("no flavors were found: name=%v", *flavorParam.Filter.Name)
+	return "", fmt.Errorf("no flavors were found: name=%v", *flavorName)
 }
 
 func (s *Service) GetFlavor(flavorID string) (*flavors.Flavor, error) {

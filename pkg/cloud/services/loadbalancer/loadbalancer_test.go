@@ -30,14 +30,13 @@ import (
 	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/monitors"
 	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/pools"
 	"github.com/gophercloud/gophercloud/v2/openstack/loadbalancer/v2/providers"
-	"github.com/gophercloud/gophercloud/v2/openstack/networking/v2/subnets"
-	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega" //nolint:revive
 	"go.uber.org/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-	clusterv1 "sigs.k8s.io/cluster-api/api/core/v1beta2"
+	clusterv1beta1 "sigs.k8s.io/cluster-api/api/core/v1beta1"
 
-	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta2"
+	infrav1 "sigs.k8s.io/cluster-api-provider-openstack/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/clients/mock"
 	"sigs.k8s.io/cluster-api-provider-openstack/pkg/scope"
 )
@@ -68,13 +67,11 @@ func Test_ReconcileLoadBalancer(t *testing.T) {
 
 	openStackCluster := &infrav1.OpenStackCluster{
 		Spec: infrav1.OpenStackClusterSpec{
-			APIServer: &infrav1.APIServer{
-				ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{
-					Enabled: ptr.To(true),
-				},
-				EnableFloatingIP: ptr.To(false),
+			APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+				Enabled: ptr.To(true),
 			},
-			ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+			DisableAPIServerFloatingIP: ptr.To(true),
+			ControlPlaneEndpoint: &clusterv1beta1.APIEndpoint{
 				Host: apiHostname,
 				Port: 6443,
 			},
@@ -184,19 +181,17 @@ func Test_ReconcileLoadBalancer(t *testing.T) {
 			name: "should update monitor when values are different than defaults",
 			clusterSpec: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{
-							Enabled: ptr.To(true),
-							Monitor: &infrav1.APIServerLoadBalancerMonitor{
-								Delay:          15,
-								Timeout:        8,
-								MaxRetries:     6,
-								MaxRetriesDown: 4,
-							},
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						Enabled: ptr.To(true),
+						Monitor: &infrav1.APIServerLoadBalancerMonitor{
+							Delay:          15,
+							Timeout:        8,
+							MaxRetries:     6,
+							MaxRetriesDown: 4,
 						},
-						EnableFloatingIP: ptr.To(false),
 					},
-					ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+					DisableAPIServerFloatingIP: ptr.To(true),
+					ControlPlaneEndpoint: &clusterv1beta1.APIEndpoint{
 						Host: apiHostname,
 						Port: 6443,
 					},
@@ -287,19 +282,17 @@ func Test_ReconcileLoadBalancer(t *testing.T) {
 			name: "should report error when monitor update fails",
 			clusterSpec: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{
-							Enabled: ptr.To(true),
-							Monitor: &infrav1.APIServerLoadBalancerMonitor{
-								Delay:          15,
-								Timeout:        8,
-								MaxRetries:     6,
-								MaxRetriesDown: 4,
-							},
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						Enabled: ptr.To(true),
+						Monitor: &infrav1.APIServerLoadBalancerMonitor{
+							Delay:          15,
+							Timeout:        8,
+							MaxRetries:     6,
+							MaxRetriesDown: 4,
 						},
-						EnableFloatingIP: ptr.To(false),
 					},
-					ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+					DisableAPIServerFloatingIP: ptr.To(true),
+					ControlPlaneEndpoint: &clusterv1beta1.APIEndpoint{
 						Host: apiHostname,
 						Port: 6443,
 					},
@@ -382,19 +375,17 @@ func Test_ReconcileLoadBalancer(t *testing.T) {
 			name: "should create monitor when it doesn't exist",
 			clusterSpec: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{
-							Enabled: ptr.To(true),
-							Monitor: &infrav1.APIServerLoadBalancerMonitor{
-								Delay:          15,
-								Timeout:        8,
-								MaxRetries:     6,
-								MaxRetriesDown: 4,
-							},
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						Enabled: ptr.To(true),
+						Monitor: &infrav1.APIServerLoadBalancerMonitor{
+							Delay:          15,
+							Timeout:        8,
+							MaxRetries:     6,
+							MaxRetriesDown: 4,
 						},
-						EnableFloatingIP: ptr.To(false),
 					},
-					ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+					DisableAPIServerFloatingIP: ptr.To(true),
+					ControlPlaneEndpoint: &clusterv1beta1.APIEndpoint{
 						Host: apiHostname,
 						Port: 6443,
 					},
@@ -528,7 +519,7 @@ func Test_getAPIServerVIPAddress(t *testing.T) {
 			name: "API server VIP is InternalIP",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Status: infrav1.OpenStackClusterStatus{
-					APIServerManagedLoadBalancer: &infrav1.LoadBalancer{
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
 						InternalIP: "1.2.3.4",
 					},
 				},
@@ -540,9 +531,7 @@ func Test_getAPIServerVIPAddress(t *testing.T) {
 			name: "API server VIP is API Server Fixed IP",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						FixedIP: ptr.To("1.2.3.4"),
-					},
+					APIServerFixedIP: ptr.To("1.2.3.4"),
 				},
 			},
 			want:      ptr.To("1.2.3.4"),
@@ -552,10 +541,8 @@ func Test_getAPIServerVIPAddress(t *testing.T) {
 			name: "API server VIP with valid control plane endpoint",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						EnableFloatingIP: ptr.To(false),
-					},
-					ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+					DisableAPIServerFloatingIP: ptr.To(true),
+					ControlPlaneEndpoint: &clusterv1beta1.APIEndpoint{
 						Host: apiHostname,
 						Port: 6443,
 					},
@@ -568,10 +555,8 @@ func Test_getAPIServerVIPAddress(t *testing.T) {
 			name: "API server VIP with invalid control plane endpoint",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						EnableFloatingIP: ptr.To(false),
-					},
-					ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+					DisableAPIServerFloatingIP: ptr.To(true),
+					ControlPlaneEndpoint: &clusterv1beta1.APIEndpoint{
 						Host: "invalid-api.test-cluster.test",
 						Port: 6443,
 					},
@@ -623,7 +608,7 @@ func Test_getAPIServerFloatingIP(t *testing.T) {
 			name: "API server FIP is API Server LB IP",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Status: infrav1.OpenStackClusterStatus{
-					APIServerManagedLoadBalancer: &infrav1.LoadBalancer{
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
 						IP: "1.2.3.4",
 					},
 				},
@@ -635,9 +620,7 @@ func Test_getAPIServerFloatingIP(t *testing.T) {
 			name: "API server FIP is API Server Floating IP",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						FloatingIP: ptr.To("1.2.3.4"),
-					},
+					APIServerFloatingIP: ptr.To("1.2.3.4"),
 				},
 			},
 			want:      ptr.To("1.2.3.4"),
@@ -647,7 +630,7 @@ func Test_getAPIServerFloatingIP(t *testing.T) {
 			name: "API server FIP with valid control plane endpoint",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+					ControlPlaneEndpoint: &clusterv1beta1.APIEndpoint{
 						Host: apiHostname,
 						Port: 6443,
 					},
@@ -660,7 +643,7 @@ func Test_getAPIServerFloatingIP(t *testing.T) {
 			name: "API server FIP with invalid control plane endpoint",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+					ControlPlaneEndpoint: &clusterv1beta1.APIEndpoint{
 						Host: "invalid-api.test-cluster.test",
 						Port: 6443,
 					},
@@ -700,10 +683,8 @@ func Test_getCanonicalAllowedCIDRs(t *testing.T) {
 			name: "allowed CIDRs are set",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{
-							AllowedCIDRs: []string{"1.2.3.4/32"},
-						},
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						AllowedCIDRs: []string{"1.2.3.4/32"},
 					},
 				},
 			},
@@ -713,10 +694,8 @@ func Test_getCanonicalAllowedCIDRs(t *testing.T) {
 			name: "allowed CIDRs are set with bastion",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{
-							AllowedCIDRs: []string{"1.2.3.4/32"},
-						},
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						AllowedCIDRs: []string{"1.2.3.4/32"},
 					},
 				},
 				Status: infrav1.OpenStackClusterStatus{
@@ -732,10 +711,8 @@ func Test_getCanonicalAllowedCIDRs(t *testing.T) {
 			name: "allowed CIDRs are set with network status",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{
-							AllowedCIDRs: []string{"1.2.3.4/32"},
-						},
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						AllowedCIDRs: []string{"1.2.3.4/32"},
 					},
 				},
 				Status: infrav1.OpenStackClusterStatus{
@@ -754,10 +731,8 @@ func Test_getCanonicalAllowedCIDRs(t *testing.T) {
 			name: "allowed CIDRs are set with network status and router IP",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{
-							AllowedCIDRs: []string{"1.2.3.4/32"},
-						},
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						AllowedCIDRs: []string{"1.2.3.4/32"},
 					},
 				},
 				Status: infrav1.OpenStackClusterStatus{
@@ -805,7 +780,6 @@ func Test_getOrCreateAPILoadBalancer(t *testing.T) {
 	lbtests := []struct {
 		name               string
 		openStackCluster   *infrav1.OpenStackCluster
-		expectNetwork      func(m *mock.MockNetworkClientMockRecorder)
 		expectLoadBalancer func(m *mock.MockLbClientMockRecorder)
 		want               *loadbalancers.LoadBalancer
 		wantError          error
@@ -813,7 +787,6 @@ func Test_getOrCreateAPILoadBalancer(t *testing.T) {
 		{
 			name:             "nothing exists",
 			openStackCluster: &infrav1.OpenStackCluster{},
-			expectNetwork:    func(*mock.MockNetworkClientMockRecorder) {},
 			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
 				m.ListLoadBalancers(gomock.Any()).Return([]loadbalancers.LoadBalancer{}, nil)
 			},
@@ -823,7 +796,6 @@ func Test_getOrCreateAPILoadBalancer(t *testing.T) {
 		{
 			name:             "loadbalancer already exists",
 			openStackCluster: &infrav1.OpenStackCluster{},
-			expectNetwork:    func(*mock.MockNetworkClientMockRecorder) {},
 			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
 				m.ListLoadBalancers(gomock.Any()).Return([]loadbalancers.LoadBalancer{{ID: "AAAAA"}}, nil)
 			},
@@ -841,12 +813,11 @@ func Test_getOrCreateAPILoadBalancer(t *testing.T) {
 							{ID: "aaaaaaaa-bbbb-cccc-dddd-333333333333"},
 						},
 					},
-					APIServerManagedLoadBalancer: &infrav1.LoadBalancer{
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
 						LoadBalancerNetwork: nil,
 					},
 				},
 			},
-			expectNetwork: func(*mock.MockNetworkClientMockRecorder) {},
 			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
 				m.ListLoadBalancers(gomock.Any()).Return([]loadbalancers.LoadBalancer{}, nil)
 				m.ListLoadBalancerProviders().Return(octaviaProviders, nil)
@@ -869,7 +840,7 @@ func Test_getOrCreateAPILoadBalancer(t *testing.T) {
 							{ID: "aaaaaaaa-bbbb-cccc-dddd-222222222222"},
 						},
 					},
-					APIServerManagedLoadBalancer: &infrav1.LoadBalancer{
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
 						LoadBalancerNetwork: &infrav1.NetworkStatusWithSubnets{
 							NetworkStatus: infrav1.NetworkStatus{
 								Name: "VIPNET",
@@ -886,7 +857,6 @@ func Test_getOrCreateAPILoadBalancer(t *testing.T) {
 					},
 				},
 			},
-			expectNetwork: func(*mock.MockNetworkClientMockRecorder) {},
 			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
 				m.ListLoadBalancers(gomock.Any()).Return([]loadbalancers.LoadBalancer{}, nil)
 				m.ListLoadBalancerProviders().Return(octaviaProviders, nil)
@@ -906,10 +876,8 @@ func Test_getOrCreateAPILoadBalancer(t *testing.T) {
 			name: "loadbalancer with specified flavor created",
 			openStackCluster: &infrav1.OpenStackCluster{
 				Spec: infrav1.OpenStackClusterSpec{
-					APIServer: &infrav1.APIServer{
-						ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{
-							Flavor: ptr.To("flavorName"),
-						},
+					APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+						Flavor: ptr.To("flavorName"),
 					},
 				},
 				Status: infrav1.OpenStackClusterStatus{
@@ -919,12 +887,11 @@ func Test_getOrCreateAPILoadBalancer(t *testing.T) {
 							{ID: "aaaaaaaa-bbbb-cccc-dddd-333333333333"},
 						},
 					},
-					APIServerManagedLoadBalancer: &infrav1.LoadBalancer{
+					APIServerLoadBalancer: &infrav1.LoadBalancer{
 						LoadBalancerNetwork: nil,
 					},
 				},
 			},
-			expectNetwork: func(*mock.MockNetworkClientMockRecorder) {},
 			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
 				m.ListLoadBalancers(gomock.Any()).Return([]loadbalancers.LoadBalancer{}, nil)
 				m.ListLoadBalancerProviders().Return(octaviaProviders, nil)
@@ -939,49 +906,6 @@ func Test_getOrCreateAPILoadBalancer(t *testing.T) {
 				VipSubnetID: "aaaaaaaa-bbbb-cccc-dddd-222222222222",
 			},
 		},
-		{
-			name: "loadbalancer VIP uses primarySubnet when set",
-			openStackCluster: &infrav1.OpenStackCluster{
-				Spec: infrav1.OpenStackClusterSpec{
-					PrimarySubnet: &infrav1.SubnetParam{
-						ID: ptr.To("aaaaaaaa-bbbb-cccc-dddd-444444444444"),
-					},
-				},
-				Status: infrav1.OpenStackClusterStatus{
-					Network: &infrav1.NetworkStatusWithSubnets{
-						NetworkStatus: infrav1.NetworkStatus{
-							ID: "aaaaaaaa-bbbb-cccc-dddd-111111111111",
-						},
-						Subnets: []infrav1.Subnet{
-							{ID: "aaaaaaaa-bbbb-cccc-dddd-222222222222"},
-							{ID: "aaaaaaaa-bbbb-cccc-dddd-333333333333"},
-							{ID: "aaaaaaaa-bbbb-cccc-dddd-444444444444"},
-						},
-					},
-					APIServerManagedLoadBalancer: &infrav1.LoadBalancer{
-						LoadBalancerNetwork: nil,
-					},
-				},
-			},
-			expectNetwork: func(m *mock.MockNetworkClientMockRecorder) {
-				m.GetSubnet("aaaaaaaa-bbbb-cccc-dddd-444444444444").Return(&subnets.Subnet{
-					ID:        "aaaaaaaa-bbbb-cccc-dddd-444444444444",
-					NetworkID: "aaaaaaaa-bbbb-cccc-dddd-111111111111",
-				}, nil)
-			},
-			expectLoadBalancer: func(m *mock.MockLbClientMockRecorder) {
-				m.ListLoadBalancers(gomock.Any()).Return([]loadbalancers.LoadBalancer{}, nil)
-				m.ListLoadBalancerProviders().Return(octaviaProviders, nil)
-				m.CreateLoadBalancer(gomock.Any()).Return(&loadbalancers.LoadBalancer{
-					ID:          "AAAAA",
-					VipSubnetID: "aaaaaaaa-bbbb-cccc-dddd-444444444444",
-				}, nil)
-			},
-			want: &loadbalancers.LoadBalancer{
-				ID:          "AAAAA",
-				VipSubnetID: "aaaaaaaa-bbbb-cccc-dddd-444444444444",
-			},
-		},
 	}
 	for _, tt := range lbtests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -992,7 +916,6 @@ func Test_getOrCreateAPILoadBalancer(t *testing.T) {
 			lbs, err := NewService(scope.NewWithLogger(mockScopeFactory, log))
 			g.Expect(err).NotTo(HaveOccurred())
 
-			tt.expectNetwork(mockScopeFactory.NetworkClient.EXPECT())
 			tt.expectLoadBalancer(mockScopeFactory.LbClient.EXPECT())
 			lb, err := lbs.getOrCreateAPILoadBalancer(tt.openStackCluster, "AAAAA")
 			if tt.wantError != nil {
@@ -1030,24 +953,22 @@ func Test_ReconcileLoadBalancerMember(t *testing.T) {
 	makeCluster := func(provider *string, lbNetworkID string) *infrav1.OpenStackCluster {
 		return &infrav1.OpenStackCluster{
 			Spec: infrav1.OpenStackClusterSpec{
-				APIServer: &infrav1.APIServer{
-					ManagedLoadBalancer: &infrav1.APIServerLoadBalancer{
-						Enabled:  ptr.To(true),
-						Provider: provider,
-						Network: &infrav1.NetworkParam{
-							ID: &lbNetworkID,
-						},
+				APIServerLoadBalancer: &infrav1.APIServerLoadBalancer{
+					Enabled:  ptr.To(true),
+					Provider: provider,
+					Network: &infrav1.NetworkParam{
+						ID: &lbNetworkID,
 					},
-					EnableFloatingIP: ptr.To(false),
 				},
-				ControlPlaneEndpoint: &clusterv1.APIEndpoint{
+				DisableAPIServerFloatingIP: ptr.To(true),
+				ControlPlaneEndpoint: &clusterv1beta1.APIEndpoint{
 					Host: apiHostname,
 					Port: port,
 				},
 				Tags: []string{"k8s", "clusterapi"},
 			},
 			Status: infrav1.OpenStackClusterStatus{
-				APIServerManagedLoadBalancer: &infrav1.LoadBalancer{
+				APIServerLoadBalancer: &infrav1.LoadBalancer{
 					ID: lbID,
 					LoadBalancerNetwork: &infrav1.NetworkStatusWithSubnets{
 						NetworkStatus: infrav1.NetworkStatus{
@@ -1266,12 +1187,12 @@ func Test_ReconcileLoadBalancerMember(t *testing.T) {
 			name: "nil LoadBalancerNetwork, return error and wait",
 			clusterSpec: func() *infrav1.OpenStackCluster {
 				c := makeCluster(nil, clusterNetID)
-				c.Status.APIServerManagedLoadBalancer.LoadBalancerNetwork = nil
+				c.Status.APIServerLoadBalancer.LoadBalancerNetwork = nil
 				return c
 			}(),
 			expectNetwork:      func(*mock.MockNetworkClientMockRecorder) {},
 			expectLoadBalancer: func(*mock.MockLbClientMockRecorder) {},
-			wantError:          errors.New("apiServerManagedLoadBalancer.LoadBalancerNetwork is not yet available in openStackCluster.Status"),
+			wantError:          errors.New("apiServerLoadBalancer.LoadBalancerNetwork is not yet available in openStackCluster.Status"),
 		},
 	}
 
