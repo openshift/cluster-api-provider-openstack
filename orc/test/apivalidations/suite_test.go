@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -104,7 +105,9 @@ var _ = BeforeSuite(func() {
 
 	Expect(serverVersion.Major).To(Equal("1"))
 
-	minorInt, err := strconv.Atoi(serverVersion.Minor)
+	// OpenShift envtest builds append "+" when the binary has a git suffix
+	// (for example v1.30.3-dirty reports minor "30+").
+	minorInt, err := strconv.Atoi(strings.TrimSuffix(serverVersion.Minor, "+"))
 	Expect(err).ToNot(HaveOccurred())
 	Expect(minorInt).To(BeNumerically(">=", 25), fmt.Sprintf("This test suite requires a Kube API server of at least version 1.25, current version is 1.%s", serverVersion.Minor))
 

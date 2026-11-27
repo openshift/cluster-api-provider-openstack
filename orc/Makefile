@@ -1,7 +1,10 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.30.0
+# 1.30.3 is the 1.30 release in the OpenShift envtest index. The legacy
+# kubebuilder-tools bucket returns 401, and 1.30.0 is not published there.
+ENVTEST_K8S_VERSION = 1.30.3
+ENVTEST_INDEX ?= https://raw.githubusercontent.com/openshift/api/master/envtest-releases.yaml
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -84,7 +87,7 @@ test: manifests generate fmt vet test-only ## Run tests.
 
 .PHONY: test-only
 test-only: envtest
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list $(TEST_PATHS) | grep -v /e2e) -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path --use-deprecated-gcs=false --index $(ENVTEST_INDEX))" go test $$(go list $(TEST_PATHS) | grep -v /e2e) -coverprofile cover.out
 
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
 .PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
