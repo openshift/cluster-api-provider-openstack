@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,6 +17,12 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 )
+
+// Transformer YAML is loaded from disk by provider kustomization overlays.
+// Embedding it makes `go mod vendor` copy those files into consumer repos.
+//
+//go:embed transformers/*.yaml
+var _ embed.FS
 
 var (
 	allowedPlatformTypes = []string{
@@ -48,6 +55,7 @@ func init() {
 
 type cmdlineOptions struct {
 	manifestsPath          string
+	manifestsSummary       bool
 	profileName            string
 	kustomizeDir           string
 	name                   string
@@ -55,6 +63,7 @@ type cmdlineOptions struct {
 	protectClusterResource string
 	selfImageRef           string
 	installOrder           int
+	preserveRequests       bool
 	attributes             map[string]string
 }
 
@@ -78,9 +87,10 @@ func (a attributeFlags) Set(value string) error {
 
 func main() {
 	var (
-		manifestsPath = flag.String("manifests-path", "", "Path to the desired directory where to output the generated manifests. Required.")
-		profileName   = flag.String("profile-name", "default", "Name of the profile, e.g 'featuregate-foo' (default: 'default'.'")
-		kustomizeDir  = flag.String("kustomize-dir", "", "Directory containing kustomization.yaml file used to generate the base resources, relative to the current working directory. Required.")
+		manifestsPath    = flag.String("manifests-path", "", "Path to the desired directory where to output the generated manifests. Required.")
+		profileName      = flag.String("profile-name", "default", "Name of the profile, e.g 'featuregate-foo' (default: 'default'.'")
+		kustomizeDir     = flag.String("kustomize-dir", "", "Directory containing kustomization.yaml file used to generate the base resources, relative to the current working directory. Required.")
+		manifestsSummary = flag.Bool("manifests-summary", false, "If set, output the manifests summary YAML file")
 
 		name = flag.String("name", "", "Name of the provider, e.g. 'cluster-api-provider-aws'. Required.")
 
@@ -88,6 +98,7 @@ func main() {
 		protectClusterResource = flag.String("protect-cluster-resource", "", "Singular name of a cluster resource, e.g. 'awscluster'. Generates a ValidatingAdmissionPolicy which prevents modification of cluster resources created by the CAPI Operator. If provided matches any CRD in the manifests with this name. If not provided, matches any CRD in the manifests in the 'infrastructure.cluster.x-k8s.io' group whose plural name ends in 'clusters'. Optional.")
 		selfImageRef           = flag.String("self-image-ref", "", "Image reference of the provider in generated manifests, e.g. registry.ci.openshift.org/openshift:aws-cluster-api-controllers. If specified, this string will be substituted with the provider's release image when the manifests are installed. Optional.")
 		installOrder           = flag.Int("install-order", 0, "Order in which providers are installed. Lower values are installed first. Optional.")
+		preserveRequests       = flag.Bool("preserve-resource-requests", false, "If set, resource requests already declared on Deployment containers are kept instead of being replaced by the default CPU and memory requests. Missing CPU or memory requests are still defaulted, and resource limits are always removed. Optional.")
 	)
 
 	attributes := make(attributeFlags)
@@ -97,6 +108,7 @@ func main() {
 
 	opts := cmdlineOptions{
 		manifestsPath:          *manifestsPath,
+		manifestsSummary:       *manifestsSummary,
 		profileName:            *profileName,
 		kustomizeDir:           *kustomizeDir,
 		name:                   *name,
@@ -104,6 +116,7 @@ func main() {
 		protectClusterResource: *protectClusterResource,
 		selfImageRef:           *selfImageRef,
 		installOrder:           *installOrder,
+		preserveRequests:       *preserveRequests,
 		attributes:             attributes,
 	}
 

@@ -18,7 +18,7 @@ jobs:
       current_version: ${{ steps.check_version.outputs.current_version }}
     steps:
     - name: Checkout repository
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
     - name: Get latest golangci-lint version
@@ -39,7 +39,7 @@ jobs:
         sed -i "s/GOLANGCI_LINT_VERSION ?= .*/GOLANGCI_LINT_VERSION ?= ${{ steps.get_version.outputs.latest_version }}/" hack/tools/Makefile
     - name: Create Pull Request
       if: ${{ steps.check_version.outputs.current_version != steps.get_version.outputs.latest_version }}
-      uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # tag=v8.1.1
+      uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1 # tag=v8.1.3
       with:
         commit-message: "This commit updates golangci-lint to version v${{ steps.get_version.outputs.latest_version }}."
         title: ":seedling: chore: bump golangci-lint to v${{ steps.get_version.outputs.latest_version }}"
