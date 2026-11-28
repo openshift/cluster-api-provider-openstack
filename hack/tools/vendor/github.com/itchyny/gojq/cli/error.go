@@ -1,0 +1,253 @@
+package cli
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"iter"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+
+	"github.com/itchyny/go-yaml"
+	"github.com/mattn/go-runewidth"
+
+	"github.com/itchyny/gojq"
+)
+
+type emptyError struct {
+	err error
+}
+
+func (*emptyError) Error() string {
+	return ""
+}
+
+func (*emptyError) isEmptyError() {}
+
+func (err *emptyError) ExitCode() int {
+	if err, ok := err.err.(interface{ ExitCode() int }); ok {
+		return err.ExitCode()
+	}
+	return exitCodeDefaultErr
+}
+
+type exitCodeError struct {
+	code int
+}
+
+func (err *exitCodeError) Error() string {
+	return "exit code: " + strconv.Itoa(err.code)
+}
+
+func (*exitCodeError) isEmptyError() {}
+
+func (err *exitCodeError) ExitCode() int {
+	return err.code
+}
+
+type flagParseError struct {
+	err error
+}
+
+func (err *flagParseError) Error() string {
+	return err.err.Error()
+}
+
+func (*flagParseError) ExitCode() int {
+	return exitCodeFlagParseErr
+}
+
+type compileError struct {
+	err error
+}
+
+func (err *compileError) Error() string {
+	return "compile error: " + err.err.Error()
+}
+
+func (*compileError) ExitCode() int {
+	return exitCodeCompileErr
+}
+
+type queryParseError struct {
+	fname, contents string
+	err             error
+}
+
+func (err *queryParseError) Error() string {
+	var offset int
+	var e *gojq.ParseError
+	if errors.As(err.err, &e) {
+		offset = e.Offset - len(e.Token) + 1
+	}
+	linestr, line, column := getLineByOffset(err.contents, offset)
+	if err.fname != "<arg>" || containsNewline(err.contents) {
+		return fmt.Sprintf("invalid query: %s:%d\n%s  %s",
+			err.fname, line, formatLineInfo(linestr, line, column), err.err)
+	}
+	return fmt.Sprintf("invalid query: %s\n    %s\n    %*c  %s",
+		err.contents, linestr, column+1, '^', err.err)
+}
+
+func (*queryParseError) ExitCode() int {
+	return exitCodeCompileErr
+}
+
+type jsonParseError struct {
+	fname, contents string
+	line            int
+	err             error
+}
+
+func (err *jsonParseError) Error() string {
+	var offset int
+	if err.err == io.ErrUnexpectedEOF {
+		offset = len(err.contents) + 1
+	} else if e, ok := err.err.(*json.SyntaxError); ok {
+		offset = int(e.Offset)
+	} else if e, ok := err.err.(*jsonTrailingValueError); ok {
+		offset = e.offset
+	}
+	linestr, line, column := getLineByOffset(err.contents, offset)
+	if line += err.line; line > 1 {
+		return fmt.Sprintf("invalid json: %s:%d\n%s  %s",
+			err.fname, line, formatLineInfo(linestr, line, column), err.err)
+	}
+	return fmt.Sprintf("invalid json: %s\n    %s\n    %*c  %s",
+		err.fname, linestr, column+1, '^', err.err)
+}
+
+type jsonTrailingValueError struct {
+	char   rune
+	offset int
+}
+
+func (err *jsonTrailingValueError) Error() string {
+	return "invalid character " + strconv.QuoteRune(err.char) + " after top-level value"
+}
+
+type yamlParseError struct {
+	fname, contents string
+	err             error
+}
+
+func (err *yamlParseError) Error() string {
+	var index int
+	var message string
+	var le *yaml.LoadError
+	if errors.As(err.err, &le) {
+		mark := le.Mark
+		if le.ContextMark.Line > 0 {
+			mark = le.ContextMark
+		}
+		index, message = markIndex(err.contents, mark), le.Message
+	}
+	linestr, line, column := getLineByOffset(err.contents, index+1)
+	return fmt.Sprintf("invalid yaml: %s:%d\n%s  %s",
+		err.fname, line, formatLineInfo(linestr, line, column), message)
+}
+
+func markIndex(contents string, mark yaml.Mark) int {
+	var i int
+	for l := 1; l < mark.Line; l++ {
+		j := strings.IndexByte(contents[i:], '\n')
+		if j < 0 {
+			return mark.Index
+		}
+		i += j + 1
+	}
+	for c := 1; c < mark.Column && i < len(contents); c++ {
+		_, size := utf8.DecodeRuneInString(contents[i:])
+		i += size
+	}
+	return i
+}
+
+func getLineByOffset(str string, offset int) (linestr string, line, column int) {
+	for str, start := range stringLines(str) {
+		line++
+		linestr = str
+		if offset <= start+len(str)+1 {
+			offset -= start
+			break
+		}
+	}
+	offset = min(max(offset-1, 0), len(linestr))
+	if offset > 48 {
+		skip := len(trimLastInvalidRune(linestr[:offset-48]))
+		linestr = linestr[skip:]
+		offset -= skip
+	}
+	linestr = trimLastInvalidRune(linestr[:min(64, len(linestr))])
+	if offset < len(linestr) {
+		offset = len(trimLastInvalidRune(linestr[:offset]))
+	} else {
+		offset = len(linestr)
+	}
+	column = runewidth.StringWidth(linestr[:offset])
+	return
+}
+
+func stringLines(str string) iter.Seq2[string, int] {
+	return func(yield func(string, int) bool) {
+		var offset int
+		for str != "" {
+			var line string
+			i := indexNewline(str)
+			if i >= 0 {
+				line, str = str[:i], str[i:]
+				var ok bool
+				if str, ok = strings.CutPrefix(str, "\r\n"); ok {
+					i += 2
+				} else {
+					str = str[1:]
+					i++
+				}
+			} else {
+				line, str = str, ""
+			}
+			if !yield(line, offset) {
+				return
+			}
+			offset += i
+		}
+	}
+}
+
+func trimLastInvalidRune(s string) string {
+	for i := len(s) - 1; i >= 0 && i > len(s)-utf8.UTFMax; i-- {
+		if b := s[i]; b < utf8.RuneSelf {
+			return s[:i+1]
+		} else if utf8.RuneStart(b) {
+			if r, _ := utf8.DecodeRuneInString(s[i:]); r == utf8.RuneError {
+				return s[:i]
+			}
+			break
+		}
+	}
+	return s
+}
+
+func formatLineInfo(linestr string, line, column int) string {
+	l := strconv.Itoa(line)
+	return fmt.Sprintf("    %s | %s\n    %*c", l, linestr, column+len(l)+4, '^')
+}
+
+// Faster than strings.ContainsAny(str, "\r\n").
+func containsNewline(str string) bool {
+	return strings.IndexByte(str, '\n') >= 0 ||
+		strings.IndexByte(str, '\r') >= 0
+}
+
+// Faster than strings.IndexAny(str, "\r\n").
+func indexNewline(str string) (i int) {
+	if i = strings.IndexByte(str, '\n'); i >= 0 {
+		str = str[:i]
+	}
+	if j := strings.IndexByte(str, '\r'); j >= 0 {
+		i = j
+	}
+	return
+}
